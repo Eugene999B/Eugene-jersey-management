@@ -5,21 +5,28 @@ import type { CSSProperties } from "react";
 import { Bike, CheckCircle2, CreditCard, MapPin, PackageCheck, Phone, ShieldCheck, Store, Wallet } from "lucide-react";
 import { FulfillmentType } from "@prisma/client";
 import { verifyFulfillmentAction } from "@/app/track/[orderId]/actions";
+import { requestReturnAction } from "@/app/track/[orderId]/return-actions";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { currency, shortDate, titleCase } from "@/lib/format";
+import { settlePaystackTransaction, verifyPaystackTransaction } from "@/lib/payments";
 
 type Props = {
   params: Promise<{ orderId: string }>;
-  searchParams?: Promise<{ verify?: string }>;
+  searchParams?: Promise<{ verify?: string; reference?: string; return?: string }>;
 };
 
 const steps = ["PENDING", "IN_PRODUCTION", "READY", "COMPLETED"] as const;
 
 export default async function TrackOrderPage({ params, searchParams }: Props) {
   const { orderId } = await params;
-  const verifyStatus = (await searchParams)?.verify;
+  const query = (await searchParams) ?? {};
+  const verifyStatus = query.verify;
+  if (query.reference) {
+    const verified = await verifyPaystackTransaction(query.reference);
+    if (verified) await settlePaystackTransaction(verified);
+  }
   const order = await prisma.order.findFirst({
     where: {
       OR: [{ id: orderId }, { receiptNumber: orderId }],
@@ -101,6 +108,16 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
               The phone number or code did not match this order.
             </div>
           ) : null}
+          {query.return === "success" ? (
+            <div className="mb-6 rounded-[8px] border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+              Return request sent to the shop.
+            </div>
+          ) : null}
+          {query.return === "failed" ? (
+            <div className="mb-6 rounded-[8px] border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+              The phone number did not match this order, so the return request was not created.
+            </div>
+          ) : null}
 
           {order.cashHoldExpiresAt && !paid ? (
             <div className="mb-6 rounded-[8px] border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
@@ -158,6 +175,19 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
                 </label>
                 <input className="field tracking-[0.18em]" name="code" inputMode="numeric" placeholder="Code" required />
                 <Button><ShieldCheck size={16} /> Verify</Button>
+              </div>
+            </form>
+          ) : null}
+
+          {order.status === "COMPLETED" ? (
+            <form action={requestReturnAction} className="mt-6 rounded-[8px] border border-[#ded8cd] bg-white p-4">
+              <h2 className="font-semibold">Request return, refund, or exchange</h2>
+              <p className="mt-1 text-sm text-slate-600">Use the same phone number on the order. The shop will review it in Commerce.</p>
+              <input type="hidden" name="receiptNumber" value={order.receiptNumber} />
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
+                <input className="field" name="phone" placeholder="+233..." required />
+                <input className="field" name="reason" placeholder="Reason for return or exchange" required />
+                <Button variant="outline">Send request</Button>
               </div>
             </form>
           ) : null}

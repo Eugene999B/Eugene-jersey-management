@@ -460,6 +460,63 @@ async function main() {
     });
   }
 
+  await prisma.deliveryZone.upsert({
+    where: { shopId_name: { shopId: demoShop.id, name: "Accra Central" } },
+    update: {
+      city: "Accra",
+      area: "Central, Osu, Adabraka",
+      fee: "25.00",
+      estimatedMins: 45,
+      isActive: true,
+    },
+    create: {
+      shopId: demoShop.id,
+      name: "Accra Central",
+      city: "Accra",
+      area: "Central, Osu, Adabraka",
+      fee: "25.00",
+      estimatedMins: 45,
+    },
+  });
+
+  await prisma.deliveryZone.upsert({
+    where: { shopId_name: { shopId: demoShop.id, name: "Tema Express" } },
+    update: {
+      city: "Tema",
+      area: "Community 1-12",
+      fee: "40.00",
+      estimatedMins: 90,
+      isActive: true,
+    },
+    create: {
+      shopId: demoShop.id,
+      name: "Tema Express",
+      city: "Tema",
+      area: "Community 1-12",
+      fee: "40.00",
+      estimatedMins: 90,
+    },
+  });
+
+  await prisma.coupon.upsert({
+    where: { shopId_code: { shopId: demoShop.id, code: "TEAM10" } },
+    update: {
+      discountType: "PERCENT",
+      value: "10.00",
+      minSubtotal: "200.00",
+      usageLimit: 200,
+      status: "ACTIVE",
+    },
+    create: {
+      shopId: demoShop.id,
+      code: "TEAM10",
+      discountType: "PERCENT",
+      value: "10.00",
+      minSubtotal: "200.00",
+      usageLimit: 200,
+    },
+  });
+
   const owner = await prisma.user.findUniqueOrThrow({ where: { email: "owner@accra.test" } });
   const customer = await prisma.customer.upsert({
     where: { id: "demo-customer-akua" },

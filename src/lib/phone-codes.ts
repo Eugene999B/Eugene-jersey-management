@@ -3,6 +3,7 @@ import { NotificationChannel, PhoneVerificationPurpose } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashToken, minutesFromNow } from "@/lib/tokens";
 import { sendCustomerMessage, sendDirectSms } from "@/lib/messaging";
+import { normalizePhone } from "@/lib/phone";
 
 export function createNumericCode() {
   return String(randomInt(100000, 999999));
@@ -18,11 +19,12 @@ export async function createPhoneCode(input: {
   minutes?: number;
 }) {
   const code = createNumericCode();
+  const phone = normalizePhone(input.phone);
   await prisma.phoneVerificationCode.create({
     data: {
       userId: input.userId ?? null,
       buyerId: input.buyerId ?? null,
-      phone: input.phone,
+      phone,
       purpose: input.purpose,
       codeHash: hashToken(code),
       expiresAt: minutesFromNow(input.minutes ?? 10),
@@ -34,7 +36,7 @@ export async function createPhoneCode(input: {
       shopId: input.shopId,
       channel: NotificationChannel.SMS,
       recipientName: input.name,
-      recipientPhone: input.phone,
+      recipientPhone: phone,
       subject: "Verification code",
       body: `Your verification code is ${code}. It expires in ${input.minutes ?? 10} minutes.`,
       metadata: { purpose: input.purpose },
@@ -42,7 +44,7 @@ export async function createPhoneCode(input: {
   } else {
     await sendDirectSms({
       recipientName: input.name,
-      recipientPhone: input.phone,
+      recipientPhone: phone,
       subject: "Verification code",
       body: `Your verification code is ${code}. It expires in ${input.minutes ?? 10} minutes.`,
       metadata: { purpose: input.purpose },
@@ -61,7 +63,7 @@ export async function consumePhoneCode(input: {
 }) {
   const record = await prisma.phoneVerificationCode.findFirst({
     where: {
-      phone: input.phone,
+      phone: normalizePhone(input.phone),
       purpose: input.purpose,
       usedAt: null,
       expiresAt: { gt: new Date() },

@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { MediaKind } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { createOptimizedMediaAsset } from "@/lib/media-storage";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -60,11 +62,21 @@ export async function updateShopSettingsAction(formData: FormData) {
 
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
+  const uploadedLogo = formData.get("logoFile");
+  const logoAsset = uploadedLogo instanceof File && uploadedLogo.size > 0
+    ? await createOptimizedMediaAsset({
+        file: uploadedLogo,
+        shopId: session.shopId,
+        uploadedById: session.id,
+        kind: MediaKind.SHOP_LOGO,
+      })
+    : null;
+
   await prisma.shop.update({
     where: { id: session.shopId },
     data: {
       name: parsed.data.name,
-      logoUrl: parsed.data.logoUrl,
+      logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
       primaryColor: parsed.data.primaryColor,
       secondaryColor: parsed.data.secondaryColor,
       storefrontEnabled: parsed.data.storefrontEnabled,

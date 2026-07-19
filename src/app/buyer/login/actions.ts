@@ -6,6 +6,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createPhoneCode, consumePhoneCode } from "@/lib/phone-codes";
 import { setBuyerSessionCookie } from "@/lib/buyer-session";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { normalizePhone, phoneRateKey } from "@/lib/phone";
 
 const nextPath = (value: FormDataEntryValue | null) => {
   const raw = String(value ?? "").trim();
@@ -27,14 +29,25 @@ const verifySchema = z.object({
 });
 
 export async function requestBuyerLoginCodeAction(formData: FormData) {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const parsed = requestSchema.safeParse({
     name: formData.get("name"),
-    phone: formData.get("phone"),
+    phone,
     email: formData.get("email") || undefined,
     next: formData.get("next") || undefined,
   });
 
   if (!parsed.success) redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(nextPath(formData.get("next")))}`);
+
+  try {
+    await enforceRateLimit({
+      key: `buyer-login-code:${phoneRateKey(parsed.data.phone)}`,
+      limit: 5,
+      windowSeconds: 15 * 60,
+    });
+  } catch {
+    redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  }
 
   const buyer = await prisma.buyerAccount.upsert({
     where: { phone: parsed.data.phone },
@@ -62,13 +75,24 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
 }
 
 export async function verifyBuyerLoginCodeAction(formData: FormData) {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const parsed = verifySchema.safeParse({
-    phone: formData.get("phone"),
+    phone,
     code: formData.get("code"),
     next: formData.get("next") || undefined,
   });
 
   if (!parsed.success) redirect("/buyer/login?error=invalid");
+
+  try {
+    await enforceRateLimit({
+      key: `buyer-login-verify:${phoneRateKey(parsed.data.phone)}`,
+      limit: 8,
+      windowSeconds: 15 * 60,
+    });
+  } catch {
+    redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  }
 
   const buyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
   if (!buyer || !buyer.isActive) redirect(`/buyer/login?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}`);

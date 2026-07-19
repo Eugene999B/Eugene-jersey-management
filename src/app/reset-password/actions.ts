@@ -8,6 +8,8 @@ import { hashPassword } from "@/lib/auth";
 import { hashToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
 import { consumePhoneCode } from "@/lib/phone-codes";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { normalizePhone, phoneRateKey } from "@/lib/phone";
 
 const schema = z.object({
   token: z.string().optional(),
@@ -27,17 +29,27 @@ export async function resetPasswordAction(formData: FormData) {
   if (!parsed.success) redirect("/reset-password?error=invalid");
 
   if (parsed.data.phone && parsed.data.code) {
-    const user = await prisma.user.findFirst({ where: { phone: parsed.data.phone } });
+    const phone = normalizePhone(parsed.data.phone);
+    try {
+      await enforceRateLimit({
+        key: `password-reset-verify:${phoneRateKey(phone)}`,
+        limit: 8,
+        windowSeconds: 15 * 60,
+      });
+    } catch {
+      redirect(`/reset-password?error=expired&phone=${encodeURIComponent(phone)}`);
+    }
+    const user = await prisma.user.findFirst({ where: { phone } });
     if (!user) redirect("/reset-password?error=expired");
 
     const consumed = await consumePhoneCode({
       userId: user.id,
-      phone: user.phone ?? parsed.data.phone,
+      phone: user.phone ?? phone,
       purpose: PhoneVerificationPurpose.STAFF_PASSWORD_RESET,
       code: parsed.data.code,
     });
 
-    if (!consumed) redirect(`/reset-password?error=expired&phone=${encodeURIComponent(parsed.data.phone)}`);
+    if (!consumed) redirect(`/reset-password?error=expired&phone=${encodeURIComponent(phone)}`);
 
     await prisma.user.update({
       where: { id: user.id },

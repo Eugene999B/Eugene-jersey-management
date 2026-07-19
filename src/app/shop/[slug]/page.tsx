@@ -19,6 +19,7 @@ import {
 import { ShopVerificationStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { addCartItemAction } from "@/app/cart/actions";
 import { createProductReviewAction } from "@/app/shop/[slug]/review-actions";
 import { prisma } from "@/lib/db";
 import { currency, titleCase } from "@/lib/format";
@@ -110,7 +111,12 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
           </Link>
           <div className="flex items-center gap-2">
             {buyer ? (
-              <Badge tone="green" className="hidden sm:inline-flex">{buyer.name}</Badge>
+              <>
+                <Badge tone="green" className="hidden sm:inline-flex">{buyer.name}</Badge>
+                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white" href="/cart">
+                  <ShoppingBag size={15} /> Cart
+                </Link>
+              </>
             ) : (
               <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white" href={`/buyer/login?next=/shop/${shop.slug}`}>
                 <LogIn size={15} /> Login
@@ -264,7 +270,10 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                           <Wallet size={16} /> Cash pickup
                         </label>
                       </div>
-                      <Button className="w-full"><ShoppingBag size={16} /> Place order</Button>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Button><ShoppingBag size={16} /> Place order</Button>
+                        <Button variant="outline" formAction={addCartItemAction}>Add to cart</Button>
+                      </div>
                       <p className="flex items-center gap-1 text-xs text-slate-500">
                         <Timer size={13} /> Credit is not available online. Shop staff can approve credit only inside POS.
                       </p>

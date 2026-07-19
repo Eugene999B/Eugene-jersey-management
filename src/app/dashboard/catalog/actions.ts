@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { ProductCondition } from "@prisma/client";
+import { MediaKind, ProductCondition } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { imageListFromUrl } from "@/lib/product-images";
+import { createOptimizedMediaAsset } from "@/lib/media-storage";
 
 const categorySchema = z.object({
   name: z.string().min(2).max(80),
@@ -104,6 +105,15 @@ export async function createProductAction(formData: FormData) {
 
   if (!parsed.success) redirect("/dashboard/catalog?error=product");
 
+  const uploadedPhoto = formData.get("photo");
+  const mediaAsset = uploadedPhoto instanceof File && uploadedPhoto.size > 0
+    ? await createOptimizedMediaAsset({
+        file: uploadedPhoto,
+        shopId: session.shopId,
+        uploadedById: session.id,
+        kind: MediaKind.PRODUCT,
+      })
+    : null;
   const sku = parsed.data.sku?.trim() || `${parsed.data.name.slice(0, 3).toUpperCase()}-${nanoid(6).toUpperCase()}`;
   const sizeGuide = parsed.data.sizeGuide
     ? parsed.data.sizeGuide.split(",").map((item) => item.trim()).filter(Boolean)
@@ -119,7 +129,7 @@ export async function createProductAction(formData: FormData) {
       sportType: parsed.data.sportType,
       teamName: parsed.data.teamName,
       sizeGuide,
-      images: imageListFromUrl(parsed.data.imageUrl),
+      images: mediaAsset ? [mediaAsset.url] : imageListFromUrl(parsed.data.imageUrl),
       condition: parsed.data.condition,
       basePrice: parsed.data.basePrice,
       lowStockThreshold: parsed.data.lowStockThreshold,

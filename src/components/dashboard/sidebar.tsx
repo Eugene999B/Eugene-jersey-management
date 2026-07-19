@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, LogOut, MessageCircle, Palette, Settings, ShoppingCart, Truck, Users } from "lucide-react";
+import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, LogOut, MessageCircle, Palette, Settings, ShoppingCart, Tags, Truck, Users } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
 import { canSeeNav, roleLabels } from "@/lib/rbac";
@@ -20,6 +20,7 @@ const navItems = [
   { key: "closing", href: "/dashboard/closing", label: "Daily Closing", icon: ClipboardCheck },
   { key: "suppliers", href: "/dashboard/suppliers", label: "Suppliers", icon: Truck },
   { key: "network", href: "/dashboard/network", label: "Shop Network", icon: Link2 },
+  { key: "commerce", href: "/dashboard/commerce", label: "Commerce", icon: Tags },
   { key: "reports", href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
   { key: "exports", href: "/dashboard/exports", label: "Exports", icon: FileDown },
   { key: "activity", href: "/dashboard/activity", label: "Activity", icon: Activity },

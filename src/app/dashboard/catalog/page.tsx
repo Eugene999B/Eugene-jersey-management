@@ -76,7 +76,7 @@ export default async function CatalogPage({ searchParams }: Props) {
             <Plus size={18} className="text-[var(--shop-primary)]" />
             <h1 className="text-lg font-semibold">Add product</h1>
           </div>
-          <form action={createProductAction} className="space-y-3">
+          <form action={createProductAction} encType="multipart/form-data" className="space-y-3">
             <input className="field" name="name" placeholder="Product name" disabled={!canWrite} required />
             <textarea className="field min-h-20" name="description" placeholder="Description" disabled={!canWrite} />
             <div className="grid grid-cols-2 gap-3">
@@ -88,7 +88,12 @@ export default async function CatalogPage({ searchParams }: Props) {
               </select>
               <input className="field" name="brand" placeholder="Brand" disabled={!canWrite} />
             </div>
-            <input className="field" name="imageUrl" type="url" placeholder="Product photo URL" disabled={!canWrite} />
+            <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
+              <span className="mb-2 block font-semibold text-slate-700">Product photo upload</span>
+              <input className="block w-full text-sm" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={!canWrite} />
+              <span className="mt-2 block text-xs text-slate-500">Images are optimized automatically. A URL can still be used below if no file is selected.</span>
+            </label>
+            <input className="field" name="imageUrl" type="url" placeholder="Optional photo URL fallback" disabled={!canWrite} />
             <div className="grid grid-cols-2 gap-3">
               <select className="field" name="productType" disabled={!canWrite}>
                 <option value="">Product type</option>

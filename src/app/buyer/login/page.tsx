@@ -9,6 +9,8 @@ type Props = {
 const errors: Record<string, string> = {
   invalid: "Check the phone number and details, then try again.",
   code: "That code is not correct or has expired.",
+  rate: "Too many code attempts. Please wait a few minutes and try again.",
+  "login-required": "Login first to continue.",
 };
 
 export default async function BuyerLoginPage({ searchParams }: Props) {

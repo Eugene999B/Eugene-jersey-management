@@ -19,7 +19,7 @@ export default async function SettingsPage() {
           <p className="text-slate-500">Shop network code</p>
           <p className="mt-1 text-xl font-semibold tracking-wide">{shop.networkCode ?? "Not assigned yet"}</p>
         </div>
-        <form action={updateShopSettingsAction} className="mt-5 space-y-4">
+        <form action={updateShopSettingsAction} encType="multipart/form-data" className="mt-5 space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-semibold">Shop name</span>
             <input className="field" name="name" defaultValue={shop.name} required />
@@ -27,6 +27,11 @@ export default async function SettingsPage() {
           <label className="block">
             <span className="mb-1 block text-sm font-semibold">Logo URL</span>
             <input className="field" name="logoUrl" defaultValue={shop.logoUrl ?? ""} placeholder="/brand/accra-pro.svg" />
+          </label>
+          <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
+            <span className="mb-2 block font-semibold text-slate-700">Upload shop logo</span>
+            <input className="block w-full text-sm" name="logoFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif" />
+            <span className="mt-2 block text-xs text-slate-500">Uploaded logos are optimized and replace the URL above.</span>
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">

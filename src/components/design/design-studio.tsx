@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training";
 type ViewMode = "front" | "back" | "production";
 type DesignMode = "plain" | "team" | "custom";
+type TextEffect = "flat" | "outline" | "shadow" | "arch";
+type ProductionAid = "balanced" | "speed" | "precision" | "waste-saver";
 type MaterialPreset = "pu-vinyl" | "flock" | "sublimation" | "twill";
 type CutterProfile = "generic-hpgl" | "graphtec-ce" | "roland-gs" | "silhouette-cameo";
 type LayerKey = "crest" | "sponsor" | "name" | "number" | "sideStripes" | "contour" | "weedBox" | "registration";
@@ -111,6 +113,8 @@ function hpglJob(copies: number, mirrorCut: boolean, contourOffset: number) {
 export function DesignStudio() {
   const [garmentStyle, setGarmentStyle] = useState<GarmentStyle>("pro-panel");
   const [designMode, setDesignMode] = useState<DesignMode>("custom");
+  const [textEffect, setTextEffect] = useState<TextEffect>("outline");
+  const [productionAid, setProductionAid] = useState<ProductionAid>("balanced");
   const [baseColor, setBaseColor] = useState("#0f766e");
   const [accentColor, setAccentColor] = useState("#f97316");
   const [trimColor, setTrimColor] = useState("#111827");
@@ -130,6 +134,10 @@ export function DesignStudio() {
   const [copies, setCopies] = useState(1);
   const [mirrorCut, setMirrorCut] = useState(true);
   const [preserveCutOrder, setPreserveCutOrder] = useState(true);
+  const [showSafeArea, setShowSafeArea] = useState(true);
+  const [showRulers, setShowRulers] = useState(true);
+  const [autoWeedLines, setAutoWeedLines] = useState(true);
+  const [uploadedLogo, setUploadedLogo] = useState<string | null>(null);
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     crest: true,
     sponsor: true,
@@ -156,6 +164,23 @@ export function DesignStudio() {
     const frontVisible = view === "front";
     const backVisible = view === "back" || productionMode;
     const cutDash = productionMode ? "10 8" : "0";
+    const safeArea = showSafeArea
+      ? `<path d="M136 186 L264 186 L258 426 L142 426 Z" fill="none" stroke="#22c55e" stroke-width="2" stroke-dasharray="7 6" opacity="0.9"/>`
+      : "";
+    const rulers = showRulers
+      ? `
+        <g fill="#334155" font-size="10" font-weight="700" opacity="0.75">
+          <path d="M28 32V492M372 32V492M36 500H364" stroke="#334155" stroke-width="1"/>
+          <text x="22" y="262" transform="rotate(-90 22 262)">520 mm height guide</text>
+          <text x="162" y="514">400 mm width guide</text>
+        </g>`
+      : "";
+    const weedLines = autoWeedLines && productionMode
+      ? `
+        <g stroke="#ef4444" stroke-width="1.5" stroke-dasharray="8 7" opacity="0.75">
+          <path d="M72 228H328"/><path d="M72 332H328"/><path d="M200 86V454"/>
+        </g>`
+      : "";
     const registration = layers.registration
       ? `
         <g fill="none" stroke="#111827" stroke-width="2">
@@ -179,16 +204,41 @@ export function DesignStudio() {
       ? `
         <g>
           <path d="M177 118 L200 102 L223 118 L216 148 L184 148 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/>
-          <text x="200" y="139" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff">${safeCrest}</text>
+          ${uploadedLogo ? `<image href="${uploadedLogo}" x="182" y="110" width="36" height="36" preserveAspectRatio="xMidYMid slice"/>` : `<text x="200" y="139" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff">${safeCrest}</text>`}
         </g>`
       : "";
     const sponsorText = layers.sponsor && frontVisible
       ? `<text x="200" y="262" text-anchor="middle" font-size="${sponsorSize}" font-weight="800" fill="${vinylColor}">${safeSponsor}</text>`
       : "";
+    const nameText = (() => {
+      if (!layers.name || !backVisible) return "";
+      if (textEffect === "arch") {
+        return `
+          <path id="nameArc" d="M122 220 C150 178 250 178 278 220" fill="none"/>
+          <text font-size="${nameSize}" font-weight="900" fill="${vinylColor}" stroke="${trimColor}" stroke-width="2" paint-order="stroke fill">
+            <textPath href="#nameArc" startOffset="50%" text-anchor="middle">${safePlayerName}</textPath>
+          </text>`;
+      }
+      if (textEffect === "shadow") {
+        return `
+          <text x="204" y="216" text-anchor="middle" font-size="${nameSize}" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerName}</text>
+          <text x="200" y="212" text-anchor="middle" font-size="${nameSize}" font-weight="900" fill="${vinylColor}">${safePlayerName}</text>`;
+      }
+      return `<text x="200" y="212" text-anchor="middle" font-size="${nameSize}" font-weight="900" fill="${vinylColor}" ${textEffect === "outline" ? `stroke="${trimColor}" stroke-width="3" paint-order="stroke fill"` : ""}>${safePlayerName}</text>`;
+    })();
+    const numberText = (() => {
+      if (!layers.number || !backVisible) return "";
+      if (textEffect === "shadow") {
+        return `
+          <text x="207" y="324" text-anchor="middle" font-size="104" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerNumber}</text>
+          <text x="200" y="318" text-anchor="middle" font-size="104" font-weight="900" fill="${vinylColor}">${safePlayerNumber}</text>`;
+      }
+      return `<text x="200" y="318" text-anchor="middle" font-size="104" font-weight="900" fill="${vinylColor}" ${textEffect === "outline" || textEffect === "arch" ? `stroke="${trimColor}" stroke-width="5" paint-order="stroke fill"` : ""}>${safePlayerNumber}</text>`;
+    })();
     const backText = backVisible
       ? `
-        ${layers.name ? `<text x="200" y="212" text-anchor="middle" font-size="${nameSize}" font-weight="800" fill="${vinylColor}">${safePlayerName}</text>` : ""}
-        ${layers.number ? `<text x="200" y="318" text-anchor="middle" font-size="104" font-weight="900" fill="${vinylColor}">${safePlayerNumber}</text>` : ""}
+        ${nameText}
+        ${numberText}
         ${layers.number && productionMode ? `<text x="200" y="372" text-anchor="middle" font-size="13" font-weight="700" fill="#64748b">CUT ${copies} / ${materialConfig.label}</text>` : ""}`
       : "";
     const contour = layers.contour
@@ -203,12 +253,15 @@ export function DesignStudio() {
         <path d="${path}" fill="${baseColor}" stroke="${trimColor}" stroke-width="4"/>
         <path d="M160 42 C175 86 225 86 240 42 L218 96 L182 96 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="2"/>
         ${sideStripes}
+        ${safeArea}
+        ${weedLines}
         ${crestShape}
         ${sponsorText}
         ${backText}
         ${contour}
       </g>
       ${registration}
+      ${rulers}
     </svg>`;
   }, [
     accentColor,
@@ -219,10 +272,15 @@ export function DesignStudio() {
     layers,
     materialConfig.label,
     mirrorCut,
+    autoWeedLines,
     playerName,
     playerNumber,
+    showRulers,
+    showSafeArea,
     sponsor,
+    textEffect,
     trimColor,
+    uploadedLogo,
     view,
     vinylColor,
   ]);
@@ -230,6 +288,8 @@ export function DesignStudio() {
   const productionManifest = useMemo(() => ({
     jobName: `${playerName || "PLAYER"}-${playerNumber || "00"}`,
     designMode,
+    textEffect,
+    productionAid,
     view,
     garmentStyle,
     material: materialConfig.label,
@@ -249,6 +309,9 @@ export function DesignStudio() {
       contourOffsetMm: contourOffset,
       mirrorCut,
       preserveCutOrder,
+      showSafeArea,
+      showRulers,
+      autoWeedLines,
       copies,
     },
     layers,
@@ -262,6 +325,11 @@ export function DesignStudio() {
     cutForce,
     cutSpeed,
     designMode,
+    textEffect,
+    productionAid,
+    showSafeArea,
+    showRulers,
+    autoWeedLines,
     cutterConfig.height,
     cutterConfig.label,
     cutterConfig.width,
@@ -348,6 +416,8 @@ export function DesignStudio() {
   function resetDesign() {
     setGarmentStyle("pro-panel");
     setDesignMode("custom");
+    setTextEffect("outline");
+    setProductionAid("balanced");
     setBaseColor("#0f766e");
     setAccentColor("#f97316");
     setTrimColor("#111827");
@@ -363,6 +433,10 @@ export function DesignStudio() {
     setCopies(1);
     setMirrorCut(true);
     setPreserveCutOrder(true);
+    setShowSafeArea(true);
+    setShowRulers(true);
+    setAutoWeedLines(true);
+    setUploadedLogo(null);
     setLayers({
       crest: true,
       sponsor: true,
@@ -387,8 +461,15 @@ export function DesignStudio() {
     downloadFile(`cut-path-${playerName || "design"}.plt`, hpglJob(copies, mirrorCut, contourOffset), "application/octet-stream");
   }
 
+  function handleLogoUpload(file: File | undefined) {
+    if (!file) return;
+    if (uploadedLogo) URL.revokeObjectURL(uploadedLogo);
+    setUploadedLogo(URL.createObjectURL(file));
+    setLayers((current) => ({ ...current, crest: true }));
+  }
+
   const activeLayers = Object.values(layers).filter(Boolean).length;
-  const productionScore = Math.round(((layers.contour ? 25 : 0) + (layers.registration ? 20 : 0) + (layers.weedBox ? 15 : 0) + (mirrorCut ? 15 : 0) + (preserveCutOrder ? 10 : 0) + Math.min(activeLayers * 2, 15)));
+  const productionScore = Math.round(((layers.contour ? 20 : 0) + (layers.registration ? 15 : 0) + (layers.weedBox ? 13 : 0) + (mirrorCut ? 12 : 0) + (preserveCutOrder ? 10 : 0) + (showSafeArea ? 8 : 0) + (autoWeedLines ? 8 : 0) + Math.min(activeLayers * 2, 14)));
 
   return (
     <div className="grid gap-5 2xl:grid-cols-[420px_1fr_360px]">
@@ -431,6 +512,33 @@ export function DesignStudio() {
               <option value="pro-panel">Pro panel</option>
               <option value="training">Training fit</option>
             </select>
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">Text engine</span>
+              <select className="field" value={textEffect} onChange={(event) => setTextEffect(event.target.value as TextEffect)}>
+                <option value="flat">Flat vinyl</option>
+                <option value="outline">Pro outline</option>
+                <option value="shadow">Shadow stack</option>
+                <option value="arch">Arched name</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">Auto optimizer</span>
+              <select className="field" value={productionAid} onChange={(event) => setProductionAid(event.target.value as ProductionAid)}>
+                <option value="balanced">Balanced</option>
+                <option value="speed">Speed cut</option>
+                <option value="precision">Precision press</option>
+                <option value="waste-saver">Waste saver</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
+            <span className="mb-2 block font-semibold">Customer logo / crest</span>
+            <input type="file" accept="image/*" onChange={(event) => handleLogoUpload(event.target.files?.[0])} />
+            <span className="mt-2 block text-xs text-slate-500">Preview a customer crest directly on the jersey before exporting production files.</span>
           </label>
 
           <div className="grid grid-cols-2 gap-3">
@@ -611,11 +719,23 @@ export function DesignStudio() {
               <span>Preserve cut order</span>
               <input type="checkbox" checked={preserveCutOrder} onChange={(event) => setPreserveCutOrder(event.target.checked)} />
             </label>
+            <label className="flex items-center justify-between gap-2">
+              <span>Safe print area</span>
+              <input type="checkbox" checked={showSafeArea} onChange={(event) => setShowSafeArea(event.target.checked)} />
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span>Rulers</span>
+              <input type="checkbox" checked={showRulers} onChange={(event) => setShowRulers(event.target.checked)} />
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span>Auto weed lines</span>
+              <input type="checkbox" checked={autoWeedLines} onChange={(event) => setAutoWeedLines(event.target.checked)} />
+            </label>
           </div>
 
           <div className="rounded-[8px] bg-slate-950 p-3 text-sm text-white">
             <p className="font-semibold">{materialConfig.note}</p>
-            <p className="mt-2 text-white/70">Media {cutterConfig.width} x {cutterConfig.height} mm, blade {bladeOffset} mm, overcut {overcut} mm.</p>
+            <p className="mt-2 text-white/70">Media {cutterConfig.width} x {cutterConfig.height} mm, blade {bladeOffset} mm, overcut {overcut} mm. Optimizer: {productionAid}.</p>
           </div>
         </div>
       </section>

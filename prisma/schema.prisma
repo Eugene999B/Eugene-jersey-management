@@ -176,6 +176,50 @@ enum PhoneVerificationPurpose {
   DELIVERY_VERIFY
 }
 
+enum MediaKind {
+  PRODUCT
+  SHOP_LOGO
+  SHOP_CREDENTIAL
+  DESIGN_ASSET
+  RECEIPT
+  EXPORT
+  CUSTOMER_UPLOAD
+}
+
+enum StorageProvider {
+  LOCAL
+  R2
+  S3
+}
+
+enum CouponDiscountType {
+  PERCENT
+  FIXED
+}
+
+enum CouponStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
+enum ReturnRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  RECEIVED
+  REFUNDED
+  EXCHANGED
+  CANCELLED
+}
+
+enum PaymentProviderEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
 model Shop {
   id                         String                 @id @default(cuid())
   name                       String
@@ -238,6 +282,11 @@ model Shop {
   networkOrdersReceived ShopNetworkOrder[]  @relation("NetworkOrderPartner")
   productReviews        ProductReview[]
   verifiedBy            User?               @relation("ShopVerifiedBy", fields: [verifiedById], references: [id])
+  mediaAssets           MediaAsset[]
+  buyerCartItems        BuyerCartItem[]
+  coupons               Coupon[]
+  deliveryZones         DeliveryZone[]
+  returnRequests        ReturnRequest[]
 
   @@index([isActive, planTier])
   @@index([subscriptionStatus, subscriptionRenewalAt])
@@ -273,6 +322,7 @@ model User {
   dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
   shopsVerified          Shop[]                  @relation("ShopVerifiedBy")
   phoneVerificationCodes PhoneVerificationCode[]
+  uploadedMedia          MediaAsset[]
 
   @@index([shopId, id])
   @@index([role, isActive])
@@ -371,6 +421,7 @@ model ProductVariant {
   orderItems         OrderItem[]
   supplierOrderItems SupplierOrderItem[]
   networkOrderItems  ShopNetworkOrderItem[]
+  buyerCartItems     BuyerCartItem[]
 
   @@index([productId, id])
   @@index([sku])
@@ -415,6 +466,8 @@ model BuyerAccount {
   orders                 Order[]
   reviews                ProductReview[]
   phoneVerificationCodes PhoneVerificationCode[]
+  cartItems              BuyerCartItem[]
+  returnRequests         ReturnRequest[]
 
   @@index([phone, isActive])
   @@index([email])
@@ -460,12 +513,21 @@ model Order {
   pickupVerifiedAt   DateTime?
   deliveryVerifiedAt DateTime?
   customerVerifiedAt DateTime?
+  stockReleasedAt    DateTime?
+  cancellationReason String?
+  couponId           String?
+  deliveryZoneId     String?
+
+  coupon         Coupon?         @relation(fields: [couponId], references: [id])
+  deliveryZone   DeliveryZone?   @relation(fields: [deliveryZoneId], references: [id])
+  returnRequests ReturnRequest[]
 
   @@index([shopId, id])
   @@index([shopId, status])
   @@index([shopId, createdAt])
   @@index([publicAccessToken])
   @@index([buyerId, createdAt])
+  @@index([stockReleasedAt])
 }
 
 model OrderItem {
@@ -487,10 +549,145 @@ model Payment {
   amount            Decimal       @db.Decimal(12, 2)
   status            PaymentStatus @default(PENDING)
   providerReference String?
+  verifiedAt        DateTime?
+  gatewayResponse   String?
+  providerChannel   String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([providerReference])
+  @@index([status, verifiedAt])
+}
+
+model MediaAsset {
+  id           String          @id @default(cuid())
+  shopId       String?
+  uploadedById String?
+  kind         MediaKind       @default(PRODUCT)
+  provider     StorageProvider @default(LOCAL)
+  key          String
+  url          String
+  thumbnailUrl String?
+  originalName String?
+  mimeType     String
+  width        Int?
+  height       Int?
+  sizeBytes    Int
+  checksum     String?
+  createdAt    DateTime        @default(now())
+
+  shop       Shop? @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([shopId, kind, createdAt])
+  @@index([uploadedById, createdAt])
+  @@index([key])
+}
+
+model BuyerCartItem {
+  id                  String   @id @default(cuid())
+  buyerId             String
+  shopId              String
+  productVariantId    String
+  quantity            Int      @default(1)
+  personalizationData Json     @default("{}")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  buyer          BuyerAccount   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  shop           Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, productVariantId])
+  @@index([shopId, createdAt])
+  @@index([buyerId, shopId])
+}
+
+model Coupon {
+  id           String             @id @default(cuid())
+  shopId       String
+  code         String
+  discountType CouponDiscountType @default(PERCENT)
+  value        Decimal            @db.Decimal(12, 2)
+  minSubtotal  Decimal?           @db.Decimal(12, 2)
+  usageLimit   Int?
+  usedCount    Int                @default(0)
+  status       CouponStatus       @default(ACTIVE)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  shop   Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([shopId, code])
+  @@index([shopId, status])
+}
+
+model DeliveryZone {
+  id            String   @id @default(cuid())
+  shopId        String
+  name          String
+  city          String?
+  area          String?
+  fee           Decimal  @default(0) @db.Decimal(12, 2)
+  estimatedMins Int?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop   Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([shopId, name])
+  @@index([shopId, isActive])
+}
+
+model ReturnRequest {
+  id          String              @id @default(cuid())
+  shopId      String
+  orderId     String
+  buyerId     String?
+  status      ReturnRequestStatus @default(REQUESTED)
+  reason      String
+  resolution  String?
+  requestedAt DateTime            @default(now())
+  resolvedAt  DateTime?
+  notes       String?
+
+  shop  Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  order Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  buyer BuyerAccount? @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, status])
+  @@index([orderId])
+  @@index([buyerId, requestedAt])
+}
+
+model PaymentProviderEvent {
+  id          String                     @id @default(cuid())
+  provider    String
+  eventType   String
+  eventId     String?
+  reference   String?
+  status      PaymentProviderEventStatus @default(RECEIVED)
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime                   @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, reference])
+  @@index([status, createdAt])
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
 }
 
 model InviteToken {
