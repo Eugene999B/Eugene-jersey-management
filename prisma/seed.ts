@@ -268,24 +268,45 @@ async function main() {
     },
   });
 
-  await prisma.announcement.create({
-    data: {
+  const launchAnnouncement = await prisma.announcement.findFirst({
+    where: {
       shopId: demoShop.id,
       title: "Welcome to the launch workspace",
-      body: "Catalog, POS, custom orders, reports, and tenant controls are ready for your team to test.",
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
+  if (!launchAnnouncement) {
+    await prisma.announcement.create({
+      data: {
+        shopId: demoShop.id,
+        title: "Welcome to the launch workspace",
+        body: "Catalog, POS, custom orders, reports, and tenant controls are ready for your team to test.",
+      },
+    });
+  }
+
+  const existingSeedLog = await prisma.auditLog.findFirst({
+    where: {
       shopId: demoShop.id,
       userId: owner.id,
       action: "seed.demo_ready",
       entityType: "Order",
       entityId: order.id,
-      metadata: { source: "prisma/seed.ts" },
     },
   });
+
+  if (!existingSeedLog) {
+    await prisma.auditLog.create({
+      data: {
+        shopId: demoShop.id,
+        userId: owner.id,
+        action: "seed.demo_ready",
+        entityType: "Order",
+        entityId: order.id,
+        metadata: { source: "prisma/seed.ts" },
+      },
+    });
+  }
 }
 
 main()
