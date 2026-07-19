@@ -37,7 +37,12 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "super@ypms.test" },
-    update: { passwordHash },
+    update: {
+      passwordHash,
+      failedLoginCount: 0,
+      lockUntil: null,
+      isActive: true,
+    },
     create: {
       email: "super@ypms.test",
       passwordHash,
@@ -58,7 +63,14 @@ async function main() {
   for (const [email, name, role] of users) {
     await prisma.user.upsert({
       where: { email },
-      update: { passwordHash, shopId: demoShop.id, role },
+      update: {
+        passwordHash,
+        shopId: demoShop.id,
+        role,
+        failedLoginCount: 0,
+        lockUntil: null,
+        isActive: true,
+      },
       create: {
         email,
         passwordHash,
