@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { LockKeyhole, Mail, ShieldCheck } from "lucide-react";
-import { loginAction } from "@/app/login/actions";
 
 const errorCopy: Record<string, string> = {
   invalid: "Use one of the demo emails with password Ghana123.",
@@ -13,6 +12,14 @@ const errorCopy: Record<string, string> = {
 type LoginPageProps = {
   searchParams?: Promise<{ error?: string; next?: string }>;
 };
+
+const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "Ghana123";
+
+const quickLogins = [
+  { label: "Owner dashboard", email: "owner@accra.test", next: "/dashboard" },
+  { label: "Manager workspace", email: "manager@accra.test", next: "/dashboard" },
+  { label: "Cashier POS", email: "cashier@accra.test", next: "/dashboard/pos" },
+];
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = (await searchParams) ?? {};
@@ -45,7 +52,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         </div>
         <p className="text-sm text-white/60">
-          Demo password after seeding: <span className="font-semibold text-white">Ghana123</span>
+          Demo password after seeding: <span className="font-semibold text-white">{demoPassword}</span>
         </p>
       </section>
 
@@ -66,7 +73,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </div>
           ) : null}
 
-          <form action={loginAction} className="space-y-4">
+          <form action="/api/auth/login" method="post" className="space-y-4">
             <input type="hidden" name="next" value={params.next ?? ""} />
             <label className="block">
               <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -78,12 +85,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <LockKeyhole size={16} /> Password
               </span>
-              <input className="field" name="password" type="password" autoComplete="current-password" defaultValue="Ghana123" required />
+              <input className="field" name="password" type="password" autoComplete="current-password" defaultValue={demoPassword} required />
             </label>
             <button className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
               Sign in
             </button>
           </form>
+
+          <div className="mt-5 grid gap-2">
+            {quickLogins.map((login) => (
+              <form key={login.email} action="/api/auth/login" method="post">
+                <input type="hidden" name="email" value={login.email} />
+                <input type="hidden" name="password" value={demoPassword} />
+                <input type="hidden" name="next" value={login.next} />
+                <button className="w-full rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#0f766e] hover:text-[#0f766e]">
+                  {login.label}
+                </button>
+              </form>
+            ))}
+          </div>
 
           <div className="mt-5 flex items-center justify-between text-sm">
             <Link href="/forgot-password" className="font-semibold text-[#0f766e] hover:underline">

@@ -8,7 +8,7 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "ChangeMe123!";
+  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "Ghana123";
   const passwordHash = await bcrypt.hash(demoPassword, 12);
 
   const demoShop = await prisma.shop.upsert({

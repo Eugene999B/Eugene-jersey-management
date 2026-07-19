@@ -9,7 +9,11 @@ export async function proxy(request: NextRequest) {
   if ((pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) && !session) {
     const url = new URL("/login", request.url);
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    const response = NextResponse.redirect(url);
+    if (token) {
+      response.cookies.delete(SESSION_COOKIE);
+    }
+    return response;
   }
 
   if (pathname.startsWith("/admin") && session?.role !== "SUPER_ADMIN") {

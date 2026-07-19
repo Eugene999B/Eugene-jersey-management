@@ -54,6 +54,7 @@ export function DashboardSidebar({ role, shop }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={clsx(
                   "flex h-11 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold transition",
                   isActive ? "bg-[var(--shop-primary)] text-white" : "text-slate-600 hover:bg-[#f6f4ef] hover:text-slate-950",
@@ -73,6 +74,7 @@ export function DashboardSidebar({ role, shop }: SidebarProps) {
         </div>
         <Link
           href="/logout"
+          prefetch={false}
           className="flex h-10 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-700"
         >
           <LogOut size={18} />
