@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f4ef;
+  --foreground: #111827;
+  --shop-primary: #0f766e;
+  --shop-secondary: #f97316;
+  --panel: #fffdf8;
+  --line: #ded8cd;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  letter-spacing: 0;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--shop-secondary), white 35%);
+  color: #111827;
+}
+
+.field {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.field:focus {
+  border-color: var(--shop-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--shop-primary), white 78%);
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgb(20 27 37 / 0.06);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
