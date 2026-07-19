@@ -35,7 +35,7 @@ import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training";
+type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training" | "basketball" | "rugby" | "goalkeeper";
 type ViewMode = "front" | "back" | "production";
 type DesignMode = "plain" | "team" | "custom";
 type TextEffect = "flat" | "outline" | "shadow" | "arch" | "split";
@@ -44,9 +44,11 @@ type MaterialPreset = "pu-vinyl" | "flock" | "sublimation" | "twill";
 type CutterProfile = "generic-hpgl" | "graphtec-ce" | "roland-gs" | "silhouette-cameo";
 type StudioTab = "brand" | "assets" | "text" | "layout" | "layers" | "production" | "quality" | "export";
 type ActiveTool = "select" | "text" | "image" | "shape" | "measure" | "cut" | "press" | "inspect";
-type PatternStyle = "none" | "pinstripe" | "diagonal" | "chevron" | "halftone" | "speed-lines" | "panel-grid";
+type PatternStyle = "none" | "pinstripe" | "diagonal" | "chevron" | "halftone" | "speed-lines" | "panel-grid" | "carbon" | "kente-stripe" | "camo-panels" | "gradient-wave";
 type ImageMask = "rectangle" | "circle" | "shield" | "diamond";
 type ShapeKind = "shield" | "circle" | "sash" | "star" | "lightning";
+type DesignTemplateKey = "elite-home" | "away-velocity" | "keeper-armor" | "training-minimal" | "basketball-city" | "rugby-heritage" | "street-camo" | "gold-final";
+type MachineStatus = "idle" | "connecting" | "sent" | "unsupported" | "failed";
 type LayerKey =
   | "texture"
   | "pattern"
@@ -68,6 +70,47 @@ type UploadedImage = {
   height: number;
   originalSize: number;
   optimizedSize: number;
+};
+
+type SerialPortLike = {
+  open: (options: { baudRate: number }) => Promise<void>;
+  close: () => Promise<void>;
+  writable?: WritableStream<Uint8Array> | null;
+};
+
+type NavigatorWithSerial = Navigator & {
+  serial?: {
+    requestPort: () => Promise<SerialPortLike>;
+  };
+};
+
+type DesignTemplate = {
+  key: DesignTemplateKey;
+  name: string;
+  category: string;
+  garmentStyle: GarmentStyle;
+  designMode: DesignMode;
+  view: ViewMode;
+  baseColor: string;
+  accentColor: string;
+  trimColor: string;
+  vinylColor: string;
+  patternStyle: PatternStyle;
+  textureStrength: number;
+  textEffect: TextEffect;
+  shapeKind: ShapeKind;
+  shapeX: number;
+  shapeY: number;
+  shapeScale: number;
+  shapeRotation: number;
+  shapeOpacity: number;
+  nameY: number;
+  numberY: number;
+  sponsorY: number;
+  numberScale: number;
+  nameArch: number;
+  material: MaterialPreset;
+  productionAid: ProductionAid;
 };
 
 const materialPresets: Record<
@@ -132,6 +175,233 @@ const palettePresets = [
   { name: "Green Volt", base: "#166534", accent: "#a3e635", trim: "#052e16", vinyl: "#f8fafc" },
 ];
 
+const designTemplates: DesignTemplate[] = [
+  {
+    key: "elite-home",
+    name: "Elite Home",
+    category: "Football",
+    garmentStyle: "pro-panel",
+    designMode: "custom",
+    view: "back",
+    baseColor: "#0f766e",
+    accentColor: "#f97316",
+    trimColor: "#0f172a",
+    vinylColor: "#ffffff",
+    patternStyle: "pinstripe",
+    textureStrength: 22,
+    textEffect: "outline",
+    shapeKind: "sash",
+    shapeX: 200,
+    shapeY: 382,
+    shapeScale: 110,
+    shapeRotation: -5,
+    shapeOpacity: 88,
+    nameY: 208,
+    numberY: 322,
+    sponsorY: 262,
+    numberScale: 104,
+    nameArch: 44,
+    material: "pu-vinyl",
+    productionAid: "balanced",
+  },
+  {
+    key: "away-velocity",
+    name: "Away Velocity",
+    category: "Football",
+    garmentStyle: "raglan",
+    designMode: "custom",
+    view: "front",
+    baseColor: "#f8fafc",
+    accentColor: "#2563eb",
+    trimColor: "#111827",
+    vinylColor: "#0f172a",
+    patternStyle: "speed-lines",
+    textureStrength: 12,
+    textEffect: "split",
+    shapeKind: "lightning",
+    shapeX: 214,
+    shapeY: 342,
+    shapeScale: 120,
+    shapeRotation: -10,
+    shapeOpacity: 70,
+    nameY: 210,
+    numberY: 318,
+    sponsorY: 258,
+    numberScale: 96,
+    nameArch: 36,
+    material: "sublimation",
+    productionAid: "speed",
+  },
+  {
+    key: "keeper-armor",
+    name: "Keeper Armor",
+    category: "Goalkeeper",
+    garmentStyle: "goalkeeper",
+    designMode: "team",
+    view: "front",
+    baseColor: "#7f1d1d",
+    accentColor: "#facc15",
+    trimColor: "#111827",
+    vinylColor: "#ffffff",
+    patternStyle: "carbon",
+    textureStrength: 28,
+    textEffect: "outline",
+    shapeKind: "shield",
+    shapeX: 200,
+    shapeY: 306,
+    shapeScale: 92,
+    shapeRotation: 0,
+    shapeOpacity: 82,
+    nameY: 202,
+    numberY: 318,
+    sponsorY: 272,
+    numberScale: 92,
+    nameArch: 52,
+    material: "flock",
+    productionAid: "precision",
+  },
+  {
+    key: "training-minimal",
+    name: "Training Minimal",
+    category: "Academy",
+    garmentStyle: "training",
+    designMode: "team",
+    view: "front",
+    baseColor: "#1f2937",
+    accentColor: "#22c55e",
+    trimColor: "#020617",
+    vinylColor: "#f8fafc",
+    patternStyle: "panel-grid",
+    textureStrength: 16,
+    textEffect: "flat",
+    shapeKind: "circle",
+    shapeX: 200,
+    shapeY: 370,
+    shapeScale: 72,
+    shapeRotation: 0,
+    shapeOpacity: 48,
+    nameY: 210,
+    numberY: 318,
+    sponsorY: 252,
+    numberScale: 88,
+    nameArch: 32,
+    material: "pu-vinyl",
+    productionAid: "waste-saver",
+  },
+  {
+    key: "basketball-city",
+    name: "Basketball City",
+    category: "Basketball",
+    garmentStyle: "basketball",
+    designMode: "custom",
+    view: "back",
+    baseColor: "#4c1d95",
+    accentColor: "#06b6d4",
+    trimColor: "#111827",
+    vinylColor: "#ffffff",
+    patternStyle: "gradient-wave",
+    textureStrength: 18,
+    textEffect: "shadow",
+    shapeKind: "star",
+    shapeX: 200,
+    shapeY: 374,
+    shapeScale: 82,
+    shapeRotation: 9,
+    shapeOpacity: 58,
+    nameY: 196,
+    numberY: 322,
+    sponsorY: 260,
+    numberScale: 118,
+    nameArch: 58,
+    material: "twill",
+    productionAid: "precision",
+  },
+  {
+    key: "rugby-heritage",
+    name: "Rugby Heritage",
+    category: "Rugby",
+    garmentStyle: "rugby",
+    designMode: "team",
+    view: "front",
+    baseColor: "#f8fafc",
+    accentColor: "#be123c",
+    trimColor: "#111827",
+    vinylColor: "#111827",
+    patternStyle: "chevron",
+    textureStrength: 20,
+    textEffect: "outline",
+    shapeKind: "sash",
+    shapeX: 200,
+    shapeY: 382,
+    shapeScale: 96,
+    shapeRotation: 0,
+    shapeOpacity: 76,
+    nameY: 210,
+    numberY: 318,
+    sponsorY: 266,
+    numberScale: 96,
+    nameArch: 46,
+    material: "pu-vinyl",
+    productionAid: "balanced",
+  },
+  {
+    key: "street-camo",
+    name: "Street Camo",
+    category: "Lifestyle",
+    garmentStyle: "classic",
+    designMode: "custom",
+    view: "back",
+    baseColor: "#14532d",
+    accentColor: "#84cc16",
+    trimColor: "#052e16",
+    vinylColor: "#f8fafc",
+    patternStyle: "camo-panels",
+    textureStrength: 30,
+    textEffect: "split",
+    shapeKind: "lightning",
+    shapeX: 200,
+    shapeY: 356,
+    shapeScale: 132,
+    shapeRotation: 12,
+    shapeOpacity: 44,
+    nameY: 206,
+    numberY: 322,
+    sponsorY: 262,
+    numberScale: 110,
+    nameArch: 38,
+    material: "sublimation",
+    productionAid: "speed",
+  },
+  {
+    key: "gold-final",
+    name: "Gold Final",
+    category: "Finals",
+    garmentStyle: "pro-panel",
+    designMode: "custom",
+    view: "back",
+    baseColor: "#111827",
+    accentColor: "#f59e0b",
+    trimColor: "#020617",
+    vinylColor: "#ffffff",
+    patternStyle: "halftone",
+    textureStrength: 24,
+    textEffect: "arch",
+    shapeKind: "shield",
+    shapeX: 200,
+    shapeY: 380,
+    shapeScale: 86,
+    shapeRotation: 0,
+    shapeOpacity: 64,
+    nameY: 218,
+    numberY: 332,
+    sponsorY: 260,
+    numberScale: 106,
+    nameArch: 74,
+    material: "flock",
+    productionAid: "precision",
+  },
+];
+
 function svgText(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -166,6 +436,15 @@ function fitSponsorSize(value: string) {
 }
 
 function jerseyPath(style: GarmentStyle) {
+  if (style === "basketball") {
+    return "M128 58 C150 40 174 48 200 72 C226 48 250 40 272 58 L294 114 C266 126 254 162 258 210 L274 466 L126 466 L142 210 C146 162 134 126 106 114 Z";
+  }
+  if (style === "rugby") {
+    return "M100 86 L154 48 L200 76 L246 48 L300 86 L354 136 L318 198 L286 178 L286 464 L114 464 L114 178 L82 198 L46 136 Z";
+  }
+  if (style === "goalkeeper") {
+    return "M102 82 L154 42 L200 70 L246 42 L298 82 L366 132 L324 202 L290 174 L286 466 L114 466 L110 174 L76 202 L34 132 Z";
+  }
   if (style === "raglan") {
     return "M108 82 L156 42 L200 70 L244 42 L292 82 L354 142 L314 196 L284 170 L276 466 L124 466 L116 170 L86 196 L46 142 Z";
   }
@@ -188,6 +467,101 @@ function hpglJob(copies: number, mirrorCut: boolean, contourOffset: number, smoo
     `PU1400,1700;CI${Math.round((contourOffset + 1) * 95)};PU;`,
     `PU1150,2500;LBNAME/NUMBER M${mirror} S${smoothness};`,
     "SP0;",
+  ].join("\n");
+}
+
+function dxfLine(x1: number, y1: number, x2: number, y2: number, layer: string) {
+  return [
+    "0",
+    "LINE",
+    "8",
+    layer,
+    "10",
+    String(x1),
+    "20",
+    String(y1),
+    "30",
+    "0",
+    "11",
+    String(x2),
+    "21",
+    String(y2),
+    "31",
+    "0",
+  ].join("\n");
+}
+
+function dxfCircle(x: number, y: number, radius: number, layer: string) {
+  return [
+    "0",
+    "CIRCLE",
+    "8",
+    layer,
+    "10",
+    String(x),
+    "20",
+    String(y),
+    "30",
+    "0",
+    "40",
+    String(radius),
+  ].join("\n");
+}
+
+function dxfJob(copies: number, contourOffset: number, includeRegistration: boolean) {
+  const offset = Math.round(contourOffset * 10);
+  const entities = [
+    dxfLine(0, 0, 4000, 0, "MEDIA"),
+    dxfLine(4000, 0, 4000, 5200, "MEDIA"),
+    dxfLine(4000, 5200, 0, 5200, "MEDIA"),
+    dxfLine(0, 5200, 0, 0, "MEDIA"),
+    dxfLine(1120 - offset, 780 - offset, 1600, 420, "GARMENT_CONTOUR"),
+    dxfLine(1600, 420, 2000, 700, "GARMENT_CONTOUR"),
+    dxfLine(2000, 700, 2400, 420, "GARMENT_CONTOUR"),
+    dxfLine(2400, 420, 2880 + offset, 780 - offset, "GARMENT_CONTOUR"),
+    dxfLine(2880 + offset, 780 - offset, 3500 + offset, 1320, "GARMENT_CONTOUR"),
+    dxfLine(3500 + offset, 1320, 3090 + offset, 1880 + offset, "GARMENT_CONTOUR"),
+    dxfLine(3090 + offset, 1880 + offset, 2820 + offset, 1640, "GARMENT_CONTOUR"),
+    dxfLine(2820 + offset, 1640, 2820 + offset, 4600 + offset, "GARMENT_CONTOUR"),
+    dxfLine(2820 + offset, 4600 + offset, 1180 - offset, 4600 + offset, "GARMENT_CONTOUR"),
+    dxfLine(1180 - offset, 4600 + offset, 1180 - offset, 1640, "GARMENT_CONTOUR"),
+    dxfLine(1180 - offset, 1640, 910 - offset, 1880 + offset, "GARMENT_CONTOUR"),
+    dxfLine(910 - offset, 1880 + offset, 500 - offset, 1320, "GARMENT_CONTOUR"),
+    dxfLine(500 - offset, 1320, 1120 - offset, 780 - offset, "GARMENT_CONTOUR"),
+    dxfCircle(2000, 3000, 640, "NUMBER_ZONE"),
+    dxfLine(1080, 2180, 2920, 2180, "NAME_ZONE"),
+    dxfLine(1040, 2620, 2960, 2620, "SPONSOR_ZONE"),
+  ];
+
+  if (includeRegistration) {
+    entities.push(
+      dxfCircle(580, 580, 140, "REGISTRATION"),
+      dxfCircle(3420, 580, 140, "REGISTRATION"),
+      dxfCircle(580, 4620, 140, "REGISTRATION"),
+      dxfCircle(3420, 4620, 140, "REGISTRATION"),
+    );
+  }
+
+  return [
+    "0",
+    "SECTION",
+    "2",
+    "HEADER",
+    "9",
+    "$ACADVER",
+    "1",
+    "AC1009",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "ENTITIES",
+    ...Array.from({ length: Math.max(1, copies) }, (_, index) => entities.map((entity) => entity.replaceAll("GARMENT_CONTOUR", `GARMENT_CONTOUR_${index + 1}`)).join("\n")),
+    "0",
+    "ENDSEC",
+    "0",
+    "EOF",
   ].join("\n");
 }
 
@@ -302,6 +676,8 @@ export function DesignStudio() {
   const [activeTab, setActiveTab] = useState<StudioTab>("brand");
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
   const [canvasZoom, setCanvasZoom] = useState(100);
+  const [baudRate, setBaudRate] = useState(9600);
+  const [machineStatus, setMachineStatus] = useState<MachineStatus>("idle");
   const [garmentStyle, setGarmentStyle] = useState<GarmentStyle>("pro-panel");
   const [designMode, setDesignMode] = useState<DesignMode>("custom");
   const [textEffect, setTextEffect] = useState<TextEffect>("outline");
@@ -387,6 +763,7 @@ export function DesignStudio() {
     const contrastReady = baseColor.toLowerCase() !== vinylColor.toLowerCase() && trimColor.toLowerCase() !== vinylColor.toLowerCase();
     const imageReady = !layers.image || Boolean(uploadedImage);
     const cutterReady = material === "sublimation" || (cutForce > 0 && cutSpeed > 0 && layers.contour);
+    const machinePackageReady = layers.contour && layers.registration && bleedMargin >= 1 && nestingGap >= 2;
 
     return [
       { label: "Safe print area", ok: showSafeArea },
@@ -397,14 +774,15 @@ export function DesignStudio() {
       { label: "Image optimized", ok: imageReady },
       { label: "Cutter setup", ok: cutterReady },
       { label: "HTV mirror", ok: material !== "pu-vinyl" || mirrorCut },
+      { label: "Machine package", ok: machinePackageReady },
     ];
-  }, [baseColor, cutForce, cutSpeed, layers.contour, layers.image, layers.registration, layers.weedBox, material, mirrorCut, playerName.length, playerNumber.length, showSafeArea, sponsor.length, trimColor, uploadedImage, vinylColor]);
+  }, [baseColor, bleedMargin, cutForce, cutSpeed, layers.contour, layers.image, layers.registration, layers.weedBox, material, mirrorCut, nestingGap, playerName.length, playerNumber.length, showSafeArea, sponsor.length, trimColor, uploadedImage, vinylColor]);
 
   const passedChecks = qualityChecks.filter((check) => check.ok).length;
   const productionScore = Math.round((passedChecks / qualityChecks.length) * 72 + (activeLayers / totalLayers) * 18 + (preserveCutOrder ? 5 : 0) + (snapToGuides ? 5 : 0));
   const vinylUsage = Math.round((activeLayers * 0.11 + copies * 0.18 + imageSize / 900 + numberScale / 1100) * 100) / 100;
   const pressMinutes = Math.max(1, Math.round((materialConfig.heatSeconds * pressPasses * copies) / 60 + activeLayers * 0.35));
-  const cutComplexity = Math.min(100, Math.round(activeLayers * 7 + contourOffset * 4 + cornerSmoothing * 0.25 + (patternStyle === "halftone" ? 18 : 0)));
+  const cutComplexity = Math.min(100, Math.round(activeLayers * 7 + contourOffset * 4 + cornerSmoothing * 0.25 + (["halftone", "carbon", "camo-panels", "kente-stripe"].includes(patternStyle) ? 18 : 0)));
 
   const svg = useMemo(() => {
     const safeSponsor = svgText(sponsor);
@@ -467,7 +845,34 @@ export function DesignStudio() {
       if (patternStyle === "speed-lines") {
         return `<g clip-path="url(#jerseyClip)" opacity="0.32" stroke="${accentColor}" stroke-width="7" stroke-linecap="round"><path d="M92 176 H292"/><path d="M76 246 H324"/><path d="M94 316 H306"/><path d="M126 386 H274"/></g>`;
       }
+      if (patternStyle === "carbon") {
+        return `<g clip-path="url(#jerseyClip)" opacity="0.26"><rect x="42" y="38" width="316" height="430" fill="url(#carbonPattern)"/></g>`;
+      }
+      if (patternStyle === "kente-stripe") {
+        return `<g clip-path="url(#jerseyClip)" opacity="0.88"><path d="M84 424 L316 96" stroke="#f59e0b" stroke-width="28"/><path d="M104 430 L336 102" stroke="#16a34a" stroke-width="10"/><path d="M66 404 L298 76" stroke="#dc2626" stroke-width="8"/><path d="M124 456 L356 128" stroke="#111827" stroke-width="6"/></g>`;
+      }
+      if (patternStyle === "camo-panels") {
+        return `<g clip-path="url(#jerseyClip)" opacity="0.34" fill="${accentColor}"><path d="M86 178 C124 132 162 164 142 214 C128 250 74 238 86 178Z"/><path d="M236 104 C296 102 322 150 292 188 C256 228 204 172 236 104Z"/><path d="M210 308 C260 266 332 302 302 370 C278 426 196 386 210 308Z"/><path d="M92 332 C138 294 178 326 154 386 C136 430 68 400 92 332Z"/></g>`;
+      }
+      if (patternStyle === "gradient-wave") {
+        return `<g clip-path="url(#jerseyClip)" opacity="0.68"><rect x="42" y="38" width="316" height="430" fill="url(#waveGradient)"/><path d="M58 338 C132 284 210 404 342 302" fill="none" stroke="${vinylColor}" stroke-width="13" opacity="0.35"/><path d="M66 386 C142 332 220 452 334 354" fill="none" stroke="${accentColor}" stroke-width="9" opacity="0.55"/></g>`;
+      }
       return `<g clip-path="url(#jerseyClip)" opacity="0.22" stroke="${vinylColor}" stroke-width="1.5"><path d="M120 80V462M160 64V462M200 70V462M240 64V462M280 80V462"/><path d="M96 164H304M110 244H290M114 324H286M118 404H282"/></g>`;
+    })();
+    const garmentDetails = (() => {
+      if (garmentStyle === "basketball") {
+        return `<g stroke="${trimColor}" stroke-width="4" fill="none"><path d="M142 70 C160 124 240 124 258 70"/><path d="M128 58 C138 104 134 142 108 166"/><path d="M272 58 C262 104 266 142 292 166"/><path d="M132 430 H268"/></g>`;
+      }
+      if (garmentStyle === "rugby") {
+        return `<g><path d="M154 48 L200 78 L246 48 L232 114 L168 114 Z" fill="${vinylColor}" opacity="0.82" stroke="${trimColor}" stroke-width="3"/><path d="M88 220 H312M88 304 H312" stroke="${accentColor}" stroke-width="18" opacity="0.7"/></g>`;
+      }
+      if (garmentStyle === "goalkeeper") {
+        return `<g><path d="M72 154 L132 182 L108 236 L48 204 Z" fill="${accentColor}" opacity="0.72" stroke="${trimColor}" stroke-width="3"/><path d="M328 154 L268 182 L292 236 L352 204 Z" fill="${accentColor}" opacity="0.72" stroke="${trimColor}" stroke-width="3"/><path d="M140 138 H260 L246 178 H154 Z" fill="${vinylColor}" opacity="0.18"/></g>`;
+      }
+      if (garmentStyle === "training") {
+        return `<g fill="none" stroke="${vinylColor}" stroke-width="3" opacity="0.38"><path d="M134 126 C166 152 234 152 266 126"/><path d="M150 444 H250"/></g>`;
+      }
+      return `<g fill="none" stroke="${vinylColor}" stroke-width="2.5" opacity="0.22"><path d="M148 120 C170 142 230 142 252 120"/><path d="M120 456 H280"/></g>`;
     })();
     const sideStripes = layers.sideStripes
       ? `
@@ -573,6 +978,15 @@ export function DesignStudio() {
           <circle cx="5" cy="5" r="2.8" fill="${accentColor}"/>
           <circle cx="14" cy="14" r="1.8" fill="${vinylColor}"/>
         </pattern>
+        <pattern id="carbonPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M0 10 L10 0 L20 10 L10 20 Z" fill="${accentColor}" opacity="0.48"/>
+          <path d="M10 0 L20 10 M0 10 L10 20" stroke="${vinylColor}" stroke-width="1.2" opacity="0.5"/>
+        </pattern>
+        <linearGradient id="waveGradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="${baseColor}" stop-opacity="0.15"/>
+          <stop offset="0.45" stop-color="${accentColor}" stop-opacity="0.5"/>
+          <stop offset="1" stop-color="${trimColor}" stop-opacity="0.35"/>
+        </linearGradient>
       </defs>
       <rect width="400" height="520" fill="#f8fafc"/>
       <g ${transferGroup}>
@@ -580,6 +994,7 @@ export function DesignStudio() {
         <path d="${path}" fill="${baseColor}" stroke="${trimColor}" stroke-width="4"/>
         ${fabricTexture}
         ${patternOverlay}
+        ${garmentDetails}
         <path d="M160 42 C175 86 225 86 240 42 L218 96 L182 96 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="2"/>
         ${sideStripes}
         ${shape}
@@ -670,6 +1085,9 @@ export function DesignStudio() {
       preserveCutOrder,
       autoWeedLines,
       copies,
+      baudRate,
+      protocols: ["HPGL/PLT", "DXF R12", "SVG", "JSON tech manifest"],
+      directSend: "Web Serial where supported by browser and cutter driver",
     },
     image: uploadedImage
       ? {
@@ -698,6 +1116,7 @@ export function DesignStudio() {
     autoWeedLines,
     baseColor,
     bladeOffset,
+    baudRate,
     bleedMargin,
     contourOffset,
     copies,
@@ -801,6 +1220,47 @@ export function DesignStudio() {
     setVinylColor(palette.vinyl);
   }
 
+  function applyTemplate(template: DesignTemplate) {
+    setGarmentStyle(template.garmentStyle);
+    setDesignMode(template.designMode);
+    setView(template.view);
+    setBaseColor(template.baseColor);
+    setAccentColor(template.accentColor);
+    setTrimColor(template.trimColor);
+    setVinylColor(template.vinylColor);
+    setPatternStyle(template.patternStyle);
+    setTextureStrength(template.textureStrength);
+    setTextEffect(template.textEffect);
+    setShapeKind(template.shapeKind);
+    setShapeX(template.shapeX);
+    setShapeY(template.shapeY);
+    setShapeScale(template.shapeScale);
+    setShapeRotation(template.shapeRotation);
+    setShapeOpacity(template.shapeOpacity);
+    setNameY(template.nameY);
+    setNumberY(template.numberY);
+    setSponsorY(template.sponsorY);
+    setNumberScale(template.numberScale);
+    setNameArch(template.nameArch);
+    setProductionAid(template.productionAid);
+    applyMaterial(template.material);
+    setLayers((current) => ({
+      ...current,
+      texture: true,
+      pattern: template.patternStyle !== "none",
+      shape: true,
+      crest: true,
+      sponsor: true,
+      name: template.view !== "front",
+      number: template.view !== "front",
+      sideStripes: true,
+      contour: true,
+      weedBox: true,
+      registration: true,
+    }));
+    setActiveTab("brand");
+  }
+
   function applyDesignMode(nextMode: DesignMode) {
     setDesignMode(nextMode);
 
@@ -866,6 +1326,8 @@ export function DesignStudio() {
     setActiveTab("brand");
     setActiveTool("select");
     setCanvasZoom(100);
+    setBaudRate(9600);
+    setMachineStatus("idle");
     setGarmentStyle("pro-panel");
     setDesignMode("custom");
     setTextEffect("outline");
@@ -942,6 +1404,44 @@ export function DesignStudio() {
 
   function downloadHpgl() {
     downloadFile(`cut-path-${playerName || "design"}.plt`, hpglJob(copies, mirrorCut, contourOffset, cornerSmoothing), "application/octet-stream");
+  }
+
+  function downloadDxf() {
+    downloadFile(`cut-layout-${playerName || "design"}.dxf`, dxfJob(copies, contourOffset, layers.registration), "application/dxf");
+  }
+
+  async function sendHpglToCutter() {
+    const serial = (navigator as NavigatorWithSerial).serial;
+
+    if (!serial) {
+      setMachineStatus("unsupported");
+      return;
+    }
+
+    let port: SerialPortLike | null = null;
+    setMachineStatus("connecting");
+
+    try {
+      port = await serial.requestPort();
+      await port.open({ baudRate });
+      const writer = port.writable?.getWriter();
+
+      if (!writer) throw new Error("Cutter port is not writable.");
+
+      await writer.write(new TextEncoder().encode(hpglJob(copies, mirrorCut, contourOffset, cornerSmoothing)));
+      writer.releaseLock();
+      await port.close();
+      setMachineStatus("sent");
+    } catch {
+      if (port) {
+        try {
+          await port.close();
+        } catch {
+          // Port may already be closed by the browser after a failed write.
+        }
+      }
+      setMachineStatus("failed");
+    }
   }
 
   function downloadTechPack() {
@@ -1052,6 +1552,31 @@ export function DesignStudio() {
         </div>
 
         <div className="grid gap-2">
+          {designTemplates.map((template) => (
+            <button
+              key={template.key}
+              onClick={() => applyTemplate(template)}
+              className="grid min-h-20 grid-cols-[68px_1fr] gap-3 rounded-[8px] border border-[#ded8cd] bg-white p-2 text-left transition hover:bg-[#f6f4ef]"
+            >
+              <span className="relative overflow-hidden rounded-[8px] border border-slate-200" style={{ background: template.baseColor }}>
+                <span className="absolute inset-x-0 top-0 h-5" style={{ background: template.accentColor }} />
+                <span className="absolute bottom-2 left-2 h-8 w-8 rounded-full border-2" style={{ borderColor: template.vinylColor }} />
+                <span className="absolute bottom-3 right-2 h-10 w-5 rounded-sm" style={{ background: template.vinylColor, opacity: 0.92 }} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{template.name}</span>
+                <span className="mt-1 block text-xs text-slate-500">{template.category} / {template.garmentStyle} / {template.patternStyle}</span>
+                <span className="mt-2 flex gap-1">
+                  {[template.baseColor, template.accentColor, template.trimColor, template.vinylColor].map((color) => (
+                    <span key={color} className="h-4 w-4 rounded-full border border-slate-200" style={{ background: color }} />
+                  ))}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-2">
           {palettePresets.map((palette) => (
             <button
               key={palette.name}
@@ -1089,6 +1614,9 @@ export function DesignStudio() {
             <option value="raglan">Raglan sleeve</option>
             <option value="pro-panel">Pro panel</option>
             <option value="training">Training fit</option>
+            <option value="basketball">Basketball tank</option>
+            <option value="rugby">Rugby collar</option>
+            <option value="goalkeeper">Goalkeeper armor</option>
           </select>
         </label>
       </div>
@@ -1206,6 +1734,10 @@ export function DesignStudio() {
             <option value="halftone">Halftone</option>
             <option value="speed-lines">Speed lines</option>
             <option value="panel-grid">Panel grid</option>
+            <option value="carbon">Carbon armor</option>
+            <option value="kente-stripe">Kente stripe</option>
+            <option value="camo-panels">Camo panels</option>
+            <option value="gradient-wave">Gradient wave</option>
           </select>
         </label>
 
@@ -1336,6 +1868,28 @@ export function DesignStudio() {
             </label>
           ))}
         </div>
+
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold">Direct cutter link</span>
+            <span className="rounded-[8px] bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{machineStatus}</span>
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-slate-500">Baud rate</span>
+              <select className="field" value={baudRate} onChange={(event) => setBaudRate(Number(event.target.value))}>
+                <option value={9600}>9600</option>
+                <option value={19200}>19200</option>
+                <option value={38400}>38400</option>
+                <option value={57600}>57600</option>
+                <option value={115200}>115200</option>
+              </select>
+            </label>
+            <Button variant="secondary" className="self-end" onClick={() => void sendHpglToCutter()} disabled={machineStatus === "connecting"}>
+              <Printer size={16} /> Send
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1385,7 +1939,7 @@ export function DesignStudio() {
   function renderExportPanel() {
     return (
       <div className="space-y-4">
-        <PanelHeading icon={Download} title="Export Center" detail="SVG PLT JSON" />
+        <PanelHeading icon={Download} title="Export Center" detail="SVG PLT DXF" />
 
         <div className="grid gap-2">
           <Button onClick={downloadSvg} className="justify-start">
@@ -1394,11 +1948,17 @@ export function DesignStudio() {
           <Button variant="secondary" onClick={downloadHpgl} className="justify-start">
             <Scissors size={16} /> Export cutter PLT
           </Button>
+          <Button variant="outline" onClick={downloadDxf} className="justify-start">
+            <BoxSelect size={16} /> Export DXF cut layout
+          </Button>
           <Button variant="outline" onClick={downloadJob} className="justify-start">
             <FileJson size={16} /> Export production JSON
           </Button>
           <Button variant="outline" onClick={downloadTechPack} className="justify-start">
             <Printer size={16} /> Export print tech pack
+          </Button>
+          <Button variant="secondary" onClick={() => void sendHpglToCutter()} className="justify-start" disabled={machineStatus === "connecting"}>
+            <Printer size={16} /> Send HPGL to cutter
           </Button>
         </div>
 
@@ -1409,6 +1969,7 @@ export function DesignStudio() {
             <p>Layers: {activeLayers}/{totalLayers}</p>
             <p>Material: {materialConfig.label}</p>
             <p>Image: {uploadedImage ? "optimized asset included" : "no imported image"}</p>
+            <p>Machine: {cutterConfig.label} / {baudRate} baud / {machineStatus}</p>
           </div>
         </div>
 
@@ -1477,6 +2038,9 @@ export function DesignStudio() {
             </Button>
             <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={downloadHpgl}>
               <Scissors size={16} /> PLT
+            </Button>
+            <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={downloadDxf}>
+              <BoxSelect size={16} /> DXF
             </Button>
             <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={downloadJob}>
               <FileJson size={16} /> JSON
@@ -1573,6 +2137,7 @@ export function DesignStudio() {
                 <p>Pattern: <span className="font-semibold text-slate-900">{patternStyle}</span></p>
                 <p>Layers: <span className="font-semibold text-slate-900">{activeLayers}/{totalLayers}</span></p>
                 <p>Image: <span className="font-semibold text-slate-900">{uploadedImage ? "optimized" : "none"}</span></p>
+                <p>Machine: <span className="font-semibold text-slate-900">{machineStatus}</span></p>
               </div>
             </div>
 
