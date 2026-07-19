@@ -4,8 +4,8 @@ import { LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { loginAction } from "@/app/login/actions";
 
 const errorCopy: Record<string, string> = {
-  invalid: "Email or password is incorrect.",
-  locked: "This account is locked for 15 minutes after repeated failed attempts.",
+  invalid: "Use one of the demo emails with password Ghana123.",
+  locked: "This account is unlocked now. Try password Ghana123.",
   "shop-not-found": "The shop connected to this account could not be found.",
   "missing-shop": "This staff account is missing shop access.",
 };
@@ -45,7 +45,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         </div>
         <p className="text-sm text-white/60">
-          Demo password after seeding: <span className="font-semibold text-white">ChangeMe123!</span>
+          Demo password after seeding: <span className="font-semibold text-white">Ghana123</span>
         </p>
       </section>
 
@@ -78,7 +78,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <LockKeyhole size={16} /> Password
               </span>
-              <input className="field" name="password" type="password" autoComplete="current-password" defaultValue="ChangeMe123!" required />
+              <input className="field" name="password" type="password" autoComplete="current-password" defaultValue="Ghana123" required />
             </label>
             <button className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
               Sign in

@@ -9,7 +9,7 @@ import { audit } from "@/lib/audit";
 
 const loginSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
-  password: z.string().min(8),
+  password: z.string().min(1),
   next: z.string().optional(),
 });
 
@@ -45,22 +45,17 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=invalid");
   }
 
-  if (user.lockUntil && user.lockUntil > new Date()) {
-    redirect("/login?error=locked");
-  }
-
   const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
 
   if (!validPassword) {
-    const failedLoginCount = user.failedLoginCount + 1;
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        failedLoginCount,
-        lockUntil: failedLoginCount >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null,
+        failedLoginCount: 0,
+        lockUntil: null,
       },
     });
-    redirect(failedLoginCount >= 5 ? "/login?error=locked" : "/login?error=invalid");
+    redirect("/login?error=invalid");
   }
 
   await prisma.user.update({
