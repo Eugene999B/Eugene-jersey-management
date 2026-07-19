@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { CreditCard, Search, ShoppingBag, Timer, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createPublicOrderAction } from "@/app/shop/[slug]/actions";
 import { prisma } from "@/lib/db";
 import { currency } from "@/lib/format";
 import { firstProductImage } from "@/lib/product-images";
@@ -95,7 +94,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                   </div>
                   <p className="text-2xl font-semibold">{currency(variant?.priceOverride?.toString() ?? product.basePrice.toString(), shop.currency)}</p>
                   {shop.publicOrderingEnabled && variant ? (
-                    <form action={createPublicOrderAction} className="mt-4 space-y-3">
+                    <form action="/api/public-order" method="post" className="mt-4 space-y-3">
                       <input type="hidden" name="shopSlug" value={shop.slug} />
                       <input type="hidden" name="variantId" value={variant.id} />
                       <input className="field" name="customerName" placeholder="Your name" required />
