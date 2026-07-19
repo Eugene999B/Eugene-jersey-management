@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   unpack:
-    if: ${{ contains(github.event.head_commit.message, 'Add temporary source unpack workflow') }}
+    if: ${{ contains(github.event.head_commit.message, 'Run source unpack') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -27,6 +27,7 @@ jobs:
         run: |
           unzip -o project.zip -d .
           rm -f project.zip
+          rm -f .github/unpack-trigger.txt
           rm -f .github/workflows/unpack-source.yml
 
       - name: Commit extracted source
