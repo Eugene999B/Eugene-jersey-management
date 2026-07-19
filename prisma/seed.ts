@@ -8,7 +8,8 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const passwordHash = await bcrypt.hash("ChangeMe123!", 12);
+  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "ChangeMe123!";
+  const passwordHash = await bcrypt.hash(demoPassword, 12);
 
   const demoShop = await prisma.shop.upsert({
     where: { slug: "accra-pro-sports" },
@@ -312,7 +313,7 @@ async function main() {
 main()
   .then(async () => {
     await prisma.$disconnect();
-    console.log("Seed complete. Demo password for all accounts: ChangeMe123!");
+    console.log("Seed complete. Demo account password was loaded from SEED_DEMO_PASSWORD when provided.");
   })
   .catch(async (error) => {
     console.error(error);
