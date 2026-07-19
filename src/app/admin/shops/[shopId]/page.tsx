@@ -17,7 +17,8 @@ export default async function AdminShopDetailPage({ params }: Props) {
     where: { id: shopId },
     include: {
       users: { orderBy: { createdAt: "desc" } },
-      _count: { select: { products: true, orders: true, customers: true } },
+      paymentConfig: true,
+      _count: { select: { products: true, orders: true, customers: true, debts: true, suppliers: true, dailyClosings: true } },
       auditLogs: { orderBy: { createdAt: "desc" }, take: 8, include: { user: true } },
     },
   });
@@ -37,7 +38,7 @@ export default async function AdminShopDetailPage({ params }: Props) {
         <div>
           <Link className="text-sm font-semibold text-slate-500 hover:text-slate-950" href="/admin">Back to shops</Link>
           <h1 className="mt-2 text-3xl font-semibold">{shop.name}</h1>
-          <p className="mt-1 text-sm text-slate-600">/{shop.slug} - created {shortDate(shop.createdAt)}</p>
+          <p className="mt-1 text-sm text-slate-600">/{shop.slug} - code {shop.networkCode ?? "not assigned"} - created {shortDate(shop.createdAt)}</p>
         </div>
         <form action={toggleShopAction}>
           <input type="hidden" name="shopId" value={shop.id} />
@@ -50,6 +51,28 @@ export default async function AdminShopDetailPage({ params }: Props) {
         <StatCard label="Status" value={shop.isActive ? "Active" : "Suspended"} />
         <StatCard label="Products" value={String(shop._count.products)} />
         <StatCard label="30-day sales" value={currency(sales._sum.totalAmount?.toString() ?? "0", shop.currency)} />
+        <StatCard label="Renewal" value={shop.subscriptionRenewalAt ? shortDate(shop.subscriptionRenewalAt) : "Not set"} />
+        <StatCard label="Suppliers" value={String(shop._count.suppliers)} />
+        <StatCard label="Debt records" value={String(shop._count.debts)} />
+        <StatCard label="Closings" value={String(shop._count.dailyClosings)} />
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <div className="panel p-5">
+          <p className="text-sm font-semibold uppercase text-slate-500">Payment routing</p>
+          <h2 className="mt-2 text-xl font-semibold">{shop.paymentConfig?.paystackSubaccountCode ? "Subaccount ready" : "Needs subaccount"}</h2>
+          <p className="mt-2 text-sm text-slate-500">{shop.paymentConfig?.paystackSubaccountCode ?? "Add a Paystack subaccount in shop settings before live online payments."}</p>
+        </div>
+        <div className="panel p-5">
+          <p className="text-sm font-semibold uppercase text-slate-500">Mobile money</p>
+          <h2 className="mt-2 text-xl font-semibold">{shop.paymentConfig?.shopMomoNumber ?? "Not set"}</h2>
+          <p className="mt-2 text-sm text-slate-500">{shop.paymentConfig?.shopMomoNetwork ?? "Shop can add its own settlement line."}</p>
+        </div>
+        <div className="panel p-5">
+          <p className="text-sm font-semibold uppercase text-slate-500">Billing</p>
+          <h2 className="mt-2 text-xl font-semibold">{shop.billingCycle}</h2>
+          <p className="mt-2 text-sm text-slate-500">{shop.subscriptionStatus} - {shop.billingCycle === "YEARLY" ? currency(shop.yearlyPrice?.toString() ?? "0") : currency(shop.monthlyPrice?.toString() ?? "0")}</p>
+        </div>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">

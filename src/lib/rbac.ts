@@ -9,6 +9,7 @@ export const roleLabels: Record<Role, string> = {
   INVENTORY_CLERK: "Inventory Clerk",
   ACCOUNTANT: "Accountant",
   VIEWER: "Viewer",
+  SUPPLIER: "Supplier",
 };
 
 export const permissions = {
@@ -31,6 +32,10 @@ export const permissions = {
   messages: [Role.OWNER, Role.MANAGER, Role.CASHIER],
   designs: [Role.OWNER, Role.MANAGER, Role.DESIGNER],
   activity: [Role.OWNER, Role.MANAGER],
+  closing: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT],
+  suppliers: [Role.OWNER, Role.MANAGER, Role.INVENTORY_CLERK, Role.ACCOUNTANT],
+  network: [Role.OWNER, Role.MANAGER],
+  exports: [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT],
   staff: [Role.OWNER, Role.MANAGER],
   settings: [Role.OWNER, Role.MANAGER],
 } satisfies Record<string, Role[]>;
@@ -66,6 +71,10 @@ export function canSeeNav(role: Role) {
     messages: hasRole({ role }, permissions.messages),
     designs: hasRole({ role }, permissions.designs),
     activity: hasRole({ role }, permissions.activity),
+    closing: hasRole({ role }, permissions.closing),
+    suppliers: hasRole({ role }, permissions.suppliers),
+    network: hasRole({ role }, permissions.network),
+    exports: hasRole({ role }, permissions.exports),
     staff: hasRole({ role }, permissions.staff),
     settings: hasRole({ role }, permissions.settings),
   };

@@ -4,7 +4,7 @@ Login details and the first workflows to test after seeding.
 
 ## Demo Password
 
-All seeded demo users use the password ChangeMe123!. Change every password before real use.
+All seeded demo users use the password Ghana123. Change every password before real use.
 
 ## Accounts
 
@@ -14,6 +14,7 @@ All seeded demo users use the password ChangeMe123!. Change every password befor
 - cashier@accra.test - Cashier - POS and orders
 - designer@accra.test - Designer - production order status workflow
 - accountant@accra.test - Accountant - reports and financial visibility
+- supplier@accra.test - Supplier portal - purchase order acknowledgement
 
 ## First Run Checklist
 
@@ -21,9 +22,14 @@ All seeded demo users use the password ChangeMe123!. Change every password befor
 - Sign out, then sign in as owner@accra.test.
 - Open Catalog and create a test product.
 - Open POS, add a product to the cart, choose Cash, and complete the sale.
+- Open POS again, choose Store Credit, enter a customer name, due date, and installment count, then confirm the debt appears in Debts.
 - Open Orders and move the demo order through the production board.
-- Open Reports and export CSV or use the PDF print button.
+- Open Designs and test the production view, cutter profile, heat press preset, SVG export, job JSON export, and PLT export.
+- Open Suppliers, review the seeded supplier, create a purchase order, and receive it to increase stock.
+- Open Daily Closing, enter counted cash, and export the closing report.
+- Open Exports and download PDF, Word, and Excel-compatible reports.
 - Open /track/APS-10001 to see the public tracking page.
+- Sign in as supplier@accra.test and confirm /supplier shows purchase orders.
 
 ## Common Local Issues
 

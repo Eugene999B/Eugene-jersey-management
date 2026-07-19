@@ -12,6 +12,8 @@ const checkoutSchema = z.object({
   customerPhone: z.string().optional(),
   customerEmail: z.string().email().optional(),
   paymentMethod: z.nativeEnum(PaymentMethod),
+  creditDueDate: z.coerce.date().optional(),
+  creditInstallments: z.coerce.number().int().min(1).max(12).default(1),
   discountAmount: z.coerce.number().min(0).default(0),
   notes: z.string().optional(),
   items: z.array(z.object({
@@ -29,6 +31,14 @@ function receiptNumber(shopSlug: string) {
     .slice(0, 4)
     .toUpperCase();
   return `${prefix || "SHOP"}-${Date.now().toString().slice(-7)}`;
+}
+
+function installmentDates(firstDueDate: Date, count: number) {
+  return Array.from({ length: count }).map((_, index) => {
+    const dueDate = new Date(firstDueDate);
+    dueDate.setMonth(dueDate.getMonth() + index);
+    return dueDate;
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -67,6 +77,12 @@ export async function POST(request: NextRequest) {
 
   const discountAmount = Math.min(parsed.data.discountAmount, subtotal);
   const totalAmount = Math.max(subtotal - discountAmount, 0);
+  const isCredit = parsed.data.paymentMethod === PaymentMethod.STORE_CREDIT;
+
+  if (isCredit && !parsed.data.customerName) {
+    return NextResponse.json({ error: "Customer name is required for credit sales." }, { status: 400 });
+  }
+
   const customer = parsed.data.customerName
     ? await prisma.customer.create({
         data: {
@@ -89,7 +105,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return tx.order.create({
+    const createdOrder = await tx.order.create({
       data: {
         shopId: session.shopId!,
         customerId: customer?.id,
@@ -115,15 +131,43 @@ export async function POST(request: NextRequest) {
           create: {
             method: parsed.data.paymentMethod,
             amount: totalAmount,
-            status: PaymentStatus.SUCCESS,
+            status: isCredit ? PaymentStatus.PENDING : PaymentStatus.SUCCESS,
             providerReference:
               parsed.data.paymentMethod === PaymentMethod.CASH
                 ? "CASH-RECORDED"
+                : parsed.data.paymentMethod === PaymentMethod.STORE_CREDIT
+                  ? "CREDIT-RECORDED"
                 : `SANDBOX-${parsed.data.paymentMethod}-${Date.now()}`,
           },
         },
       },
     });
+
+    if (isCredit && customer) {
+      const dueDate = parsed.data.creditDueDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const installmentCount = parsed.data.creditInstallments;
+      const installmentAmount = Number((totalAmount / installmentCount).toFixed(2));
+      await tx.debt.create({
+        data: {
+          shopId: session.shopId!,
+          customerId: customer.id,
+          orderId: createdOrder.id,
+          principalAmount: totalAmount,
+          dueDate,
+          notes: `POS credit sale ${createdOrder.receiptNumber}`,
+          installments: {
+            create: installmentDates(dueDate, installmentCount).map((installmentDueDate, index) => ({
+              amount: index === installmentCount - 1
+                ? Number((totalAmount - installmentAmount * (installmentCount - 1)).toFixed(2))
+                : installmentAmount,
+              dueDate: installmentDueDate,
+            })),
+          },
+        },
+      });
+    }
+
+    return createdOrder;
   });
 
   await audit({
@@ -132,7 +176,7 @@ export async function POST(request: NextRequest) {
     action: "pos.checkout_completed",
     entityType: "Order",
     entityId: order.id,
-    metadata: { receiptNumber: order.receiptNumber, paymentMethod: parsed.data.paymentMethod },
+    metadata: { receiptNumber: order.receiptNumber, paymentMethod: parsed.data.paymentMethod, creditCreated: isCredit },
   });
 
   if (customer?.phone || customer?.email) {

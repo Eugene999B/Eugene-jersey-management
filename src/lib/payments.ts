@@ -5,6 +5,9 @@ type PaystackInitInput = {
   reference: string;
   callbackUrl: string;
   metadata?: Record<string, unknown>;
+  subaccount?: string | null;
+  transactionCharge?: number | null;
+  bearer?: "account" | "subaccount" | "all-proportional" | "all" | null;
 };
 
 type PaystackInitResult = {
@@ -39,6 +42,9 @@ export async function initializePaystackTransaction(input: PaystackInitInput): P
       currency: input.currency,
       reference: input.reference,
       callback_url: input.callbackUrl,
+      subaccount: input.subaccount || undefined,
+      transaction_charge: input.transactionCharge ?? undefined,
+      bearer: input.bearer || undefined,
       metadata: input.metadata,
     }),
   });

@@ -21,9 +21,9 @@ export default async function DesignsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Design studio</h1>
-          <p className="mt-2 text-sm text-slate-500">Create jersey mockups, export production SVGs, and connect designs to orders.</p>
+          <p className="mt-2 text-sm text-slate-500">Create jersey mockups, prepare heat press jobs, and export cutter-ready artwork.</p>
         </div>
-        <Badge tone="blue"><WandSparkles size={14} /> Machine-ready foundation</Badge>
+        <Badge tone="blue"><WandSparkles size={14} /> Plotter-ready studio</Badge>
       </div>
 
       <DesignStudio />

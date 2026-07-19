@@ -4,13 +4,13 @@ A wide context document for ChatGPT, another AI coding agent, or a developer joi
 
 ## Executive Summary
 
-Sports Shop Platform is a full-stack multi-tenant sports retail SaaS application. It was built from the YPMS roadmap document as a Phase 1 MVP covering tenant administration, staff login, RBAC, catalog, POS, custom production orders, customers, reports, branding, audit logs, and generated documentation.
+Sports Shop Platform is a full-stack multi-tenant sports retail SaaS application. It was built from the YPMS roadmap document and expanded into a professional jersey-shop platform covering tenant administration, staff login, RBAC, catalog, POS, credit sales, debts, custom production orders, design studio, customer messaging, supplier purchasing, shop networking, daily closing, exports, reports, branding, audit logs, and generated documentation.
 
 The project is not a separated frontend/backend architecture yet. It is a Next.js App Router application where the user interface, backend API routes, server actions, authentication, database access, and public tracking pages live in the same app. This matters for deployment decisions.
 
 ## Current Project Location
 
-- Local path: C:\Users\DDK\Documents\Jersey\sports-shop-platform
+- Local path: C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready
 - Primary app framework: Next.js 16 App Router with TypeScript.
 - Database: PostgreSQL through Prisma ORM v7 and @prisma/adapter-pg.
 - Styling: Tailwind CSS v4 with custom global UI classes.
@@ -18,6 +18,7 @@ The project is not a separated frontend/backend architecture yet. It is a Next.j
 - Railway config: railway.toml.
 - Prisma schema: prisma/schema.prisma.
 - Initial production migration: prisma/migrations/20260714163000_init/migration.sql.
+- Operations upgrade migration: prisma/migrations/20260719153000_ops_network_closing/migration.sql.
 
 ## What Is Implemented
 
@@ -28,7 +29,14 @@ The project is not a separated frontend/backend architecture yet. It is a Next.j
 - Tenant dashboard at /dashboard with KPIs, low stock, recent orders, and branded shell.
 - Catalog module with categories, templates, products, variants, stock quantities, low-stock thresholds, and personalization/service/rental flags.
 - POS module with touch-friendly product grid, cart, discounts, personalization modal, payment method choice, stock decrement, order creation, and payment record.
+- POS store-credit flow that creates debts and installment schedules automatically.
 - Orders module with production board and role-limited status changes.
+- Daily Closing module at /dashboard/closing with manual counted cash, expected system totals, variance status, history, and printable exports.
+- Exports Center at /dashboard/exports for POS, payment modes, debts, daily closing, catalog, suppliers, shop network, design jobs, messages, and activity logs.
+- Design Studio at /dashboard/designs with garment styles, layers, vinyl colors, heat press presets, cutter profiles, registration marks, weed boxes, mirrored HTV mode, SVG export, JSON job export, and PLT cut-path export.
+- Supplier management at /dashboard/suppliers plus /supplier supplier portal login and purchase order acknowledgement.
+- Shop Network at /dashboard/network with unique shop codes, trusted shop links, outgoing requests, incoming requests, and stock-checked fulfillment.
+- Public shop ordering with Paystack initialization and per-shop subaccount routing fields.
 - Public tracking page at /track/[orderId] or /track/[receiptNumber].
 - Customers, reports, staff invites, shop settings, receipt HTML, notifications table, and audit logs.
 - Seed data for Accra Pro Sports and demo users.
@@ -40,7 +48,13 @@ The project is not a separated frontend/backend architecture yet. It is a Next.j
 - src/lib/rbac.ts: role labels, permission groups, and navigation visibility.
 - src/proxy.ts: route protection for /dashboard and /admin.
 - src/app/api/pos/checkout/route.ts: server-side POS checkout and stock decrement.
+- src/app/api/exports/route.ts: protected report export engine for PDF, Word, and Excel-compatible downloads.
+- src/app/api/public-order/route.ts: public order creation and Paystack initialization with shop subaccount routing.
 - src/app/api/orders/[orderId]/status/route.ts: production status updates and role enforcement.
+- src/app/dashboard/closing/*: daily closing page and server action.
+- src/app/dashboard/suppliers/* and src/app/supplier/*: supplier management and supplier portal.
+- src/app/dashboard/network/*: shop-to-shop linking and transfer requests.
+- src/components/design/design-studio.tsx: browser-side jersey production design surface.
 - src/app/dashboard/*: tenant-facing modules.
 - src/app/admin/*: platform Super Admin modules.
 - prisma/seed.ts: demo data seed script.
@@ -60,17 +74,18 @@ npm.cmd run docs:generate
 
 ## Demo Accounts
 
-- Password for all seeded accounts: ChangeMe123!
+- Password for all seeded accounts: Ghana123
 - super@ypms.test: Super Admin, opens /admin.
 - owner@accra.test: Owner, full shop workspace.
 - manager@accra.test: Manager.
 - cashier@accra.test: POS and order operations.
 - designer@accra.test: production order workflow.
 - accountant@accra.test: reports and financial visibility.
+- supplier@accra.test: supplier portal.
 
 ## Deployment Answer: Railway Backend and Database, Cloudflare Frontend
 
-The exact split of backend plus database on Railway and frontend on Cloudflare Pages is not the best fit for this codebase as it exists today. The backend is not a separate Express, Nest, or FastAPI service; it is integrated into Next.js through route handlers and server actions. If only static frontend files are sent to Cloudflare Pages, login, dashboard data, POS checkout, reports, order updates, and receipts will break unless the backend is refactored into a separate API service and the frontend is changed to call that API.
+The exact split of backend plus database on Railway and frontend on Cloudflare Pages is not the best fit for this codebase as it exists today. The backend is not a separate Express/Nest/FastAPI service; it is integrated into Next.js through route handlers and server actions. If only static frontend files are sent to Cloudflare Pages, login, dashboard data, POS checkout, reports, order updates, and receipts will break unless the backend is refactored into a separate API service and the frontend is changed to call that API.
 
 The recommended first production deployment is to deploy the full Next.js app and PostgreSQL database on Railway. Then optionally put Cloudflare in front as DNS, CDN, WAF, and custom domain proxy. This gives you Cloudflare benefits without prematurely splitting the app.
 
@@ -78,7 +93,7 @@ A future split is possible. To do it properly, create a separate backend service
 
 ## Recommended Production Path
 
-- Step 1: Push sports-shop-platform to a private GitHub repository.
+- Step 1: Push sports-shop-platform-github-ready to a private GitHub repository.
 - Step 2: Create a Railway project from that GitHub repository.
 - Step 3: Add a Railway PostgreSQL database.
 - Step 4: Add DATABASE_URL to the Next.js service as a reference variable from the Postgres service.
@@ -89,22 +104,22 @@ A future split is possible. To do it properly, create a separate backend service
 
 ## GitHub Push Instructions
 
-Create a new empty GitHub repository. Do not initialize it with README, license, or gitignore because the project already has those files. Then run the following from the sports-shop-platform folder.
+Create a new empty GitHub repository. Do not initialize it with README, license, or gitignore because the project already has those files. Then run the following from the sports-shop-platform-github-ready folder.
 
 ```powershell
-cd C:\Users\DDK\Documents\Jersey\sports-shop-platform
+cd C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready
 git init
 git add .
 git commit -m "Initial Sports Shop Platform build"
 git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/sports-shop-platform.git
+git remote add origin https://github.com/YOUR-USERNAME/sports-shop-platform-github-ready.git
 git push -u origin main
 ```
 
 ## Railway Deployment Instructions
 
 - In Railway, create a new project and choose Deploy from GitHub repo.
-- Select the sports-shop-platform repository.
+- Select the sports-shop-platform-github-ready repository.
 - Add a PostgreSQL database service from Railway.
 - In the Next.js service Variables tab, add DATABASE_URL as a reference to the Postgres service.
 - Add SESSION_SECRET with a long random value. Never use the local dev value in production.
@@ -132,7 +147,7 @@ git push -u origin main
 
 Paste the prompt below into ChatGPT together with this document or the repository link. It tells ChatGPT how to understand the project without guessing.
 
-```text
+```powershell
 You are helping me continue a project named Sports Shop Platform.
 It is a full-stack Next.js 16 App Router + TypeScript + Prisma v7 + PostgreSQL multi-tenant sports retail SaaS.
 Read the repository first. Important files: prisma/schema.prisma, src/lib/db.ts, src/lib/auth.ts, src/lib/rbac.ts, src/proxy.ts, src/app/dashboard, src/app/admin, src/app/api, scripts/generate-docs.ts, railway.toml.
@@ -142,6 +157,8 @@ Keep tenant isolation by always scoping tenant data with session.shopId.
 Keep role permissions consistent with src/lib/rbac.ts.
 Before finishing any change, run npm run lint, npm run test, npm run build, and npm audit --audit-level=moderate.
 My deployment target is Railway for the full-stack app and PostgreSQL first, with Cloudflare as DNS/proxy. Only split frontend to Cloudflare later if we refactor the backend into a separate API.
+Paystack uses one platform PAYSTACK_SECRET_KEY on the server. Each shop can store its own Paystack subaccount code and mobile money settlement details in Dashboard > Settings.
+The design studio provides SVG, JSON job, and PLT exports. Exact direct cutter control requires confirming the shop's cutter model, driver, and connection protocol before adding a machine bridge.
 ```
 
 ## Near-Term Development Backlog
@@ -149,6 +166,8 @@ My deployment target is Railway for the full-stack app and PostgreSQL first, wit
 - Create production Super Admin setup command and remove dependency on demo seed users.
 - Add real Paystack webhook confirmation and refund handling.
 - Add SMS/WhatsApp provider implementation for Twilio or Africa's Talking.
+- Add automated Paystack subaccount onboarding for shops.
+- Add direct integrations for the exact cutting plotter models used by target shops.
 - Add CSV import mapping UI for catalog bulk uploads.
 - Add customer account storefront or public shop pages.
 - Add rate limiting on login, reset password, checkout, and tracking endpoints.

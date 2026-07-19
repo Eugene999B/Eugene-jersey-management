@@ -19,6 +19,7 @@ const quickLogins = [
   { label: "Owner command", email: "owner@accra.test", next: "/dashboard" },
   { label: "Manager desk", email: "manager@accra.test", next: "/dashboard" },
   { label: "Cashier POS", email: "cashier@accra.test", next: "/dashboard/pos" },
+  { label: "Supplier portal", email: "supplier@accra.test", next: "/supplier" },
 ];
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {

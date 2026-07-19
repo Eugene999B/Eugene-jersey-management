@@ -4,9 +4,9 @@ What was built from the uploaded roadmap and how the modules fit together.
 
 ## Purpose
 
-This platform is a multi-tenant sports retail operations system for shop owners, staff, and a platform Super Admin. It combines catalog management, POS, custom order production, customer records, reporting, tenant branding, and audit logging in one Next.js application.
+This platform is a multi-tenant sports retail operations system for shop owners, staff, suppliers, customers, and a platform Super Admin. It combines catalog management, POS, credit sales, debts, custom jersey production, design studio tools, customer records, messaging, reporting, tenant branding, supplier purchasing, shop-to-shop networking, daily closing, exports, and audit logging in one Next.js application.
 
-The app is built as a launch-ready Phase 1 MVP with extension points for payments, SMS or WhatsApp, offline POS, rentals, supplier purchasing, accounting, and mobile apps.
+The app is built as a launch-ready SaaS foundation with extension points for production Paystack webhooks, SMS or WhatsApp providers, deeper cutter-machine integrations, offline POS, rentals, accounting, and mobile apps.
 
 ## Major Modules
 
@@ -17,6 +17,13 @@ The app is built as a launch-ready Phase 1 MVP with extension points for payment
 - POS: touch-friendly checkout, personalization capture, discounts, cash/card/mobile money payment methods, order creation, and stock decrement.
 - Orders: button-driven production board with Pending, In Production, Ready, Completed, and Cancelled states.
 - Reports: revenue, order count, average order, best sellers, stock report, staff performance, CSV export, and print-to-PDF.
+- Debts: POS store-credit sales create customer debts and installment schedules automatically.
+- Daily Closing: staff enter manual cash counts and compare them with system-expected cash, card, mobile money, and credit totals.
+- Exports Center: POS, payment modes, debts, closing, catalog, suppliers, shop network, design jobs, messages, and activity logs export to PDF, Word, or Excel-compatible files.
+- Design Studio: jersey artwork controls for garment style, layers, vinyl colors, heat press settings, cutter profiles, registration marks, weed boxes, mirrored HTV transfer mode, SVG export, JSON job export, and PLT cut-path export.
+- Suppliers: supplier directory, supplier portal login, purchase orders, receiving workflow, stock increment on receipt, and lead-time tracking.
+- Shop Network: each shop has a unique code for linking with trusted shops and requesting or exchanging stock.
+- Payments: one platform Paystack secret can initialize transactions while each shop can store its own Paystack subaccount code and mobile money settlement details.
 - Customer Tracking: public order status page at /track/[orderId] or /track/[receiptNumber].
 
 ## Technology Stack

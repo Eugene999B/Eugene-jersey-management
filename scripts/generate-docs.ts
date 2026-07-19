@@ -36,8 +36,8 @@ const docs: DocSpec[] = [
       {
         heading: "Purpose",
         paragraphs: [
-          "This platform is a multi-tenant sports retail operations system for shop owners, staff, and a platform Super Admin. It combines catalog management, POS, custom order production, customer records, reporting, tenant branding, and audit logging in one Next.js application.",
-          "The app is built as a launch-ready Phase 1 MVP with extension points for payments, SMS or WhatsApp, offline POS, rentals, supplier purchasing, accounting, and mobile apps.",
+          "This platform is a multi-tenant sports retail operations system for shop owners, staff, suppliers, customers, and a platform Super Admin. It combines catalog management, POS, credit sales, debts, custom jersey production, design studio tools, customer records, messaging, reporting, tenant branding, supplier purchasing, shop-to-shop networking, daily closing, exports, and audit logging in one Next.js application.",
+          "The app is built as a launch-ready SaaS foundation with extension points for production Paystack webhooks, SMS or WhatsApp providers, deeper cutter-machine integrations, offline POS, rentals, accounting, and mobile apps.",
         ],
       },
       {
@@ -50,6 +50,13 @@ const docs: DocSpec[] = [
           "POS: touch-friendly checkout, personalization capture, discounts, cash/card/mobile money payment methods, order creation, and stock decrement.",
           "Orders: button-driven production board with Pending, In Production, Ready, Completed, and Cancelled states.",
           "Reports: revenue, order count, average order, best sellers, stock report, staff performance, CSV export, and print-to-PDF.",
+          "Debts: POS store-credit sales create customer debts and installment schedules automatically.",
+          "Daily Closing: staff enter manual cash counts and compare them with system-expected cash, card, mobile money, and credit totals.",
+          "Exports Center: POS, payment modes, debts, closing, catalog, suppliers, shop network, design jobs, messages, and activity logs export to PDF, Word, or Excel-compatible files.",
+          "Design Studio: jersey artwork controls for garment style, layers, vinyl colors, heat press settings, cutter profiles, registration marks, weed boxes, mirrored HTV transfer mode, SVG export, JSON job export, and PLT cut-path export.",
+          "Suppliers: supplier directory, supplier portal login, purchase orders, receiving workflow, stock increment on receipt, and lead-time tracking.",
+          "Shop Network: each shop has a unique code for linking with trusted shops and requesting or exchanging stock.",
+          "Payments: one platform Paystack secret can initialize transactions while each shop can store its own Paystack subaccount code and mobile money settlement details.",
           "Customer Tracking: public order status page at /track/[orderId] or /track/[receiptNumber].",
         ],
       },
@@ -88,7 +95,7 @@ const docs: DocSpec[] = [
       {
         heading: "Install Dependencies",
         code: [
-          "cd C:\\Users\\DDK\\Documents\\Jersey\\sports-shop-platform",
+          "cd C:\\Users\\DDK\\Documents\\Jersey\\sports-shop-platform-github-ready",
           "npm.cmd install",
         ],
       },
@@ -153,7 +160,7 @@ const docs: DocSpec[] = [
       {
         heading: "Demo Password",
         paragraphs: [
-          "All seeded demo users use the password ChangeMe123!. Change every password before real use.",
+          "All seeded demo users use the password Ghana123. Change every password before real use.",
         ],
       },
       {
@@ -165,6 +172,7 @@ const docs: DocSpec[] = [
           "cashier@accra.test - Cashier - POS and orders",
           "designer@accra.test - Designer - production order status workflow",
           "accountant@accra.test - Accountant - reports and financial visibility",
+          "supplier@accra.test - Supplier portal - purchase order acknowledgement",
         ],
       },
       {
@@ -174,9 +182,14 @@ const docs: DocSpec[] = [
           "Sign out, then sign in as owner@accra.test.",
           "Open Catalog and create a test product.",
           "Open POS, add a product to the cart, choose Cash, and complete the sale.",
+          "Open POS again, choose Store Credit, enter a customer name, due date, and installment count, then confirm the debt appears in Debts.",
           "Open Orders and move the demo order through the production board.",
-          "Open Reports and export CSV or use the PDF print button.",
+          "Open Designs and test the production view, cutter profile, heat press preset, SVG export, job JSON export, and PLT export.",
+          "Open Suppliers, review the seeded supplier, create a purchase order, and receive it to increase stock.",
+          "Open Daily Closing, enter counted cash, and export the closing report.",
+          "Open Exports and download PDF, Word, and Excel-compatible reports.",
           "Open /track/APS-10001 to see the public tracking page.",
+          "Sign in as supplier@accra.test and confirm /supplier shows purchase orders.",
         ],
       },
       {
@@ -199,6 +212,7 @@ const docs: DocSpec[] = [
         heading: "Super Admin Dashboard",
         paragraphs: [
           "The /admin dashboard lists every shop with plan tier, status, user count, product count, order count, and creation date. Use it to monitor adoption and operational health across tenants.",
+          "The dashboard also estimates monthly recurring revenue, shows open debt, recent platform activity, subscription state, and tenant usage signals.",
         ],
       },
       {
@@ -207,6 +221,7 @@ const docs: DocSpec[] = [
           "Go to /admin/shops/new.",
           "Enter shop name, slug, first owner name, owner email, and plan tier.",
           "The app creates the shop and owner in one transaction.",
+          "The app also creates a unique shop network code and an empty payment configuration record for the tenant.",
           "The generated initial password is printed in the server console for development.",
         ],
       },
@@ -220,6 +235,15 @@ const docs: DocSpec[] = [
         heading: "Broadcast Announcements",
         paragraphs: [
           "Use the Broadcast form on /admin to create a global announcement. It appears in shop dashboards until dismissed per user. The current implementation stores the announcement and supports dismissal extension through AnnouncementDismissal.",
+        ],
+      },
+      {
+        heading: "Plans, Renewals, and Payment Routing",
+        bullets: [
+          "Use Subscription update to change plan tier, monthly or yearly billing, pricing, renewal date, and subscription status.",
+          "Use each shop's detail page to inspect renewal status, supplier count, debt records, closing count, Paystack subaccount status, and mobile money settlement details.",
+          "The platform uses the server PAYSTACK_SECRET_KEY. Shops store their own Paystack subaccount code and mobile money details from Settings.",
+          "Before real money collection, create or verify the shop's Paystack subaccount in Paystack and paste the subaccount code into the shop settings page.",
         ],
       },
       {
@@ -259,7 +283,9 @@ const docs: DocSpec[] = [
           "Tap a product to add it to the cart.",
           "If the product is personalizable, enter name, number, and production notes.",
           "Choose Cash, Card, or MoMo. Card and MoMo are sandbox/stubbed until provider keys are configured.",
+          "Choose Store Credit when a customer is buying now and paying later. The checkout requires a customer name and can split the debt into installments.",
           "Complete sale creates an order, payment, order items, audit log, and decrements stock.",
+          "Credit sales create a pending payment record plus a Debt record with installment due dates.",
         ],
       },
       {
@@ -279,6 +305,48 @@ const docs: DocSpec[] = [
           "Export CSV or print the report to PDF.",
         ],
       },
+      {
+        heading: "Debts and Installments",
+        bullets: [
+          "Open Debts to review store-credit balances, installment schedules, due dates, reminder counts, and payment status.",
+          "Use the messaging tools to send SMS or WhatsApp reminders once a production provider is configured.",
+          "Debt reports can be exported from the Exports center as PDF, Word, or Excel-compatible files.",
+        ],
+      },
+      {
+        heading: "Daily Closing",
+        bullets: [
+          "Open Daily Closing at the end of the day.",
+          "Select the business date, enter opening float, counted cash, expenses, refunds, and notes.",
+          "The system compares manual cash against expected cash and stores a Balanced or Variance result.",
+          "Closing history can be exported to PDF, Word, or Excel-compatible files.",
+        ],
+      },
+      {
+        heading: "Design Studio",
+        bullets: [
+          "Open Designs to create front, back, or production artwork for jerseys.",
+          "Use garment styles, layer toggles, color controls, material presets, heat press settings, cutter profiles, blade offset, overcut, force, speed, mirror mode, registration marks, and weed boxes.",
+          "Export SVG for artwork, JSON for job settings, or PLT as a starting cut-path file for cutter workflows.",
+          "Exact direct machine control still depends on the shop's cutter model, driver, and connection protocol.",
+        ],
+      },
+      {
+        heading: "Suppliers and Shop Network",
+        bullets: [
+          "Open Suppliers to create suppliers, assign supplier portal logins, create purchase orders, and receive stock.",
+          "Supplier users sign in and open /supplier to acknowledge purchase orders.",
+          "Open Shop Network to share your unique shop code, link with trusted shops, and request items from partners.",
+          "Network fulfillment decrements the supplier shop's linked stock after checking availability.",
+        ],
+      },
+      {
+        heading: "Exports Center",
+        bullets: [
+          "Open Exports to download POS, payment modes, debts, daily closing, catalog, suppliers, shop network, design jobs, messages, and activity logs.",
+          "Each export supports PDF, Word, or Excel-compatible output.",
+        ],
+      },
     ],
   },
   {
@@ -289,17 +357,17 @@ const docs: DocSpec[] = [
       {
         heading: "Recommended Hosting",
         paragraphs: [
-          "For the simplest production path, deploy the Next.js app on Vercel and use a managed PostgreSQL provider such as Supabase or Neon. This matches the roadmap, keeps deployment simple, and avoids managing servers at launch.",
-          "For a larger team or strict infrastructure control, deploy the same app to AWS, Azure, GCP, or a container platform, but that increases operational work.",
+          "For the current codebase, deploy the full Next.js app and PostgreSQL database together on Railway. This app is not split into a separate static frontend and backend API; server actions, API routes, authentication, and Prisma database access live inside the Next.js app.",
+          "Cloudflare should be used first as DNS, SSL, proxy, CDN, and WAF in front of the Railway app. A separate Cloudflare frontend can come later only after the backend is refactored into a standalone API.",
         ],
       },
       {
-        heading: "Why Vercel Plus Managed Postgres",
+        heading: "Why Railway First",
         bullets: [
-          "Vercel is built for Next.js application deployment and environment variable management.",
-          "Managed Postgres providers handle backups, connection strings, metrics, and scaling knobs.",
-          "Supabase provides connection pooling through Supavisor, which is useful for serverless environments.",
-          "Neon provides Prisma guidance and serverless Postgres workflows.",
+          "Railway can host the Next.js service and PostgreSQL database in the same project.",
+          "railway.toml already defines the build command, pre-deploy migration command, start command, healthcheck path, and restart policy.",
+          "Keeping the app and database together reduces launch risk while the product is still moving fast.",
+          "Cloudflare can still protect the public domain without splitting the codebase.",
         ],
       },
       {
@@ -308,8 +376,20 @@ const docs: DocSpec[] = [
           "DATABASE_URL: production PostgreSQL connection string.",
           "SESSION_SECRET: long random secret, never reused from development.",
           "APP_URL: production URL.",
-          "PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY: set when payment provider is ready.",
+          "PAYSTACK_SECRET_KEY: platform secret key used server-side to initialize payments.",
+          "PAYSTACK_PUBLIC_KEY: public key used where a client-side Paystack flow is added.",
+          "Per-shop Paystack subaccount codes: stored in each shop's Settings page, not as global environment variables.",
           "NOTIFICATION_PROVIDER: console, twilio, africastalking, or another provider once implemented.",
+        ],
+      },
+      {
+        heading: "Paystack Settlement Plan",
+        bullets: [
+          "Create or verify a Paystack subaccount for each shop that should receive online payments.",
+          "Paste the shop's subaccount code into Dashboard > Settings > Payments.",
+          "Set the platform transaction charge in pesewas if the platform keeps a fixed service fee from each transaction.",
+          "Choose the Paystack charge bearer value in settings: subaccount, account, all, or all-proportional.",
+          "Keep PAYSTACK_SECRET_KEY only in Railway variables. Do not store a secret key in the database or frontend.",
         ],
       },
       {
@@ -335,12 +415,14 @@ const docs: DocSpec[] = [
         heading: "Deployment Checklist",
         bullets: [
           "Commit code and push to GitHub.",
-          "Create the production PostgreSQL database.",
-          "Set environment variables in the hosting platform.",
-          "Run migrations through CI/CD.",
-          "Deploy the app.",
+          "Create a Railway project from the GitHub repository.",
+          "Add a Railway PostgreSQL database to the same project.",
+          "Set DATABASE_URL, SESSION_SECRET, APP_URL, PAYSTACK_SECRET_KEY, and notification variables in Railway.",
+          "Confirm railway.toml is detected and lets Railway run prisma migrate deploy before start.",
+          "Deploy the app from GitHub.",
+          "Point a Cloudflare-managed domain to the Railway service when the Railway URL is stable.",
           "Create the first Super Admin with a secure password if not using demo seed data.",
-          "Run smoke tests for login, catalog, POS, orders, reports, and tracking.",
+          "Run smoke tests for login, catalog, POS, credit sale, debts, daily closing, suppliers, design studio, exports, public ordering, and tracking.",
         ],
       },
     ],
@@ -409,6 +491,11 @@ const docs: DocSpec[] = [
           "Shop, User, Category, AttributeTemplate, AttributeField.",
           "Product and ProductVariant for flexible sports catalog data.",
           "Customer, Order, OrderItem, and Payment for sales workflows.",
+          "Debt and DebtInstallment for credit sales and structured repayments.",
+          "DailyClosing for end-of-day manual cash count, expected totals, and variance tracking.",
+          "Supplier, SupplierOrder, and SupplierOrderItem for supplier portal, purchase orders, and stock receiving.",
+          "ShopNetworkLink, ShopNetworkOrder, and ShopNetworkOrderItem for trusted shop-to-shop requests and exchanges.",
+          "CustomerThread, CustomerChatMessage, CustomerMessage, and DesignJob for customer communication and production workflows.",
           "InviteToken and PasswordResetToken for onboarding and recovery.",
           "Announcement, AnnouncementDismissal, Notification, SaleHold, ShopPaymentConfig, and AuditLog.",
         ],
@@ -417,8 +504,11 @@ const docs: DocSpec[] = [
         heading: "API Routes",
         bullets: [
           "POST /api/pos/checkout: validates cart, creates order, payment, order items, audit log, and decrements stock.",
+          "POST /api/pos/checkout with STORE_CREDIT: creates a pending payment plus Debt and DebtInstallment records.",
           "PATCH /api/orders/[orderId]/status: updates production status with role restrictions.",
           "GET /api/receipts/[orderId]: returns printable receipt HTML.",
+          "POST /api/public-order: creates public shop orders and initializes Paystack payments with optional shop subaccount routing.",
+          "GET /api/exports: returns protected PDF, Word, or Excel-compatible exports by module.",
         ],
       },
       {
@@ -436,10 +526,10 @@ const docs: DocSpec[] = [
       {
         heading: "Next Extension Points",
         bullets: [
-          "Payment provider webhooks for Paystack or MTN MoMo confirmation.",
-          "Twilio or Africa's Talking notification provider inside a sendNotification service.",
+          "Payment provider webhooks for Paystack or MTN MoMo confirmation, refunds, and reconciliation.",
+          "Twilio, Africa's Talking, or WhatsApp Business provider implementation inside the messaging service.",
           "Offline POS queue with local storage and conflict-safe sync.",
-          "Supplier purchase orders and inventory transfers.",
+          "Direct cutter or plotter driver bridges for exact machine models.",
           "Service bookings and rental scheduling calendars.",
           "CSV import mapping for bulk catalog upload.",
         ],
@@ -462,14 +552,14 @@ const docs: DocSpec[] = [
       {
         heading: "Executive Summary",
         paragraphs: [
-          "Sports Shop Platform is a full-stack multi-tenant sports retail SaaS application. It was built from the YPMS roadmap document as a Phase 1 MVP covering tenant administration, staff login, RBAC, catalog, POS, custom production orders, customers, reports, branding, audit logs, and generated documentation.",
+          "Sports Shop Platform is a full-stack multi-tenant sports retail SaaS application. It was built from the YPMS roadmap document and expanded into a professional jersey-shop platform covering tenant administration, staff login, RBAC, catalog, POS, credit sales, debts, custom production orders, design studio, customer messaging, supplier purchasing, shop networking, daily closing, exports, reports, branding, audit logs, and generated documentation.",
           "The project is not a separated frontend/backend architecture yet. It is a Next.js App Router application where the user interface, backend API routes, server actions, authentication, database access, and public tracking pages live in the same app. This matters for deployment decisions.",
         ],
       },
       {
         heading: "Current Project Location",
         bullets: [
-          "Local path: C:\\Users\\DDK\\Documents\\Jersey\\sports-shop-platform",
+          "Local path: C:\\Users\\DDK\\Documents\\Jersey\\sports-shop-platform-github-ready",
           "Primary app framework: Next.js 16 App Router with TypeScript.",
           "Database: PostgreSQL through Prisma ORM v7 and @prisma/adapter-pg.",
           "Styling: Tailwind CSS v4 with custom global UI classes.",
@@ -477,6 +567,7 @@ const docs: DocSpec[] = [
           "Railway config: railway.toml.",
           "Prisma schema: prisma/schema.prisma.",
           "Initial production migration: prisma/migrations/20260714163000_init/migration.sql.",
+          "Operations upgrade migration: prisma/migrations/20260719153000_ops_network_closing/migration.sql.",
         ],
       },
       {
@@ -489,7 +580,14 @@ const docs: DocSpec[] = [
           "Tenant dashboard at /dashboard with KPIs, low stock, recent orders, and branded shell.",
           "Catalog module with categories, templates, products, variants, stock quantities, low-stock thresholds, and personalization/service/rental flags.",
           "POS module with touch-friendly product grid, cart, discounts, personalization modal, payment method choice, stock decrement, order creation, and payment record.",
+          "POS store-credit flow that creates debts and installment schedules automatically.",
           "Orders module with production board and role-limited status changes.",
+          "Daily Closing module at /dashboard/closing with manual counted cash, expected system totals, variance status, history, and printable exports.",
+          "Exports Center at /dashboard/exports for POS, payment modes, debts, daily closing, catalog, suppliers, shop network, design jobs, messages, and activity logs.",
+          "Design Studio at /dashboard/designs with garment styles, layers, vinyl colors, heat press presets, cutter profiles, registration marks, weed boxes, mirrored HTV mode, SVG export, JSON job export, and PLT cut-path export.",
+          "Supplier management at /dashboard/suppliers plus /supplier supplier portal login and purchase order acknowledgement.",
+          "Shop Network at /dashboard/network with unique shop codes, trusted shop links, outgoing requests, incoming requests, and stock-checked fulfillment.",
+          "Public shop ordering with Paystack initialization and per-shop subaccount routing fields.",
           "Public tracking page at /track/[orderId] or /track/[receiptNumber].",
           "Customers, reports, staff invites, shop settings, receipt HTML, notifications table, and audit logs.",
           "Seed data for Accra Pro Sports and demo users.",
@@ -503,7 +601,13 @@ const docs: DocSpec[] = [
           "src/lib/rbac.ts: role labels, permission groups, and navigation visibility.",
           "src/proxy.ts: route protection for /dashboard and /admin.",
           "src/app/api/pos/checkout/route.ts: server-side POS checkout and stock decrement.",
+          "src/app/api/exports/route.ts: protected report export engine for PDF, Word, and Excel-compatible downloads.",
+          "src/app/api/public-order/route.ts: public order creation and Paystack initialization with shop subaccount routing.",
           "src/app/api/orders/[orderId]/status/route.ts: production status updates and role enforcement.",
+          "src/app/dashboard/closing/*: daily closing page and server action.",
+          "src/app/dashboard/suppliers/* and src/app/supplier/*: supplier management and supplier portal.",
+          "src/app/dashboard/network/*: shop-to-shop linking and transfer requests.",
+          "src/components/design/design-studio.tsx: browser-side jersey production design surface.",
           "src/app/dashboard/*: tenant-facing modules.",
           "src/app/admin/*: platform Super Admin modules.",
           "prisma/seed.ts: demo data seed script.",
@@ -525,13 +629,14 @@ const docs: DocSpec[] = [
       {
         heading: "Demo Accounts",
         bullets: [
-          "Password for all seeded accounts: ChangeMe123!",
+          "Password for all seeded accounts: Ghana123",
           "super@ypms.test: Super Admin, opens /admin.",
           "owner@accra.test: Owner, full shop workspace.",
           "manager@accra.test: Manager.",
           "cashier@accra.test: POS and order operations.",
           "designer@accra.test: production order workflow.",
           "accountant@accra.test: reports and financial visibility.",
+          "supplier@accra.test: supplier portal.",
         ],
       },
       {
@@ -545,7 +650,7 @@ const docs: DocSpec[] = [
       {
         heading: "Recommended Production Path",
         bullets: [
-          "Step 1: Push sports-shop-platform to a private GitHub repository.",
+          "Step 1: Push sports-shop-platform-github-ready to a private GitHub repository.",
           "Step 2: Create a Railway project from that GitHub repository.",
           "Step 3: Add a Railway PostgreSQL database.",
           "Step 4: Add DATABASE_URL to the Next.js service as a reference variable from the Postgres service.",
@@ -558,15 +663,15 @@ const docs: DocSpec[] = [
       {
         heading: "GitHub Push Instructions",
         paragraphs: [
-          "Create a new empty GitHub repository. Do not initialize it with README, license, or gitignore because the project already has those files. Then run the following from the sports-shop-platform folder.",
+          "Create a new empty GitHub repository. Do not initialize it with README, license, or gitignore because the project already has those files. Then run the following from the sports-shop-platform-github-ready folder.",
         ],
         code: [
-          "cd C:\\Users\\DDK\\Documents\\Jersey\\sports-shop-platform",
+          "cd C:\\Users\\DDK\\Documents\\Jersey\\sports-shop-platform-github-ready",
           "git init",
           "git add .",
           "git commit -m \"Initial Sports Shop Platform build\"",
           "git branch -M main",
-          "git remote add origin https://github.com/YOUR-USERNAME/sports-shop-platform.git",
+          "git remote add origin https://github.com/YOUR-USERNAME/sports-shop-platform-github-ready.git",
           "git push -u origin main",
         ],
       },
@@ -574,7 +679,7 @@ const docs: DocSpec[] = [
         heading: "Railway Deployment Instructions",
         bullets: [
           "In Railway, create a new project and choose Deploy from GitHub repo.",
-          "Select the sports-shop-platform repository.",
+          "Select the sports-shop-platform-github-ready repository.",
           "Add a PostgreSQL database service from Railway.",
           "In the Next.js service Variables tab, add DATABASE_URL as a reference to the Postgres service.",
           "Add SESSION_SECRET with a long random value. Never use the local dev value in production.",
@@ -618,6 +723,8 @@ const docs: DocSpec[] = [
           "Keep role permissions consistent with src/lib/rbac.ts.",
           "Before finishing any change, run npm run lint, npm run test, npm run build, and npm audit --audit-level=moderate.",
           "My deployment target is Railway for the full-stack app and PostgreSQL first, with Cloudflare as DNS/proxy. Only split frontend to Cloudflare later if we refactor the backend into a separate API.",
+          "Paystack uses one platform PAYSTACK_SECRET_KEY on the server. Each shop can store its own Paystack subaccount code and mobile money settlement details in Dashboard > Settings.",
+          "The design studio provides SVG, JSON job, and PLT exports. Exact direct cutter control requires confirming the shop's cutter model, driver, and connection protocol before adding a machine bridge.",
         ],
       },
       {
@@ -626,6 +733,8 @@ const docs: DocSpec[] = [
           "Create production Super Admin setup command and remove dependency on demo seed users.",
           "Add real Paystack webhook confirmation and refund handling.",
           "Add SMS/WhatsApp provider implementation for Twilio or Africa's Talking.",
+          "Add automated Paystack subaccount onboarding for shops.",
+          "Add direct integrations for the exact cutting plotter models used by target shops.",
           "Add CSV import mapping UI for catalog bulk uploads.",
           "Add customer account storefront or public shop pages.",
           "Add rate limiting on login, reset password, checkout, and tracking endpoints.",

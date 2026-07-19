@@ -4,24 +4,34 @@ Recommended deployment path, environment variables, and production migration not
 
 ## Recommended Hosting
 
-For the simplest production path, deploy the Next.js app on Vercel and use a managed PostgreSQL provider such as Supabase or Neon. This matches the roadmap, keeps deployment simple, and avoids managing servers at launch.
+For the current codebase, deploy the full Next.js app and PostgreSQL database together on Railway. This app is not split into a separate static frontend and backend API; server actions, API routes, authentication, and Prisma database access live inside the Next.js app.
 
-For a larger team or strict infrastructure control, deploy the same app to AWS, Azure, GCP, or a container platform, but that increases operational work.
+Cloudflare should be used first as DNS, SSL, proxy, CDN, and WAF in front of the Railway app. A separate Cloudflare frontend can come later only after the backend is refactored into a standalone API.
 
-## Why Vercel Plus Managed Postgres
+## Why Railway First
 
-- Vercel is built for Next.js application deployment and environment variable management.
-- Managed Postgres providers handle backups, connection strings, metrics, and scaling knobs.
-- Supabase provides connection pooling through Supavisor, which is useful for serverless environments.
-- Neon provides Prisma guidance and serverless Postgres workflows.
+- Railway can host the Next.js service and PostgreSQL database in the same project.
+- railway.toml already defines the build command, pre-deploy migration command, start command, healthcheck path, and restart policy.
+- Keeping the app and database together reduces launch risk while the product is still moving fast.
+- Cloudflare can still protect the public domain without splitting the codebase.
 
 ## Production Environment Variables
 
 - DATABASE_URL: production PostgreSQL connection string.
 - SESSION_SECRET: long random secret, never reused from development.
 - APP_URL: production URL.
-- PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY: set when payment provider is ready.
+- PAYSTACK_SECRET_KEY: platform secret key used server-side to initialize payments.
+- PAYSTACK_PUBLIC_KEY: public key used where a client-side Paystack flow is added.
+- Per-shop Paystack subaccount codes: stored in each shop's Settings page, not as global environment variables.
 - NOTIFICATION_PROVIDER: console, twilio, africastalking, or another provider once implemented.
+
+## Paystack Settlement Plan
+
+- Create or verify a Paystack subaccount for each shop that should receive online payments.
+- Paste the shop's subaccount code into Dashboard > Settings > Payments.
+- Set the platform transaction charge in pesewas if the platform keeps a fixed service fee from each transaction.
+- Choose the Paystack charge bearer value in settings: subaccount, account, all, or all-proportional.
+- Keep PAYSTACK_SECRET_KEY only in Railway variables. Do not store a secret key in the database or frontend.
 
 ## Production Database Migrations
 
@@ -42,9 +52,11 @@ npx prisma migrate deploy
 ## Deployment Checklist
 
 - Commit code and push to GitHub.
-- Create the production PostgreSQL database.
-- Set environment variables in the hosting platform.
-- Run migrations through CI/CD.
-- Deploy the app.
+- Create a Railway project from the GitHub repository.
+- Add a Railway PostgreSQL database to the same project.
+- Set DATABASE_URL, SESSION_SECRET, APP_URL, PAYSTACK_SECRET_KEY, and notification variables in Railway.
+- Confirm railway.toml is detected and lets Railway run prisma migrate deploy before start.
+- Deploy the app from GitHub.
+- Point a Cloudflare-managed domain to the Railway service when the Railway URL is stable.
 - Create the first Super Admin with a secure password if not using demo seed data.
-- Run smoke tests for login, catalog, POS, orders, reports, and tracking.
+- Run smoke tests for login, catalog, POS, credit sale, debts, daily closing, suppliers, design studio, exports, public ordering, and tracking.

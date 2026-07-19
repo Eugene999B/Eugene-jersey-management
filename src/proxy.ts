@@ -6,7 +6,7 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
-  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) && !session) {
+  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/supplier")) && !session) {
     const url = new URL("/login", request.url);
     url.searchParams.set("next", pathname);
     const response = NextResponse.redirect(url);
@@ -24,9 +24,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
 
+  if (pathname.startsWith("/dashboard") && session?.role === "SUPPLIER") {
+    return NextResponse.redirect(new URL("/supplier", request.url));
+  }
+
+  if (pathname.startsWith("/supplier") && session?.role !== "SUPPLIER") {
+    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/admin/:path*", "/supplier/:path*"],
 };

@@ -15,6 +15,10 @@ export default async function SettingsPage() {
       <section className="panel p-5">
         <h1 className="text-2xl font-semibold">Shop settings</h1>
         <p className="mt-2 text-sm text-slate-500">Branding values drive the dashboard CSS theme variables.</p>
+        <div className="mt-4 rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
+          <p className="text-slate-500">Shop network code</p>
+          <p className="mt-1 text-xl font-semibold tracking-wide">{shop.networkCode ?? "Not assigned yet"}</p>
+        </div>
         <form action={updateShopSettingsAction} className="mt-5 space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-semibold">Shop name</span>
@@ -52,7 +56,29 @@ export default async function SettingsPage() {
           <div className="rounded-[8px] bg-white p-3">
             <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Payments</h2>
             <input className="field" name="paystackPublicKey" placeholder="Paystack public key" defaultValue={paymentConfig?.paystackPublicKey ?? ""} />
+            <input className="field mt-3" name="paystackSubaccountCode" placeholder="Shop Paystack subaccount code" defaultValue={paymentConfig?.paystackSubaccountCode ?? ""} />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <input className="field" name="paystackTransactionCharge" type="number" min="0" placeholder="Platform charge in pesewas" defaultValue={paymentConfig?.paystackTransactionCharge ?? ""} />
+              <select className="field" name="paystackChargeBearer" defaultValue={paymentConfig?.paystackChargeBearer ?? "subaccount"}>
+                <option value="subaccount">Shop pays charges</option>
+                <option value="account">Platform pays charges</option>
+                <option value="all">Customer/platform pays all</option>
+                <option value="all-proportional">Proportional charges</option>
+              </select>
+            </div>
             <input className="field mt-3" name="momoProvider" placeholder="Momo provider" defaultValue={paymentConfig?.momoProvider ?? "Paystack"} />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <input className="field" name="shopMomoNumber" placeholder="Shop mobile money number" defaultValue={paymentConfig?.shopMomoNumber ?? ""} />
+              <input className="field" name="shopMomoNetwork" placeholder="Momo network" defaultValue={paymentConfig?.shopMomoNetwork ?? ""} />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <input className="field" name="settlementBank" placeholder="Bank" defaultValue={paymentConfig?.settlementBank ?? ""} />
+              <input className="field" name="settlementAccount" placeholder="Account number" defaultValue={paymentConfig?.settlementAccount ?? ""} />
+              <input className="field" name="settlementAccountName" placeholder="Account name" defaultValue={paymentConfig?.settlementAccountName ?? ""} />
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              The platform secret key stays in the server environment. A shop subaccount code routes online payments to that shop while your configured charge is retained by the platform.
+            </p>
             <div className="mt-3 grid gap-2 text-sm">
               <label className="flex items-center gap-2"><input name="allowCash" type="checkbox" defaultChecked={paymentConfig?.allowCash ?? true} /> Cash</label>
               <label className="flex items-center gap-2"><input name="allowCard" type="checkbox" defaultChecked={paymentConfig?.allowCard ?? true} /> Card / Paystack</label>

@@ -13,13 +13,36 @@ async function main() {
 
   const demoShop = await prisma.shop.upsert({
     where: { slug: "accra-pro-sports" },
-    update: {},
+    update: {
+      networkCode: "APS-001",
+      storefrontEnabled: true,
+      publicOrderingEnabled: true,
+      paymentConfig: {
+        upsert: {
+          create: {
+            allowCash: true,
+            allowCard: true,
+            allowMomo: true,
+            momoProvider: "Paystack",
+            paystackChargeBearer: "subaccount",
+          },
+          update: {
+            allowCash: true,
+            allowCard: true,
+            allowMomo: true,
+            momoProvider: "Paystack",
+            paystackChargeBearer: "subaccount",
+          },
+        },
+      },
+    },
     create: {
       name: "Accra Pro Sports",
       slug: "accra-pro-sports",
       logoUrl: "/brand/accra-pro.svg",
       primaryColor: "#0f766e",
       secondaryColor: "#f97316",
+      networkCode: "APS-001",
       planTier: PlanTier.PRO,
       city: "Accra",
       country: "Ghana",
@@ -30,6 +53,7 @@ async function main() {
           allowCard: true,
           allowMomo: true,
           momoProvider: "Paystack",
+          paystackChargeBearer: "subaccount",
         },
       },
     },
@@ -81,6 +105,57 @@ async function main() {
       },
     });
   }
+
+  const supplierUser = await prisma.user.upsert({
+    where: { email: "supplier@accra.test" },
+    update: {
+      passwordHash,
+      shopId: demoShop.id,
+      role: Role.SUPPLIER,
+      failedLoginCount: 0,
+      lockUntil: null,
+      isActive: true,
+    },
+    create: {
+      email: "supplier@accra.test",
+      passwordHash,
+      name: "Elite Kits Supply",
+      role: Role.SUPPLIER,
+      shopId: demoShop.id,
+      phone: "+233270000000",
+      isActive: true,
+    },
+  });
+
+  const demoSupplier = await prisma.supplier.upsert({
+    where: { id: "demo-supplier-elitekits" },
+    update: {
+      shopId: demoShop.id,
+      portalUserId: supplierUser.id,
+      name: "Elite Kits Supply",
+      contactName: "Mavis Osei",
+      email: "supplier@accra.test",
+      phone: "+233270000000",
+      categories: "Blank jerseys, HTV vinyl, heat press supplies",
+      paymentTerms: "50% deposit, balance on delivery",
+      leadTimeDays: 5,
+      rating: 5,
+      isActive: true,
+    },
+    create: {
+      id: "demo-supplier-elitekits",
+      shopId: demoShop.id,
+      portalUserId: supplierUser.id,
+      name: "Elite Kits Supply",
+      contactName: "Mavis Osei",
+      email: "supplier@accra.test",
+      phone: "+233270000000",
+      categories: "Blank jerseys, HTV vinyl, heat press supplies",
+      paymentTerms: "50% deposit, balance on delivery",
+      leadTimeDays: 5,
+      rating: 5,
+    },
+  });
 
   const apparel = await prisma.attributeTemplate.upsert({
     where: { shopId_name: { shopId: demoShop.id, name: "Apparel" } },
@@ -245,6 +320,29 @@ async function main() {
 
   const firstVariant = await prisma.productVariant.findFirstOrThrow({
     where: { product: { shopId: demoShop.id, name: "Home Match Jersey" } },
+  });
+
+  await prisma.supplierOrder.upsert({
+    where: { orderNumber: "APS-PO-1001" },
+    update: {},
+    create: {
+      shopId: demoShop.id,
+      supplierId: demoSupplier.id,
+      createdById: owner.id,
+      orderNumber: "APS-PO-1001",
+      status: "SENT",
+      expectedAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      totalAmount: "1250.00",
+      notes: "Demo incoming jerseys for supplier portal and receiving workflow.",
+      items: {
+        create: {
+          productVariantId: firstVariant.id,
+          description: "Home Match Jersey blanks",
+          quantity: 25,
+          unitCost: "50.00",
+        },
+      },
+    },
   });
 
   const order = await prisma.order.upsert({

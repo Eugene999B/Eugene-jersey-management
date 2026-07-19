@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { BillingCycle, PlanTier, Role, SubscriptionStatus } from "@prisma/client";
+import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
@@ -19,6 +20,17 @@ const createShopSchema = z.object({
   monthlyPrice: z.coerce.number().min(0).optional(),
   yearlyPrice: z.coerce.number().min(0).optional(),
 });
+
+function shopNetworkCode(slug: string) {
+  const prefix = slug
+    .split("-")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+
+  return `${prefix || "SHOP"}-${nanoid(5).toUpperCase()}`;
+}
 
 export async function createShopAction(formData: FormData) {
   const session = await requireRole(permissions.superAdmin);
@@ -43,6 +55,7 @@ export async function createShopAction(formData: FormData) {
       data: {
         name: parsed.data.name,
         slug: parsed.data.slug,
+        networkCode: shopNetworkCode(parsed.data.slug),
         planTier: parsed.data.planTier,
         billingCycle: parsed.data.billingCycle,
         monthlyPrice: parsed.data.monthlyPrice,

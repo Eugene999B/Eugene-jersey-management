@@ -23,6 +23,7 @@ enum Role {
   INVENTORY_CLERK
   ACCOUNTANT
   VIEWER
+  SUPPLIER
 }
 
 enum AttributeType {
@@ -118,6 +119,35 @@ enum DesignJobStatus {
   ARCHIVED
 }
 
+enum SupplierOrderStatus {
+  DRAFT
+  SENT
+  ACKNOWLEDGED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum NetworkLinkStatus {
+  REQUESTED
+  ACTIVE
+  BLOCKED
+}
+
+enum NetworkOrderStatus {
+  REQUESTED
+  ACCEPTED
+  FULFILLED
+  CANCELLED
+}
+
+enum ClosingStatus {
+  DRAFT
+  BALANCED
+  VARIANCE
+  APPROVED
+}
+
 model Shop {
   id                    String             @id @default(cuid())
   name                  String
@@ -138,28 +168,37 @@ model Shop {
   monthlyPrice          Decimal?           @db.Decimal(12, 2)
   yearlyPrice           Decimal?           @db.Decimal(12, 2)
   subscriptionRenewalAt DateTime?
+  networkCode           String?            @unique
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
-  users              User[]
-  categories         Category[]
-  attributeTemplates AttributeTemplate[]
-  products           Product[]
-  customers          Customer[]
-  orders             Order[]
-  auditLogs          AuditLog[]
-  invites            InviteToken[]
-  announcements      Announcement[]
-  holds              SaleHold[]
-  notifications      Notification[]
-  paymentConfig      ShopPaymentConfig?
-  debts              Debt[]
-  customerMessages   CustomerMessage[]
-  customerThreads    CustomerThread[]
-  designJobs         DesignJob[]
+  users                 User[]
+  categories            Category[]
+  attributeTemplates    AttributeTemplate[]
+  products              Product[]
+  customers             Customer[]
+  orders                Order[]
+  auditLogs             AuditLog[]
+  invites               InviteToken[]
+  announcements         Announcement[]
+  holds                 SaleHold[]
+  notifications         Notification[]
+  paymentConfig         ShopPaymentConfig?
+  debts                 Debt[]
+  customerMessages      CustomerMessage[]
+  customerThreads       CustomerThread[]
+  designJobs            DesignJob[]
+  suppliers             Supplier[]
+  supplierOrders        SupplierOrder[]
+  dailyClosings         DailyClosing[]
+  networkLinksSent      ShopNetworkLink[]   @relation("NetworkRequester")
+  networkLinksReceived  ShopNetworkLink[]   @relation("NetworkPartner")
+  networkOrdersSent     ShopNetworkOrder[]  @relation("NetworkOrderRequester")
+  networkOrdersReceived ShopNetworkOrder[]  @relation("NetworkOrderPartner")
 
   @@index([isActive, planTier])
   @@index([subscriptionStatus, subscriptionRenewalAt])
+  @@index([networkCode])
 }
 
 model User {
@@ -184,6 +223,9 @@ model User {
   announcementDismissals AnnouncementDismissal[]
   processedOrders        Order[]                 @relation("OrderProcessedBy")
   notifications          Notification[]
+  supplierPortal         Supplier?               @relation("SupplierPortalUser")
+  supplierOrdersCreated  SupplierOrder[]         @relation("SupplierOrderCreatedBy")
+  dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
 
   @@index([shopId, id])
   @@index([role, isActive])
@@ -273,8 +315,10 @@ model ProductVariant {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems OrderItem[]
+  product            Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems         OrderItem[]
+  supplierOrderItems SupplierOrderItem[]
+  networkOrderItems  ShopNetworkOrderItem[]
 
   @@index([productId, id])
   @@index([sku])
@@ -488,6 +532,35 @@ model DebtInstallment {
   @@index([debtId, dueDate])
 }
 
+model DailyClosing {
+  id             String        @id @default(cuid())
+  shopId         String
+  closedById     String
+  businessDate   DateTime      @db.Date
+  openingFloat   Decimal       @default(0) @db.Decimal(12, 2)
+  expectedCash   Decimal       @default(0) @db.Decimal(12, 2)
+  manualCash     Decimal       @default(0) @db.Decimal(12, 2)
+  cashDifference Decimal       @default(0) @db.Decimal(12, 2)
+  expectedCard   Decimal       @default(0) @db.Decimal(12, 2)
+  expectedMomo   Decimal       @default(0) @db.Decimal(12, 2)
+  creditSales    Decimal       @default(0) @db.Decimal(12, 2)
+  totalSales     Decimal       @default(0) @db.Decimal(12, 2)
+  expenses       Decimal       @default(0) @db.Decimal(12, 2)
+  refunds        Decimal       @default(0) @db.Decimal(12, 2)
+  orderCount     Int           @default(0)
+  status         ClosingStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  shop     Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  closedBy User @relation("ClosingClosedBy", fields: [closedById], references: [id])
+
+  @@unique([shopId, businessDate])
+  @@index([shopId, status])
+  @@index([closedById, createdAt])
+}
+
 model CustomerMessage {
   id                String              @id @default(cuid())
   shopId            String
@@ -564,17 +637,138 @@ model DesignJob {
   @@index([customerId, createdAt])
 }
 
+model Supplier {
+  id           String   @id @default(cuid())
+  shopId       String
+  portalUserId String?  @unique
+  name         String
+  contactName  String?
+  email        String?
+  phone        String?
+  categories   String?
+  paymentTerms String?
+  leadTimeDays Int      @default(7)
+  rating       Int      @default(5)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shop           Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  portalUser     User?           @relation("SupplierPortalUser", fields: [portalUserId], references: [id], onDelete: SetNull)
+  supplierOrders SupplierOrder[]
+
+  @@index([shopId, isActive])
+  @@index([portalUserId])
+}
+
+model SupplierOrder {
+  id                String              @id @default(cuid())
+  shopId            String
+  supplierId        String
+  createdById       String?
+  status            SupplierOrderStatus @default(DRAFT)
+  orderNumber       String              @unique
+  expectedAt        DateTime?
+  totalAmount       Decimal             @default(0) @db.Decimal(12, 2)
+  supplierReference String?
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  shop      Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  supplier  Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  createdBy User?               @relation("SupplierOrderCreatedBy", fields: [createdById], references: [id])
+  items     SupplierOrderItem[]
+
+  @@index([shopId, status])
+  @@index([supplierId, createdAt])
+}
+
+model SupplierOrderItem {
+  id               String  @id @default(cuid())
+  supplierOrderId  String
+  productVariantId String?
+  description      String
+  quantity         Int
+  unitCost         Decimal @default(0) @db.Decimal(12, 2)
+  receivedQty      Int     @default(0)
+
+  supplierOrder  SupplierOrder   @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id])
+
+  @@index([supplierOrderId])
+  @@index([productVariantId])
+}
+
+model ShopNetworkLink {
+  id              String            @id @default(cuid())
+  requesterShopId String
+  partnerShopId   String
+  status          NetworkLinkStatus @default(REQUESTED)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  requesterShop Shop @relation("NetworkRequester", fields: [requesterShopId], references: [id], onDelete: Cascade)
+  partnerShop   Shop @relation("NetworkPartner", fields: [partnerShopId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterShopId, partnerShopId])
+  @@index([partnerShopId, status])
+}
+
+model ShopNetworkOrder {
+  id              String             @id @default(cuid())
+  requesterShopId String
+  partnerShopId   String
+  status          NetworkOrderStatus @default(REQUESTED)
+  orderNumber     String             @unique
+  totalAmount     Decimal            @default(0) @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  requesterShop Shop                   @relation("NetworkOrderRequester", fields: [requesterShopId], references: [id], onDelete: Cascade)
+  partnerShop   Shop                   @relation("NetworkOrderPartner", fields: [partnerShopId], references: [id], onDelete: Cascade)
+  items         ShopNetworkOrderItem[]
+
+  @@index([requesterShopId, status])
+  @@index([partnerShopId, status])
+}
+
+model ShopNetworkOrderItem {
+  id               String  @id @default(cuid())
+  networkOrderId   String
+  productVariantId String?
+  description      String
+  quantity         Int
+  unitPrice        Decimal @default(0) @db.Decimal(12, 2)
+
+  networkOrder   ShopNetworkOrder @relation(fields: [networkOrderId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant?  @relation(fields: [productVariantId], references: [id])
+
+  @@index([networkOrderId])
+  @@index([productVariantId])
+}
+
 model ShopPaymentConfig {
-  id                   String   @id @default(cuid())
-  shopId               String   @unique
-  paystackPublicKey    String?
-  paystackSecretKeyRef String?
-  momoProvider         String?  @default("Paystack")
-  allowCash            Boolean  @default(true)
-  allowCard            Boolean  @default(true)
-  allowMomo            Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                        String   @id @default(cuid())
+  shopId                    String   @unique
+  paystackPublicKey         String?
+  paystackSecretKeyRef      String?
+  paystackSubaccountCode    String?
+  paystackTransactionCharge Int?
+  paystackChargeBearer      String?  @default("subaccount")
+  settlementBank            String?
+  settlementAccount         String?
+  settlementAccountName     String?
+  shopMomoNumber            String?
+  shopMomoNetwork           String?
+  momoProvider              String?  @default("Paystack")
+  allowCash                 Boolean  @default(true)
+  allowCard                 Boolean  @default(true)
+  allowMomo                 Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CreditCard, Minus, Plus, Printer, Search, Smartphone, Trash2, Wallet } from "lucide-react";
+import { Clock3, CreditCard, Minus, Plus, Printer, Search, Smartphone, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { currency } from "@/lib/format";
@@ -49,7 +49,9 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
   const [category, setCategory] = useState("All");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "MOMO">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "MOMO" | "STORE_CREDIT">("CASH");
+  const [creditDueDate, setCreditDueDate] = useState("");
+  const [creditInstallments, setCreditInstallments] = useState(1);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -98,6 +100,8 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
           customerPhone: customerPhone || undefined,
           customerEmail: customerEmail || undefined,
           paymentMethod,
+          creditDueDate: paymentMethod === "STORE_CREDIT" ? creditDueDate || undefined : undefined,
+          creditInstallments: paymentMethod === "STORE_CREDIT" ? creditInstallments : undefined,
           discountAmount,
           items: cart.map((line) => ({
             variantId: line.variantId,
@@ -120,6 +124,8 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
+      setCreditDueDate("");
+      setCreditInstallments(1);
       setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}.`);
     });
   }
@@ -227,22 +233,36 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
         </div>
         <div className="space-y-3 border-t border-[#ded8cd] p-4">
           <input className="field" type="number" min="0" step="0.01" placeholder="Discount amount" value={discountAmount || ""} onChange={(event) => setDiscountAmount(Number(event.target.value || 0))} />
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {[
               ["CASH", Wallet],
               ["CARD", CreditCard],
               ["MOMO", Smartphone],
+              ["STORE_CREDIT", Clock3],
             ].map(([method, Icon]) => (
               <button
                 key={String(method)}
-                onClick={() => setPaymentMethod(method as "CASH" | "CARD" | "MOMO")}
+                onClick={() => setPaymentMethod(method as "CASH" | "CARD" | "MOMO" | "STORE_CREDIT")}
                 className={`rounded-[8px] border px-2 py-3 text-sm font-semibold ${paymentMethod === method ? "border-[var(--shop-primary)] bg-[var(--shop-primary)] text-white" : "border-[#ded8cd] bg-white text-slate-700"}`}
               >
                 <Icon className="mx-auto mb-1" size={18} />
-                {String(method)}
+                {method === "STORE_CREDIT" ? "CREDIT" : String(method)}
               </button>
             ))}
           </div>
+          {paymentMethod === "STORE_CREDIT" ? (
+            <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-orange-200 bg-orange-50 p-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-orange-800">Credit due date</span>
+                <input className="field" type="date" value={creditDueDate} onChange={(event) => setCreditDueDate(event.target.value)} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-orange-800">Installments</span>
+                <input className="field" type="number" min="1" max="12" value={creditInstallments} onChange={(event) => setCreditInstallments(Number(event.target.value || 1))} />
+              </label>
+              <p className="col-span-2 text-xs text-orange-800">Credit sales require a customer name and automatically appear under Debts.</p>
+            </div>
+          ) : null}
           <div className="rounded-[8px] bg-white p-3 text-sm">
             <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{currency(subtotal, currencyCode)}</span></div>
             <div className="mt-1 flex justify-between text-slate-500"><span>Discount</span><span>{currency(discountAmount, currencyCode)}</span></div>

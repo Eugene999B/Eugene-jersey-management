@@ -74,6 +74,7 @@ export async function requireActiveShop(session: SessionUser) {
       monthlyPrice: true,
       yearlyPrice: true,
       subscriptionRenewalAt: true,
+      networkCode: true,
     },
   });
 

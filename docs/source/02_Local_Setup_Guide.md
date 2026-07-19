@@ -12,7 +12,7 @@ How to install and run the project on this computer or another developer device.
 ## Install Dependencies
 
 ```powershell
-cd C:\Users\DDK\Documents\Jersey\sports-shop-platform
+cd C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready
 npm.cmd install
 ```
 

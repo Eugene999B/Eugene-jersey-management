@@ -14,7 +14,12 @@ const loginSchema = z.object({
 
 function safeNext(value: string | undefined, role: Role) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    if (role === Role.SUPPLIER) return "/supplier";
     return role === Role.SUPER_ADMIN ? "/admin" : "/dashboard";
+  }
+
+  if (role === Role.SUPPLIER && !value.startsWith("/supplier")) {
+    return "/supplier";
   }
 
   if (role !== Role.SUPER_ADMIN && value.startsWith("/admin")) {

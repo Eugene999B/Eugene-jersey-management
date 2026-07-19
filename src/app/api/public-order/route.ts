@@ -180,6 +180,9 @@ export async function POST(request: NextRequest) {
       currency: shop.currency,
       reference: paystackReference,
       callbackUrl,
+      subaccount: shop.paymentConfig?.paystackSubaccountCode,
+      transactionCharge: shop.paymentConfig?.paystackTransactionCharge,
+      bearer: shop.paymentConfig?.paystackChargeBearer as "account" | "subaccount" | "all-proportional" | "all" | null,
       metadata: { orderId: order.id, shopId: shop.id, receiptNumber: order.receiptNumber },
     });
     if (initialized.authorizationUrl) return redirectTo(initialized.authorizationUrl);
