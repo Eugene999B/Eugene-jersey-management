@@ -303,6 +303,7 @@ model User {
   name             String
   phone            String?
   role             Role
+  adminPermissions Json      @default("[]")
   isActive         Boolean   @default(true)
   failedLoginCount Int       @default(0)
   lockUntil        DateTime?

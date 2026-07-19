@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 const errorCopy: Record<string, string> = {
   invalid: "Use one of the demo emails with password Ghana123.",
   "shop-id": "Enter the correct Shop Staff ID for this staff account.",
+  "admin-code": "Enter the Super Admin code for platform access.",
   locked: "This account is unlocked now. Try password Ghana123.",
   "shop-not-found": "The shop connected to this account could not be found.",
   "missing-shop": "This staff account is missing shop access.",
@@ -106,7 +107,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
                   <Store size={16} /> Shop Staff ID
                 </span>
-                <input className="field uppercase" name="shopLoginId" autoComplete="organization" defaultValue={demoShopLoginId} required />
+                <input className="field uppercase" name="shopLoginId" autoComplete="organization" defaultValue={demoShopLoginId} />
+              </label>
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <ShieldCheck size={16} /> Super Admin Code
+                </span>
+                <input className="field uppercase" name="adminCode" autoComplete="off" placeholder="Only for platform admin" />
               </label>
               <label className="block">
                 <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">

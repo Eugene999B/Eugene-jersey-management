@@ -10,6 +10,7 @@ const loginSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1),
   shopLoginId: z.string().optional(),
+  adminCode: z.string().optional(),
   next: z.string().optional(),
 });
 
@@ -49,12 +50,18 @@ function redirectToLogin(error: string, next?: string | null) {
   return response;
 }
 
+function validSuperAdminCode(value: string | undefined) {
+  const expected = (process.env.SUPER_ADMIN_ACCESS_CODE ?? "YPMS-ADMIN").trim().toUpperCase();
+  return value?.trim().toUpperCase() === expected;
+}
+
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     shopLoginId: formData.get("shopLoginId") || undefined,
+    adminCode: formData.get("adminCode") || undefined,
     next: formData.get("next") || undefined,
   });
 
@@ -82,6 +89,10 @@ export async function POST(request: NextRequest) {
       },
     });
     return redirectToLogin("invalid", parsed.data.next);
+  }
+
+  if (user.role === Role.SUPER_ADMIN && !validSuperAdminCode(parsed.data.adminCode)) {
+    return redirectToLogin("admin-code", parsed.data.next);
   }
 
   const needsShopId = user.shopId && user.role !== Role.SUPPLIER;

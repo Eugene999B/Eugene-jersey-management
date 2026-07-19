@@ -49,6 +49,8 @@ type ImageMask = "rectangle" | "circle" | "shield" | "diamond";
 type ShapeKind = "shield" | "circle" | "sash" | "star" | "lightning";
 type DesignTemplateKey = "elite-home" | "away-velocity" | "keeper-armor" | "training-minimal" | "basketball-city" | "rugby-heritage" | "street-camo" | "gold-final";
 type MachineStatus = "idle" | "connecting" | "sent" | "unsupported" | "failed";
+type SheetPreset = "a4" | "a3" | "vinyl-12x20" | "vinyl-15x20" | "custom";
+type PressAlignment = "center" | "upper-back" | "left-chest" | "full-front" | "sleeve";
 type LayerKey =
   | "texture"
   | "pattern"
@@ -111,6 +113,14 @@ type DesignTemplate = {
   nameArch: number;
   material: MaterialPreset;
   productionAid: ProductionAid;
+};
+
+const sheetPresets: Record<SheetPreset, { label: string; widthMm: number; heightMm: number }> = {
+  a4: { label: "A4 transfer", widthMm: 210, heightMm: 297 },
+  a3: { label: "A3 transfer", widthMm: 297, heightMm: 420 },
+  "vinyl-12x20": { label: "12 x 20 in vinyl", widthMm: 305, heightMm: 508 },
+  "vinyl-15x20": { label: "15 x 20 in vinyl", widthMm: 381, heightMm: 508 },
+  custom: { label: "Custom sheet", widthMm: 330, heightMm: 480 },
 };
 
 const materialPresets: Record<
@@ -714,6 +724,15 @@ export function DesignStudio() {
   const [shapeScale, setShapeScale] = useState(100);
   const [shapeRotation, setShapeRotation] = useState(0);
   const [shapeOpacity, setShapeOpacity] = useState(85);
+  const [garmentScale, setGarmentScale] = useState(100);
+  const [sheetPreset, setSheetPreset] = useState<SheetPreset>("vinyl-15x20");
+  const [customSheetWidth, setCustomSheetWidth] = useState(330);
+  const [customSheetHeight, setCustomSheetHeight] = useState(480);
+  const [sheetMargin, setSheetMargin] = useState(8);
+  const [transferOffsetX, setTransferOffsetX] = useState(0);
+  const [transferOffsetY, setTransferOffsetY] = useState(0);
+  const [pressAlignment, setPressAlignment] = useState<PressAlignment>("center");
+  const [showTransferSheet, setShowTransferSheet] = useState(true);
   const [material, setMaterial] = useState<MaterialPreset>("pu-vinyl");
   const [cutter, setCutter] = useState<CutterProfile>("generic-hpgl");
   const [bladeOffset, setBladeOffset] = useState(cutterProfiles["generic-hpgl"].offset);
@@ -755,6 +774,12 @@ export function DesignStudio() {
 
   const materialConfig = materialPresets[material];
   const cutterConfig = cutterProfiles[cutter];
+  const presetSheet = sheetPresets[sheetPreset];
+  const sheetConfig = {
+    label: presetSheet.label,
+    widthMm: sheetPreset === "custom" ? customSheetWidth : presetSheet.widthMm,
+    heightMm: sheetPreset === "custom" ? customSheetHeight : presetSheet.heightMm,
+  };
   const totalLayers = Object.keys(layerLabels).length;
   const activeLayers = Object.values(layers).filter(Boolean).length;
 
@@ -764,6 +789,7 @@ export function DesignStudio() {
     const imageReady = !layers.image || Boolean(uploadedImage);
     const cutterReady = material === "sublimation" || (cutForce > 0 && cutSpeed > 0 && layers.contour);
     const machinePackageReady = layers.contour && layers.registration && bleedMargin >= 1 && nestingGap >= 2;
+    const transferSheetReady = sheetConfig.widthMm <= cutterConfig.width && sheetConfig.heightMm <= Math.max(cutterConfig.height, 305) && sheetMargin >= 4;
 
     return [
       { label: "Safe print area", ok: showSafeArea },
@@ -775,8 +801,9 @@ export function DesignStudio() {
       { label: "Cutter setup", ok: cutterReady },
       { label: "HTV mirror", ok: material !== "pu-vinyl" || mirrorCut },
       { label: "Machine package", ok: machinePackageReady },
+      { label: "Transfer sheet fit", ok: transferSheetReady },
     ];
-  }, [baseColor, bleedMargin, cutForce, cutSpeed, layers.contour, layers.image, layers.registration, layers.weedBox, material, mirrorCut, nestingGap, playerName.length, playerNumber.length, showSafeArea, sponsor.length, trimColor, uploadedImage, vinylColor]);
+  }, [baseColor, bleedMargin, cutForce, cutSpeed, cutterConfig.height, cutterConfig.width, layers.contour, layers.image, layers.registration, layers.weedBox, material, mirrorCut, nestingGap, playerName.length, playerNumber.length, sheetConfig.heightMm, sheetConfig.widthMm, sheetMargin, showSafeArea, sponsor.length, trimColor, uploadedImage, vinylColor]);
 
   const passedChecks = qualityChecks.filter((check) => check.ok).length;
   const productionScore = Math.round((passedChecks / qualityChecks.length) * 72 + (activeLayers / totalLayers) * 18 + (preserveCutOrder ? 5 : 0) + (snapToGuides ? 5 : 0));
@@ -796,6 +823,22 @@ export function DesignStudio() {
     const frontVisible = view === "front";
     const backVisible = view === "back" || productionMode;
     const cutDash = productionMode ? "10 8" : "0";
+    const sheetScale = Math.min(330 / sheetConfig.widthMm, 454 / sheetConfig.heightMm);
+    const sheetWidth = Math.round(sheetConfig.widthMm * sheetScale);
+    const sheetHeight = Math.round(sheetConfig.heightMm * sheetScale);
+    const sheetX = Math.round((400 - sheetWidth) / 2 + transferOffsetX);
+    const sheetY = Math.round((520 - sheetHeight) / 2 + transferOffsetY);
+    const sheetMarginPx = Math.round(sheetMargin * sheetScale);
+    const transferSheet = showTransferSheet
+      ? `
+        <g opacity="${productionMode ? "1" : "0.72"}">
+          <rect x="${sheetX}" y="${sheetY}" width="${sheetWidth}" height="${sheetHeight}" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+          <rect x="${sheetX + sheetMarginPx}" y="${sheetY + sheetMarginPx}" width="${Math.max(20, sheetWidth - sheetMarginPx * 2)}" height="${Math.max(20, sheetHeight - sheetMarginPx * 2)}" rx="4" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="7 6"/>
+          <path d="M${sheetX} ${sheetY + sheetHeight / 2} H${sheetX + sheetWidth}M${sheetX + sheetWidth / 2} ${sheetY} V${sheetY + sheetHeight}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="5 5"/>
+          <text x="${sheetX + 10}" y="${sheetY + 18}" font-size="10" font-weight="800" fill="#64748b">${svgText(sheetConfig.label)} / ${sheetConfig.widthMm} x ${sheetConfig.heightMm} mm</text>
+        </g>`
+      : "";
+    const garmentTransform = `translate(${200 + transferOffsetX} ${260 + transferOffsetY}) scale(${garmentScale / 100}) translate(-200 -260)`;
     const safeArea = showSafeArea
       ? `<path d="M136 186 L264 186 L258 426 L142 426 Z" fill="none" stroke="#22c55e" stroke-width="2" stroke-dasharray="7 6" opacity="0.9"/>`
       : "";
@@ -989,7 +1032,9 @@ export function DesignStudio() {
         </linearGradient>
       </defs>
       <rect width="400" height="520" fill="#f8fafc"/>
+      ${transferSheet}
       <g ${transferGroup}>
+        <g transform="${garmentTransform}">
         ${weedBox}
         <path d="${path}" fill="${baseColor}" stroke="${trimColor}" stroke-width="4"/>
         ${fabricTexture}
@@ -1005,6 +1050,7 @@ export function DesignStudio() {
         ${sponsorText}
         ${backText}
         ${contour}
+        </g>
       </g>
       ${registration}
       ${rulers}
@@ -1039,17 +1085,25 @@ export function DesignStudio() {
     shapeScale,
     shapeX,
     shapeY,
+    sheetConfig.heightMm,
+    sheetConfig.label,
+    sheetConfig.widthMm,
+    sheetMargin,
     showRulers,
     showSafeArea,
+    showTransferSheet,
     sponsor,
     sponsorY,
     textEffect,
     textTracking,
     textureStrength,
     trimColor,
+    transferOffsetX,
+    transferOffsetY,
     uploadedImage,
     view,
     vinylColor,
+    garmentScale,
   ]);
 
   const productionManifest = useMemo(() => ({
@@ -1063,6 +1117,18 @@ export function DesignStudio() {
     garmentStyle,
     patternStyle,
     material: materialConfig.label,
+    transferSheet: {
+      preset: sheetPreset,
+      label: sheetConfig.label,
+      widthMm: sheetConfig.widthMm,
+      heightMm: sheetConfig.heightMm,
+      marginMm: sheetMargin,
+      garmentScale,
+      offsetX: transferOffsetX,
+      offsetY: transferOffsetY,
+      pressAlignment,
+      visible: showTransferSheet,
+    },
     heatPress: {
       temperatureC: materialConfig.heatTemp,
       seconds: materialConfig.heatSeconds,
@@ -1130,6 +1196,7 @@ export function DesignStudio() {
     cutterConfig.width,
     designMode,
     garmentStyle,
+    garmentScale,
     imageMask,
     imageOpacity,
     imageRotation,
@@ -1165,15 +1232,24 @@ export function DesignStudio() {
     shapeScale,
     shapeX,
     shapeY,
+    sheetConfig.heightMm,
+    sheetConfig.label,
+    sheetConfig.widthMm,
+    sheetMargin,
+    sheetPreset,
     sponsor,
     sponsorY,
     textEffect,
     textTracking,
     trimColor,
+    transferOffsetX,
+    transferOffsetY,
     uploadedImage,
     view,
     vinylColor,
     vinylUsage,
+    pressAlignment,
+    showTransferSheet,
   ]);
 
   function applyMaterial(nextMaterial: MaterialPreset) {
@@ -1364,6 +1440,15 @@ export function DesignStudio() {
     setShapeScale(100);
     setShapeRotation(0);
     setShapeOpacity(85);
+    setGarmentScale(100);
+    setSheetPreset("vinyl-15x20");
+    setCustomSheetWidth(330);
+    setCustomSheetHeight(480);
+    setSheetMargin(8);
+    setTransferOffsetX(0);
+    setTransferOffsetY(0);
+    setPressAlignment("center");
+    setShowTransferSheet(true);
     applyMaterial("pu-vinyl");
     applyCutter("generic-hpgl");
     setContourOffset(2);
@@ -1486,6 +1571,8 @@ export function DesignStudio() {
           <tr><td class="label">Offset / Overcut</td><td>${bladeOffset} mm / ${overcut} mm</td></tr>
           <tr><td class="label">Mirror</td><td>${mirrorCut ? "Yes" : "No"}</td></tr>
           <tr><td class="label">Copies</td><td>${copies}</td></tr>
+          <tr><td class="label">Sheet</td><td>${sheetConfig.label}, ${sheetConfig.widthMm} x ${sheetConfig.heightMm} mm</td></tr>
+          <tr><td class="label">Scale / Alignment</td><td>${garmentScale}% / ${pressAlignment}</td></tr>
         </table>
       </div>
     </div>
@@ -1820,6 +1907,51 @@ export function DesignStudio() {
           </div>
         </div>
 
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold">Transfer sheet</span>
+            <span className="rounded-[8px] bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{sheetConfig.widthMm} x {sheetConfig.heightMm} mm</span>
+          </div>
+          <div className="grid gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-slate-500">Sheet preset</span>
+              <select className="field" value={sheetPreset} onChange={(event) => setSheetPreset(event.target.value as SheetPreset)}>
+                {Object.entries(sheetPresets).map(([key, sheet]) => (
+                  <option key={key} value={key}>{sheet.label}</option>
+                ))}
+              </select>
+            </label>
+            {sheetPreset === "custom" ? (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">Width mm</span>
+                  <input className="field" type="number" min="120" max="700" value={customSheetWidth} onChange={(event) => setCustomSheetWidth(Number(event.target.value))} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">Height mm</span>
+                  <input className="field" type="number" min="120" max="900" value={customSheetHeight} onChange={(event) => setCustomSheetHeight(Number(event.target.value))} />
+                </label>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <RangeControl label="Jersey scale" value={garmentScale} min={70} max={145} suffix="%" onChange={setGarmentScale} />
+        <RangeControl label="Sheet margin" value={sheetMargin} min={2} max={30} suffix="mm" onChange={setSheetMargin} />
+        <RangeControl label="Sheet offset X" value={transferOffsetX} min={-60} max={60} suffix="px" onChange={setTransferOffsetX} />
+        <RangeControl label="Sheet offset Y" value={transferOffsetY} min={-70} max={70} suffix="px" onChange={setTransferOffsetY} />
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">Press alignment</span>
+          <select className="field" value={pressAlignment} onChange={(event) => setPressAlignment(event.target.value as PressAlignment)}>
+            <option value="center">Center chest/back</option>
+            <option value="upper-back">Upper back name set</option>
+            <option value="left-chest">Left chest crest</option>
+            <option value="full-front">Full front graphic</option>
+            <option value="sleeve">Sleeve mark</option>
+          </select>
+        </label>
+
         <label className="block">
           <span className="mb-1 flex items-center gap-2 text-sm font-semibold"><Printer size={15} /> Cutter profile</span>
           <select className="field" value={cutter} onChange={(event) => applyCutter(event.target.value as CutterProfile)}>
@@ -1861,6 +1993,7 @@ export function DesignStudio() {
             ["Rulers", showRulers, setShowRulers],
             ["Auto weed lines", autoWeedLines, setAutoWeedLines],
             ["Snap to guides", snapToGuides, setSnapToGuides],
+            ["Transfer sheet", showTransferSheet, setShowTransferSheet],
           ].map(([label, checked, setter]) => (
             <label key={label as string} className="flex items-center justify-between gap-2">
               <span>{label as string}</span>
@@ -1969,6 +2102,7 @@ export function DesignStudio() {
             <p>Layers: {activeLayers}/{totalLayers}</p>
             <p>Material: {materialConfig.label}</p>
             <p>Image: {uploadedImage ? "optimized asset included" : "no imported image"}</p>
+            <p>Sheet: {sheetConfig.label} / {garmentScale}%</p>
             <p>Machine: {cutterConfig.label} / {baudRate} baud / {machineStatus}</p>
           </div>
         </div>
@@ -2136,6 +2270,8 @@ export function DesignStudio() {
                 <p>View: <span className="font-semibold text-slate-900">{view}</span></p>
                 <p>Pattern: <span className="font-semibold text-slate-900">{patternStyle}</span></p>
                 <p>Layers: <span className="font-semibold text-slate-900">{activeLayers}/{totalLayers}</span></p>
+                <p>Sheet: <span className="font-semibold text-slate-900">{sheetConfig.label}</span></p>
+                <p>Scale: <span className="font-semibold text-slate-900">{garmentScale}%</span></p>
                 <p>Image: <span className="font-semibold text-slate-900">{uploadedImage ? "optimized" : "none"}</span></p>
                 <p>Machine: <span className="font-semibold text-slate-900">{machineStatus}</span></p>
               </div>
