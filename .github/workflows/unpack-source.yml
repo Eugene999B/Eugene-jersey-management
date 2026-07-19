@@ -1,0 +1,38 @@
+name: Unpack Sports Shop Platform Source
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    if: ${{ contains(github.event.head_commit.message, 'Add temporary source unpack workflow') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download verified project archive
+        run: |
+          curl --fail --location --request POST "https://temp.sh/vgqhD/sports-shop-platform-github-ready.zip" --output project.zip
+          echo "714c4148d37eee533f8bca3cf524a44795bfb5925de88bb62c689297eb44da13  project.zip" | sha256sum -c -
+
+      - name: Unpack source files
+        run: |
+          unzip -o project.zip -d .
+          rm -f project.zip
+          rm -f .github/workflows/unpack-source.yml
+
+      - name: Commit extracted source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Unpack Sports Shop Platform source" || exit 0
+          git push
