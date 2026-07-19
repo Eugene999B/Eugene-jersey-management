@@ -1,6 +1,7 @@
 import { PosTerminal } from "@/components/pos/pos-terminal";
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
+import { firstProductImage } from "@/lib/product-images";
 
 export default async function PosPage() {
   const { shop } = await getTenantContext();
@@ -23,6 +24,7 @@ export default async function PosPage() {
         name: product.name,
         category: product.category.name,
         brand: product.brand,
+        imageUrl: firstProductImage(product.images),
         isPersonalizable: product.isPersonalizable,
         isService: product.isService,
         basePrice: Number(product.basePrice),

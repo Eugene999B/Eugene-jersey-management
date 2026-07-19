@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { currency, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
 import { hasRole, permissions } from "@/lib/rbac";
+import { firstProductImage } from "@/lib/product-images";
 
 type Props = {
   searchParams?: Promise<{ q?: string; category?: string; stock?: string }>;
@@ -68,6 +69,7 @@ export default async function CatalogPage({ searchParams }: Props) {
               </select>
               <input className="field" name="brand" placeholder="Brand" disabled={!canWrite} />
             </div>
+            <input className="field" name="imageUrl" type="url" placeholder="Product photo URL" disabled={!canWrite} />
             <div className="grid grid-cols-2 gap-3">
               <select className="field" name="condition" defaultValue={ProductCondition.NEW} disabled={!canWrite}>
                 {Object.values(ProductCondition).map((condition) => (
@@ -153,8 +155,17 @@ export default async function CatalogPage({ searchParams }: Props) {
         <div className="grid gap-3 p-5 md:grid-cols-2 2xl:grid-cols-3">
           {filteredProducts.map((product) => {
             const totalStock = product.variants.reduce((sum, variant) => sum + variant.stockQty, 0);
+            const image = firstProductImage(product.images);
             return (
               <article key={product.id} className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
+                <div
+                  aria-label={product.name}
+                  className="mb-4 flex aspect-[4/3] w-full items-center justify-center rounded-[8px] bg-[#f6f4ef] bg-cover bg-center text-sm font-semibold text-slate-400"
+                  role="img"
+                  style={image ? { backgroundImage: `url(${image})` } : undefined}
+                >
+                  {image ? null : "No photo"}
+                </div>
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <h2 className="font-semibold text-slate-950">{product.name}</h2>

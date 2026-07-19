@@ -27,6 +27,10 @@ export const permissions = {
   orders: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER],
   orderFinance: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT],
   reports: [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT],
+  debts: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT],
+  messages: [Role.OWNER, Role.MANAGER, Role.CASHIER],
+  designs: [Role.OWNER, Role.MANAGER, Role.DESIGNER],
+  activity: [Role.OWNER, Role.MANAGER],
   staff: [Role.OWNER, Role.MANAGER],
   settings: [Role.OWNER, Role.MANAGER],
 } satisfies Record<string, Role[]>;
@@ -58,6 +62,10 @@ export function canSeeNav(role: Role) {
     pos: hasRole({ role }, permissions.pos),
     customers: hasRole({ role }, [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT, Role.VIEWER]),
     reports: hasRole({ role }, [...permissions.reports, Role.VIEWER]),
+    debts: hasRole({ role }, permissions.debts),
+    messages: hasRole({ role }, permissions.messages),
+    designs: hasRole({ role }, permissions.designs),
+    activity: hasRole({ role }, permissions.activity),
     staff: hasRole({ role }, permissions.staff),
     settings: hasRole({ role }, permissions.settings),
   };

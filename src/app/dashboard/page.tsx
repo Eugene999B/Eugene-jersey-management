@@ -1,4 +1,4 @@
-import { Boxes, ClipboardList, ShoppingBag, Users } from "lucide-react";
+import { AlertTriangle, Boxes, ClipboardList, CreditCard, ShoppingBag, Users } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { SalesChart } from "@/components/reports/sales-chart";
@@ -48,6 +48,13 @@ export default async function DashboardPage() {
         <StatCard label="Orders pending" value={String(metrics.pendingOrders)} helper="Production and open POS orders" icon={<ClipboardList size={20} />} />
         <StatCard label="Products live" value={String(metrics.products)} helper="Across flexible categories" icon={<Boxes size={20} />} />
         <StatCard label="Active staff" value={String(metrics.activeStaff)} helper="Role-based access enabled" icon={<Users size={20} />} />
+        <StatCard
+          label="Open debt"
+          value={currency(Number(metrics.openDebts._sum.principalAmount ?? 0) - Number(metrics.openDebts._sum.paidAmount ?? 0), shop.currency)}
+          helper={`${metrics.openDebts._count} active account(s)`}
+          icon={<CreditCard size={20} />}
+        />
+        <StatCard label="Cash holds" value={String(metrics.cashHolds)} helper="Online cash reservations still active" />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
@@ -63,9 +70,22 @@ export default async function DashboardPage() {
         </div>
 
         <div className="panel p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Low stock watch</h2>
-            <Badge tone="orange">{metrics.lowStockVariants.length} item(s)</Badge>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Intelligence watch</h2>
+              <p className="text-sm text-slate-500">Actionable risks for today</p>
+            </div>
+            <Badge tone={metrics.overdueDebts ? "red" : "orange"}>{metrics.overdueDebts} overdue</Badge>
+          </div>
+          <div className="mb-4 grid gap-2">
+            <div className="flex items-center gap-3 rounded-[8px] bg-white p-3 text-sm">
+              <AlertTriangle size={18} className={metrics.lowStockVariants.length ? "text-orange-600" : "text-emerald-600"} />
+              <span>{metrics.lowStockVariants.length} product variant(s) need stock attention.</span>
+            </div>
+            <div className="flex items-center gap-3 rounded-[8px] bg-white p-3 text-sm">
+              <CreditCard size={18} className={metrics.overdueDebts ? "text-red-600" : "text-emerald-600"} />
+              <span>{metrics.overdueDebts} overdue debt account(s) need follow-up.</span>
+            </div>
           </div>
           <div className="space-y-3">
             {metrics.lowStockVariants.length ? (

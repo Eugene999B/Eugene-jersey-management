@@ -66,6 +66,14 @@ export async function requireActiveShop(session: SessionUser) {
       planTier: true,
       isActive: true,
       currency: true,
+      storefrontEnabled: true,
+      publicOrderingEnabled: true,
+      cashOrderHoldMinutes: true,
+      billingCycle: true,
+      subscriptionStatus: true,
+      monthlyPrice: true,
+      yearlyPrice: true,
+      subscriptionRenewalAt: true,
     },
   });
 

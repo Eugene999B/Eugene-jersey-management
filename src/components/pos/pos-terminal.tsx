@@ -19,6 +19,7 @@ type PosProduct = {
   name: string;
   category: string;
   brand: string | null;
+  imageUrl: string | null;
   isPersonalizable: boolean;
   isService: boolean;
   basePrice: number;
@@ -50,6 +51,8 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "MOMO">("CASH");
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [personalizing, setPersonalizing] = useState<{ product: PosProduct; variant: PosVariant } | null>(null);
@@ -92,6 +95,8 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName: customerName || undefined,
+          customerPhone: customerPhone || undefined,
+          customerEmail: customerEmail || undefined,
           paymentMethod,
           discountAmount,
           items: cart.map((line) => ({
@@ -113,6 +118,8 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
       setCart([]);
       setDiscountAmount(0);
       setCustomerName("");
+      setCustomerPhone("");
+      setCustomerEmail("");
       setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}.`);
     });
   }
@@ -158,6 +165,14 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
                   else addLine(product, variant);
                 }}
               >
+                {product.imageUrl ? (
+                  <div
+                    aria-label={product.name}
+                    className="mb-3 aspect-[4/3] rounded-[8px] bg-cover bg-center"
+                    role="img"
+                    style={{ backgroundImage: `url(${product.imageUrl})` }}
+                  />
+                ) : null}
                 <div className="mb-4 flex justify-between gap-3">
                   <div>
                     <h2 className="font-semibold text-slate-950">{product.name}</h2>
@@ -177,6 +192,10 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
         <div className="border-b border-[#ded8cd] p-4">
           <h2 className="text-lg font-semibold">Cart</h2>
           <input className="field mt-3" placeholder="Customer name (optional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <input className="field" placeholder="Phone for receipt" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
+            <input className="field" type="email" placeholder="Email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
+          </div>
         </div>
         <div className="scrollbar-thin flex-1 space-y-3 overflow-y-auto p-4">
           {cart.length ? cart.map((line) => (

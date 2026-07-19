@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { PlanTier, Role } from "@prisma/client";
+import { BillingCycle, PlanTier, Role, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
@@ -15,6 +15,9 @@ const createShopSchema = z.object({
   ownerName: z.string().min(2),
   ownerEmail: z.string().email().transform((value) => value.toLowerCase()),
   planTier: z.nativeEnum(PlanTier),
+  billingCycle: z.nativeEnum(BillingCycle).default(BillingCycle.MONTHLY),
+  monthlyPrice: z.coerce.number().min(0).optional(),
+  yearlyPrice: z.coerce.number().min(0).optional(),
 });
 
 export async function createShopAction(formData: FormData) {
@@ -25,6 +28,9 @@ export async function createShopAction(formData: FormData) {
     ownerName: formData.get("ownerName"),
     ownerEmail: formData.get("ownerEmail"),
     planTier: formData.get("planTier"),
+    billingCycle: formData.get("billingCycle") || BillingCycle.MONTHLY,
+    monthlyPrice: formData.get("monthlyPrice") || undefined,
+    yearlyPrice: formData.get("yearlyPrice") || undefined,
   });
 
   if (!parsed.success) redirect("/admin/shops/new?error=invalid");
@@ -38,6 +44,11 @@ export async function createShopAction(formData: FormData) {
         name: parsed.data.name,
         slug: parsed.data.slug,
         planTier: parsed.data.planTier,
+        billingCycle: parsed.data.billingCycle,
+        monthlyPrice: parsed.data.monthlyPrice,
+        yearlyPrice: parsed.data.yearlyPrice,
+        subscriptionStatus: SubscriptionStatus.TRIAL,
+        subscriptionRenewalAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         paymentConfig: { create: {} },
       },
     });
@@ -95,6 +106,59 @@ const announcementSchema = z.object({
   title: z.string().min(2),
   body: z.string().min(2),
 });
+
+const subscriptionSchema = z.object({
+  shopId: z.string().min(1),
+  planTier: z.nativeEnum(PlanTier),
+  billingCycle: z.nativeEnum(BillingCycle),
+  subscriptionStatus: z.nativeEnum(SubscriptionStatus),
+  monthlyPrice: z.coerce.number().min(0).optional(),
+  yearlyPrice: z.coerce.number().min(0).optional(),
+  subscriptionRenewalAt: z.coerce.date().optional(),
+});
+
+export async function updateShopSubscriptionAction(formData: FormData) {
+  const session = await requireRole(permissions.superAdmin);
+  const parsed = subscriptionSchema.safeParse({
+    shopId: formData.get("shopId"),
+    planTier: formData.get("planTier"),
+    billingCycle: formData.get("billingCycle"),
+    subscriptionStatus: formData.get("subscriptionStatus"),
+    monthlyPrice: formData.get("monthlyPrice") || undefined,
+    yearlyPrice: formData.get("yearlyPrice") || undefined,
+    subscriptionRenewalAt: formData.get("subscriptionRenewalAt") || undefined,
+  });
+
+  if (!parsed.success) redirect("/admin?error=subscription");
+
+  const shop = await prisma.shop.update({
+    where: { id: parsed.data.shopId },
+    data: {
+      planTier: parsed.data.planTier,
+      billingCycle: parsed.data.billingCycle,
+      subscriptionStatus: parsed.data.subscriptionStatus,
+      monthlyPrice: parsed.data.monthlyPrice,
+      yearlyPrice: parsed.data.yearlyPrice,
+      subscriptionRenewalAt: parsed.data.subscriptionRenewalAt,
+    },
+  });
+
+  await audit({
+    shopId: shop.id,
+    userId: session.id,
+    action: "admin.subscription_updated",
+    entityType: "Shop",
+    entityId: shop.id,
+    metadata: {
+      planTier: shop.planTier,
+      billingCycle: shop.billingCycle,
+      subscriptionStatus: shop.subscriptionStatus,
+    },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/shops/${shop.id}`);
+}
 
 export async function createGlobalAnnouncementAction(formData: FormData) {
   const session = await requireRole(permissions.superAdmin);

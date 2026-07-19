@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { BarChart3, Boxes, ClipboardList, LayoutDashboard, LogOut, Settings, ShoppingCart, Users } from "lucide-react";
+import { Activity, BarChart3, Boxes, ClipboardList, CreditCard, LayoutDashboard, LogOut, MessageCircle, Palette, Settings, ShoppingCart, Users } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
 import { canSeeNav, roleLabels } from "@/lib/rbac";
@@ -14,7 +14,11 @@ const navItems = [
   { key: "orders", href: "/dashboard/orders", label: "Orders", icon: ClipboardList },
   { key: "pos", href: "/dashboard/pos", label: "POS", icon: ShoppingCart },
   { key: "customers", href: "/dashboard/customers", label: "Customers", icon: Users },
+  { key: "debts", href: "/dashboard/debts", label: "Debts", icon: CreditCard },
+  { key: "messages", href: "/dashboard/messages", label: "Messages", icon: MessageCircle },
+  { key: "designs", href: "/dashboard/designs", label: "Designs", icon: Palette },
   { key: "reports", href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+  { key: "activity", href: "/dashboard/activity", label: "Activity", icon: Activity },
   { key: "staff", href: "/dashboard/staff", label: "Staff", icon: Users },
   { key: "settings", href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;

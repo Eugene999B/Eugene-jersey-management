@@ -3,7 +3,7 @@ import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
-import { currency, titleCase } from "@/lib/format";
+import { currency, shortDate, titleCase } from "@/lib/format";
 
 type Props = {
   params: Promise<{ orderId: string }>;
@@ -20,6 +20,7 @@ export default async function TrackOrderPage({ params }: Props) {
     include: {
       shop: true,
       customer: true,
+      payments: true,
       items: { include: { productVariant: { include: { product: true } } } },
     },
   });
@@ -27,6 +28,7 @@ export default async function TrackOrderPage({ params }: Props) {
   if (!order) notFound();
 
   const activeIndex = steps.indexOf(order.status as (typeof steps)[number]);
+  const paid = order.payments.some((payment) => payment.status === "SUCCESS");
   const style = {
     "--shop-primary": order.shop.primaryColor,
     "--shop-secondary": order.shop.secondaryColor,
@@ -46,8 +48,17 @@ export default async function TrackOrderPage({ params }: Props) {
               <p className="text-sm text-slate-500">Customer</p>
               <p className="font-semibold">{order.customer?.name ?? "Walk-in customer"}</p>
             </div>
-            <Badge tone={order.status === "COMPLETED" ? "green" : order.rush ? "red" : "blue"}>{titleCase(order.status)}</Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={paid ? "green" : "orange"}>{paid ? "Paid" : "Payment pending"}</Badge>
+              <Badge tone={order.status === "COMPLETED" ? "green" : order.rush ? "red" : "blue"}>{titleCase(order.status)}</Badge>
+            </div>
           </div>
+
+          {order.cashHoldExpiresAt && !paid ? (
+            <div className="mb-6 rounded-[8px] border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+              Cash reservation expires on {shortDate(order.cashHoldExpiresAt)}. Please pay before this time to keep the stock reserved.
+            </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-4">
             {steps.map((step, index) => {

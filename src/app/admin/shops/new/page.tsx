@@ -1,4 +1,4 @@
-import { PlanTier } from "@prisma/client";
+import { BillingCycle, PlanTier } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { createShopAction } from "@/app/admin/actions";
 
@@ -22,6 +22,15 @@ export default function NewShopPage() {
             <option key={plan} value={plan}>{plan}</option>
           ))}
         </select>
+        <div className="grid gap-4 md:grid-cols-3">
+          <select className="field" name="billingCycle" defaultValue={BillingCycle.MONTHLY}>
+            {Object.values(BillingCycle).map((cycle) => (
+              <option key={cycle} value={cycle}>{cycle}</option>
+            ))}
+          </select>
+          <input className="field" name="monthlyPrice" type="number" min="0" step="0.01" placeholder="Monthly price" />
+          <input className="field" name="yearlyPrice" type="number" min="0" step="0.01" placeholder="Yearly price" />
+        </div>
         <Button variant="secondary">Create tenant</Button>
       </form>
     </div>

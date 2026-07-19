@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { PaymentMethod, PaymentStatus, OrderStatus } from "@prisma/client";
+import { NotificationChannel, PaymentMethod, PaymentStatus, OrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { sendCustomerMessage } from "@/lib/messaging";
 
 const checkoutSchema = z.object({
   customerName: z.string().optional(),
+  customerPhone: z.string().optional(),
+  customerEmail: z.string().email().optional(),
   paymentMethod: z.nativeEnum(PaymentMethod),
   discountAmount: z.coerce.number().min(0).default(0),
   notes: z.string().optional(),
@@ -69,6 +72,8 @@ export async function POST(request: NextRequest) {
         data: {
           shopId: session.shopId,
           name: parsed.data.customerName,
+          phone: parsed.data.customerPhone,
+          email: parsed.data.customerEmail,
         },
       })
     : null;
@@ -129,6 +134,44 @@ export async function POST(request: NextRequest) {
     entityId: order.id,
     metadata: { receiptNumber: order.receiptNumber, paymentMethod: parsed.data.paymentMethod },
   });
+
+  if (customer?.phone || customer?.email) {
+    const receiptBody = `${shop.name}: receipt ${order.receiptNumber} total ${totalAmount.toFixed(2)} ${shop.currency}. Track: ${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}`;
+    await Promise.all([
+      customer.phone ? sendCustomerMessage({
+        shopId: session.shopId,
+        customerId: customer.id,
+        channel: NotificationChannel.SMS,
+        recipientName: customer.name,
+        recipientPhone: customer.phone,
+        recipientEmail: customer.email,
+        subject: `Receipt ${order.receiptNumber}`,
+        body: receiptBody,
+        metadata: { orderId: order.id, receiptNumber: order.receiptNumber },
+      }) : null,
+      customer.phone ? sendCustomerMessage({
+        shopId: session.shopId,
+        customerId: customer.id,
+        channel: NotificationChannel.WHATSAPP,
+        recipientName: customer.name,
+        recipientPhone: customer.phone,
+        recipientEmail: customer.email,
+        subject: `Receipt ${order.receiptNumber}`,
+        body: receiptBody,
+        metadata: { orderId: order.id, receiptNumber: order.receiptNumber },
+      }) : null,
+      !customer.phone && customer.email ? sendCustomerMessage({
+        shopId: session.shopId,
+        customerId: customer.id,
+        channel: NotificationChannel.EMAIL,
+        recipientName: customer.name,
+        recipientEmail: customer.email,
+        subject: `Receipt ${order.receiptNumber}`,
+        body: receiptBody,
+        metadata: { orderId: order.id, receiptNumber: order.receiptNumber },
+      }) : null,
+    ]);
+  }
 
   return NextResponse.json({
     orderId: order.id,

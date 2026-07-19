@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { imageListFromUrl } from "@/lib/product-images";
 
 const categorySchema = z.object({
   name: z.string().min(2).max(80),
@@ -50,6 +51,7 @@ const productSchema = z.object({
   description: z.string().optional(),
   categoryId: z.string().min(1),
   brand: z.string().optional(),
+  imageUrl: z.string().url().optional(),
   condition: z.nativeEnum(ProductCondition),
   basePrice: z.coerce.number().positive(),
   stockQty: z.coerce.number().int().min(0),
@@ -69,6 +71,7 @@ export async function createProductAction(formData: FormData) {
     description: formData.get("description") || undefined,
     categoryId: formData.get("categoryId"),
     brand: formData.get("brand") || undefined,
+    imageUrl: formData.get("imageUrl") || undefined,
     condition: formData.get("condition"),
     basePrice: formData.get("basePrice"),
     stockQty: formData.get("stockQty"),
@@ -89,6 +92,7 @@ export async function createProductAction(formData: FormData) {
       name: parsed.data.name,
       description: parsed.data.description,
       brand: parsed.data.brand,
+      images: imageListFromUrl(parsed.data.imageUrl),
       condition: parsed.data.condition,
       basePrice: parsed.data.basePrice,
       lowStockThreshold: parsed.data.lowStockThreshold,

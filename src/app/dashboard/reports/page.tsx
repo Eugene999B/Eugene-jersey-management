@@ -91,7 +91,7 @@ export default async function ReportsPage({ searchParams }: Props) {
           <h1 className="text-2xl font-semibold">Reports</h1>
           <p className="mt-2 text-sm text-slate-500">Sales, stock, best sellers, and staff performance.</p>
         </div>
-        <ReportActions csv={csv} />
+        <ReportActions csv={csv} range={params.range ?? "30"} />
       </div>
 
       <form className="panel flex flex-wrap items-center gap-3 p-4">

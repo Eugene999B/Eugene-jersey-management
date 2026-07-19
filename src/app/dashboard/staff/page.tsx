@@ -1,7 +1,7 @@
 import { Role } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createInviteAction } from "@/app/dashboard/staff/actions";
+import { createInviteAction, createStaffAccountAction, toggleStaffAccessAction } from "@/app/dashboard/staff/actions";
 import { prisma } from "@/lib/db";
 import { roleLabels } from "@/lib/rbac";
 import { shortDate } from "@/lib/format";
@@ -19,9 +19,23 @@ export default async function StaffPage() {
   return (
     <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
       <section className="panel p-5">
-        <h1 className="text-xl font-semibold">Invite staff</h1>
-        <p className="mt-2 text-sm text-slate-500">Owner and Manager roles can invite shop staff. Links print to the server console in dev.</p>
-        <form action={createInviteAction} className="mt-5 space-y-3">
+        <h1 className="text-xl font-semibold">Create staff login</h1>
+        <p className="mt-2 text-sm text-slate-500">Create a working account immediately and choose the role that controls access.</p>
+        <form action={createStaffAccountAction} className="mt-5 space-y-3">
+          <input className="field" name="name" placeholder="Staff name" required />
+          <input className="field" name="email" type="email" placeholder="staff@example.com" required />
+          <input className="field" name="phone" placeholder="+233..." />
+          <input className="field" name="password" type="text" placeholder="Temporary password" defaultValue="Ghana123" required />
+          <select className="field" name="role" defaultValue={Role.CASHIER}>
+            {[Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER].map((role) => (
+              <option key={role} value={role}>{roleLabels[role]}</option>
+            ))}
+          </select>
+          <Button className="w-full">Create login</Button>
+        </form>
+
+        <h2 className="mt-8 text-lg font-semibold">Invite by email</h2>
+        <form action={createInviteAction} className="mt-3 space-y-3">
           <input className="field" name="email" type="email" placeholder="staff@example.com" required />
           <select className="field" name="role" defaultValue={Role.CASHIER}>
             {[Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER].map((role) => (
@@ -49,7 +63,7 @@ export default async function StaffPage() {
         </div>
         <table className="w-full text-left text-sm">
           <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500">
-            <tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Last login</th></tr>
+            <tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Last login</th><th className="p-4">Action</th></tr>
           </thead>
           <tbody className="divide-y divide-[#ded8cd] bg-white">
             {users.map((user) => (
@@ -61,6 +75,14 @@ export default async function StaffPage() {
                 <td className="p-4"><Badge>{roleLabels[user.role]}</Badge></td>
                 <td className="p-4"><Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge></td>
                 <td className="p-4 text-slate-500">{user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</td>
+                <td className="p-4">
+                  <form action={toggleStaffAccessAction}>
+                    <input type="hidden" name="userId" value={user.id} />
+                    <Button variant="outline" className="min-h-8 px-2 py-1 text-xs">
+                      {user.isActive ? "Disable" : "Enable"}
+                    </Button>
+                  </form>
+                </td>
               </tr>
             ))}
           </tbody>

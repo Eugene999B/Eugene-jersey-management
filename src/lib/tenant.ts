@@ -23,7 +23,7 @@ export async function getDashboardMetrics(shopId: string) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
-  const [todaySales, pendingOrders, products, activeStaff, lowStockVariants, recentOrders] = await Promise.all([
+  const [todaySales, pendingOrders, products, activeStaff, lowStockVariants, recentOrders, openDebts, overdueDebts, cashHolds] = await Promise.all([
     prisma.order.aggregate({
       where: { shopId, createdAt: { gte: start }, status: { not: "CANCELLED" } },
       _sum: { totalAmount: true },
@@ -44,6 +44,17 @@ export async function getDashboardMetrics(shopId: string) {
       orderBy: { createdAt: "desc" },
       take: 6,
     }),
+    prisma.debt.aggregate({
+      where: { shopId, status: { notIn: ["PAID", "WRITTEN_OFF"] } },
+      _sum: { principalAmount: true, paidAmount: true },
+      _count: true,
+    }),
+    prisma.debt.count({
+      where: { shopId, status: { notIn: ["PAID", "WRITTEN_OFF"] }, dueDate: { lt: new Date() } },
+    }),
+    prisma.order.count({
+      where: { shopId, channel: "ONLINE", status: "PENDING", cashHoldExpiresAt: { gt: new Date() } },
+    }),
   ]);
 
   return {
@@ -53,6 +64,9 @@ export async function getDashboardMetrics(shopId: string) {
     activeStaff,
     lowStockVariants,
     recentOrders,
+    openDebts,
+    overdueDebts,
+    cashHolds,
   };
 }
 

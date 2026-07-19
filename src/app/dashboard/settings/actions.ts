@@ -13,6 +13,14 @@ const schema = z.object({
   logoUrl: z.string().optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  storefrontEnabled: z.boolean().default(false),
+  publicOrderingEnabled: z.boolean().default(false),
+  cashOrderHoldMinutes: z.coerce.number().int().min(15).max(10080),
+  paystackPublicKey: z.string().optional(),
+  momoProvider: z.string().optional(),
+  allowCash: z.boolean().default(false),
+  allowCard: z.boolean().default(false),
+  allowMomo: z.boolean().default(false),
 });
 
 export async function updateShopSettingsAction(formData: FormData) {
@@ -24,13 +32,47 @@ export async function updateShopSettingsAction(formData: FormData) {
     logoUrl: formData.get("logoUrl") || undefined,
     primaryColor: formData.get("primaryColor"),
     secondaryColor: formData.get("secondaryColor"),
+    storefrontEnabled: formData.get("storefrontEnabled") === "on",
+    publicOrderingEnabled: formData.get("publicOrderingEnabled") === "on",
+    cashOrderHoldMinutes: formData.get("cashOrderHoldMinutes") || 120,
+    paystackPublicKey: formData.get("paystackPublicKey") || undefined,
+    momoProvider: formData.get("momoProvider") || undefined,
+    allowCash: formData.get("allowCash") === "on",
+    allowCard: formData.get("allowCard") === "on",
+    allowMomo: formData.get("allowMomo") === "on",
   });
 
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
   await prisma.shop.update({
     where: { id: session.shopId },
-    data: parsed.data,
+    data: {
+      name: parsed.data.name,
+      logoUrl: parsed.data.logoUrl,
+      primaryColor: parsed.data.primaryColor,
+      secondaryColor: parsed.data.secondaryColor,
+      storefrontEnabled: parsed.data.storefrontEnabled,
+      publicOrderingEnabled: parsed.data.publicOrderingEnabled,
+      cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
+      paymentConfig: {
+        upsert: {
+          create: {
+            paystackPublicKey: parsed.data.paystackPublicKey,
+            momoProvider: parsed.data.momoProvider,
+            allowCash: parsed.data.allowCash,
+            allowCard: parsed.data.allowCard,
+            allowMomo: parsed.data.allowMomo,
+          },
+          update: {
+            paystackPublicKey: parsed.data.paystackPublicKey,
+            momoProvider: parsed.data.momoProvider,
+            allowCash: parsed.data.allowCash,
+            allowCard: parsed.data.allowCard,
+            allowMomo: parsed.data.allowMomo,
+          },
+        },
+      },
+    },
   });
 
   await audit({
