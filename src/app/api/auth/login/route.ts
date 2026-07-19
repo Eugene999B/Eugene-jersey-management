@@ -28,14 +28,17 @@ function safeNext(value: string | undefined, role: Role) {
   return value;
 }
 
-function redirectToLogin(request: NextRequest, error: string, next?: string | null) {
-  const url = new URL("/login", request.url);
+function redirectToLogin(error: string, next?: string | null) {
+  const url = new URL("/login", "https://app.local");
   url.searchParams.set("error", error);
   if (next && next.startsWith("/") && !next.startsWith("//")) {
     url.searchParams.set("next", next);
   }
 
-  const response = NextResponse.redirect(url, { status: 303 });
+  const response = new NextResponse(null, {
+    status: 303,
+    headers: { Location: `${url.pathname}${url.search}` },
+  });
   response.cookies.delete(SESSION_COOKIE);
   return response;
 }
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!parsed.success) {
-    return redirectToLogin(request, "invalid", String(formData.get("next") ?? ""));
+    return redirectToLogin("invalid", String(formData.get("next") ?? ""));
   }
 
   const user = await prisma.user.findUnique({
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!user || !user.isActive) {
-    return redirectToLogin(request, "invalid", parsed.data.next);
+    return redirectToLogin("invalid", parsed.data.next);
   }
 
   const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
         lockUntil: null,
       },
     });
-    return redirectToLogin(request, "invalid", parsed.data.next);
+    return redirectToLogin("invalid", parsed.data.next);
   }
 
   await prisma.user.update({
@@ -95,7 +98,10 @@ export async function POST(request: NextRequest) {
     role: user.role,
   });
 
-  const response = NextResponse.redirect(new URL(safeNext(parsed.data.next, user.role), request.url), { status: 303 });
+  const response = new NextResponse(null, {
+    status: 303,
+    headers: { Location: safeNext(parsed.data.next, user.role) },
+  });
   response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
