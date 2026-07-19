@@ -19,6 +19,25 @@ function stockTone(stock: number, threshold: number) {
   return "green";
 }
 
+const productTypes = [
+  "Plain jersey",
+  "Team jersey",
+  "Custom print jersey",
+  "Football boots",
+  "Ball",
+  "Protective gear",
+  "Training cone",
+  "Gym equipment",
+  "Racket",
+  "Gloves",
+  "Bottle",
+  "Service",
+];
+
+const sportTypes = ["Football", "Basketball", "Volleyball", "Tennis", "Running", "Gym", "Boxing", "Swimming", "Cycling", "General"];
+
+const commonSizes = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "Kids", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "One size"];
+
 export default async function CatalogPage({ searchParams }: Props) {
   const params = (await searchParams) ?? {};
   const { session, shop } = await getTenantContext();
@@ -70,6 +89,34 @@ export default async function CatalogPage({ searchParams }: Props) {
               <input className="field" name="brand" placeholder="Brand" disabled={!canWrite} />
             </div>
             <input className="field" name="imageUrl" type="url" placeholder="Product photo URL" disabled={!canWrite} />
+            <div className="grid grid-cols-2 gap-3">
+              <select className="field" name="productType" disabled={!canWrite}>
+                <option value="">Product type</option>
+                {productTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+              <select className="field" name="sportType" disabled={!canWrite}>
+                <option value="">Sport</option>
+                {sportTypes.map((sport) => (
+                  <option key={sport} value={sport}>{sport}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input className="field" name="teamName" placeholder="Team name, if any" disabled={!canWrite} />
+              <input className="field" name="equipmentGroup" placeholder="Equipment group" disabled={!canWrite} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <select className="field" name="size" disabled={!canWrite}>
+                <option value="">Default size</option>
+                {commonSizes.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              <input className="field" name="color" placeholder="Color or team color" disabled={!canWrite} />
+            </div>
+            <input className="field" name="sizeGuide" placeholder="Available sizes, comma separated: S, M, L, XL, XXL" disabled={!canWrite} />
             <div className="grid grid-cols-2 gap-3">
               <select className="field" name="condition" defaultValue={ProductCondition.NEW} disabled={!canWrite}>
                 {Object.values(ProductCondition).map((condition) => (
@@ -175,10 +222,16 @@ export default async function CatalogPage({ searchParams }: Props) {
                 </div>
                 <div className="mb-4 flex flex-wrap gap-2">
                   <Badge>{titleCase(product.condition)}</Badge>
+                  {product.productType ? <Badge>{product.productType}</Badge> : null}
+                  {product.sportType ? <Badge tone="blue">{product.sportType}</Badge> : null}
+                  {product.teamName ? <Badge tone="orange">{product.teamName}</Badge> : null}
                   {product.isPersonalizable ? <Badge tone="blue">Personalized</Badge> : null}
                   {product.isService ? <Badge tone="orange">Service</Badge> : null}
                   {product.isRentable ? <Badge tone="green">Rental</Badge> : null}
                 </div>
+                {Array.isArray(product.sizeGuide) && product.sizeGuide.length ? (
+                  <p className="mb-3 text-sm text-slate-500">Sizes: {product.sizeGuide.join(", ")}</p>
+                ) : null}
                 <p className="text-2xl font-semibold">{currency(product.basePrice.toString(), shop.currency)}</p>
                 <div className="mt-4 space-y-2">
                   {product.variants.map((variant) => (

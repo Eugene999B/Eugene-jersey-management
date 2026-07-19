@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { BillingCycle, PlanTier, Role, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, PlanTier, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole } from "@/lib/auth";
@@ -15,10 +15,21 @@ const createShopSchema = z.object({
   slug: z.string().min(3).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   ownerName: z.string().min(2),
   ownerEmail: z.string().email().transform((value) => value.toLowerCase()),
+  ownerPhone: z.string().optional(),
+  staffLoginId: z.string().optional(),
   planTier: z.nativeEnum(PlanTier),
   billingCycle: z.nativeEnum(BillingCycle).default(BillingCycle.MONTHLY),
   monthlyPrice: z.coerce.number().min(0).optional(),
   yearlyPrice: z.coerce.number().min(0).optional(),
+  legalBusinessName: z.string().optional(),
+  businessRegistrationNumber: z.string().optional(),
+  taxIdentificationNumber: z.string().optional(),
+  ownerGovernmentId: z.string().optional(),
+  credentialContactName: z.string().optional(),
+  credentialPhone: z.string().optional(),
+  credentialEmail: z.string().email().optional(),
+  credentialAddress: z.string().optional(),
+  credentialDocumentUrl: z.string().url().optional(),
 });
 
 function shopNetworkCode(slug: string) {
@@ -32,6 +43,19 @@ function shopNetworkCode(slug: string) {
   return `${prefix || "SHOP"}-${nanoid(5).toUpperCase()}`;
 }
 
+function shopStaffLoginId(slug: string, provided?: string) {
+  const clean = provided?.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  if (clean && clean.length >= 4) return clean;
+  const prefix = slug
+    .split("-")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+
+  return `${prefix || "SHOP"}-STAFF-${nanoid(4).toUpperCase()}`;
+}
+
 export async function createShopAction(formData: FormData) {
   const session = await requireRole(permissions.superAdmin);
   const parsed = createShopSchema.safeParse({
@@ -39,10 +63,21 @@ export async function createShopAction(formData: FormData) {
     slug: formData.get("slug"),
     ownerName: formData.get("ownerName"),
     ownerEmail: formData.get("ownerEmail"),
+    ownerPhone: formData.get("ownerPhone") || undefined,
+    staffLoginId: formData.get("staffLoginId") || undefined,
     planTier: formData.get("planTier"),
     billingCycle: formData.get("billingCycle") || BillingCycle.MONTHLY,
     monthlyPrice: formData.get("monthlyPrice") || undefined,
     yearlyPrice: formData.get("yearlyPrice") || undefined,
+    legalBusinessName: formData.get("legalBusinessName") || undefined,
+    businessRegistrationNumber: formData.get("businessRegistrationNumber") || undefined,
+    taxIdentificationNumber: formData.get("taxIdentificationNumber") || undefined,
+    ownerGovernmentId: formData.get("ownerGovernmentId") || undefined,
+    credentialContactName: formData.get("credentialContactName") || undefined,
+    credentialPhone: formData.get("credentialPhone") || undefined,
+    credentialEmail: formData.get("credentialEmail") || undefined,
+    credentialAddress: formData.get("credentialAddress") || undefined,
+    credentialDocumentUrl: formData.get("credentialDocumentUrl") || undefined,
   });
 
   if (!parsed.success) redirect("/admin/shops/new?error=invalid");
@@ -56,12 +91,23 @@ export async function createShopAction(formData: FormData) {
         name: parsed.data.name,
         slug: parsed.data.slug,
         networkCode: shopNetworkCode(parsed.data.slug),
+        staffLoginId: shopStaffLoginId(parsed.data.slug, parsed.data.staffLoginId),
+        verificationStatus: ShopVerificationStatus.PENDING,
         planTier: parsed.data.planTier,
         billingCycle: parsed.data.billingCycle,
         monthlyPrice: parsed.data.monthlyPrice,
         yearlyPrice: parsed.data.yearlyPrice,
         subscriptionStatus: SubscriptionStatus.TRIAL,
         subscriptionRenewalAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        legalBusinessName: parsed.data.legalBusinessName,
+        businessRegistrationNumber: parsed.data.businessRegistrationNumber,
+        taxIdentificationNumber: parsed.data.taxIdentificationNumber,
+        ownerGovernmentId: parsed.data.ownerGovernmentId,
+        credentialContactName: parsed.data.credentialContactName || parsed.data.ownerName,
+        credentialPhone: parsed.data.credentialPhone || parsed.data.ownerPhone,
+        credentialEmail: parsed.data.credentialEmail || parsed.data.ownerEmail,
+        credentialAddress: parsed.data.credentialAddress,
+        credentialDocumentUrl: parsed.data.credentialDocumentUrl,
         paymentConfig: { create: {} },
       },
     });
@@ -73,6 +119,7 @@ export async function createShopAction(formData: FormData) {
         name: parsed.data.ownerName,
         role: Role.OWNER,
         passwordHash,
+        phone: parsed.data.ownerPhone || parsed.data.credentialPhone,
       },
     });
 
@@ -91,6 +138,61 @@ export async function createShopAction(formData: FormData) {
 
   revalidatePath("/admin");
   redirect(`/admin/shops/${shop.id}`);
+}
+
+export async function verifyShopCredentialsAction(formData: FormData) {
+  const session = await requireRole(permissions.superAdmin);
+  const shopId = String(formData.get("shopId") ?? "");
+  if (!shopId) redirect("/admin");
+
+  const shop = await prisma.shop.update({
+    where: { id: shopId },
+    data: {
+      verificationStatus: ShopVerificationStatus.VERIFIED,
+      verifiedAt: new Date(),
+      verifiedById: session.id,
+      isActive: true,
+      storefrontEnabled: true,
+    },
+  });
+
+  await audit({
+    shopId,
+    userId: session.id,
+    action: "admin.shop_credentials_verified",
+    entityType: "Shop",
+    entityId: shopId,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/shops/${shop.id}`);
+}
+
+export async function rejectShopCredentialsAction(formData: FormData) {
+  const session = await requireRole(permissions.superAdmin);
+  const shopId = String(formData.get("shopId") ?? "");
+  if (!shopId) redirect("/admin");
+
+  const shop = await prisma.shop.update({
+    where: { id: shopId },
+    data: {
+      verificationStatus: ShopVerificationStatus.REJECTED,
+      verifiedAt: null,
+      verifiedById: null,
+      storefrontEnabled: false,
+    },
+  });
+
+  await audit({
+    shopId,
+    userId: session.id,
+    action: "admin.shop_credentials_rejected",
+    entityType: "Shop",
+    entityId: shopId,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/shops/${shop.id}`);
 }
 
 export async function toggleShopAction(formData: FormData) {

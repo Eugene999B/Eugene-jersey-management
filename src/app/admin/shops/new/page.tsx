@@ -4,10 +4,12 @@ import { createShopAction } from "@/app/admin/actions";
 
 export default function NewShopPage() {
   return (
-    <div className="mx-auto max-w-2xl panel p-6">
+    <div className="mx-auto max-w-4xl panel p-6">
       <p className="text-sm font-semibold uppercase text-slate-500">New tenant</p>
-      <h1 className="mt-2 text-3xl font-semibold">Create shop and owner</h1>
-      <p className="mt-3 text-sm text-slate-600">The owner receives a generated temporary password in the server console.</p>
+      <h1 className="mt-2 text-3xl font-semibold">Create shop, owner, and verification file</h1>
+      <p className="mt-3 text-sm text-slate-600">
+        The shop receives a staff login ID and starts pending until credentials are verified by super admin.
+      </p>
       <form action={createShopAction} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <input className="field" name="name" placeholder="Shop name" required />
@@ -16,6 +18,22 @@ export default function NewShopPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <input className="field" name="ownerName" placeholder="Owner full name" required />
           <input className="field" name="ownerEmail" type="email" placeholder="owner@example.com" required />
+          <input className="field" name="ownerPhone" placeholder="Owner phone" />
+          <input className="field uppercase" name="staffLoginId" placeholder="Staff login ID, e.g. APS-STAFF" />
+        </div>
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
+          <h2 className="mb-3 font-semibold">Business credentials</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <input className="field" name="legalBusinessName" placeholder="Legal business name" />
+            <input className="field" name="businessRegistrationNumber" placeholder="Registration number" />
+            <input className="field" name="taxIdentificationNumber" placeholder="Tax ID" />
+            <input className="field" name="ownerGovernmentId" placeholder="Owner government ID reference" />
+            <input className="field" name="credentialContactName" placeholder="Credential contact name" />
+            <input className="field" name="credentialPhone" placeholder="Credential phone" />
+            <input className="field" name="credentialEmail" type="email" placeholder="Credential email" />
+            <input className="field" name="credentialDocumentUrl" type="url" placeholder="Document URL" />
+          </div>
+          <textarea className="field mt-4 min-h-20" name="credentialAddress" placeholder="Registered business address" />
         </div>
         <select className="field" name="planTier" defaultValue={PlanTier.BASIC}>
           {Object.values(PlanTier).map((plan) => (

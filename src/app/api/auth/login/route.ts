@@ -9,6 +9,7 @@ import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from "@/lib/session-
 const loginSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1),
+  shopLoginId: z.string().optional(),
   next: z.string().optional(),
 });
 
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
+    shopLoginId: formData.get("shopLoginId") || undefined,
     next: formData.get("next") || undefined,
   });
 
@@ -80,6 +82,17 @@ export async function POST(request: NextRequest) {
       },
     });
     return redirectToLogin("invalid", parsed.data.next);
+  }
+
+  const needsShopId = user.shopId && user.role !== Role.SUPPLIER;
+  if (needsShopId) {
+    const enteredShopId = parsed.data.shopLoginId?.trim().toUpperCase();
+    const validShopIds = [user.shop?.staffLoginId, user.shop?.networkCode, user.shop?.slug]
+      .filter(Boolean)
+      .map((value) => String(value).toUpperCase());
+    if (!enteredShopId || !validShopIds.includes(enteredShopId)) {
+      return redirectToLogin("shop-id", parsed.data.next);
+    }
   }
 
   await prisma.user.update({

@@ -148,29 +148,70 @@ enum ClosingStatus {
   APPROVED
 }
 
+enum ShopVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum FulfillmentType {
+  PICKUP
+  DELIVERY
+}
+
+enum DeliveryStatus {
+  NOT_REQUIRED
+  REQUESTED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  VERIFIED
+}
+
+enum PhoneVerificationPurpose {
+  BUYER_LOGIN
+  BUYER_PASSWORD_RESET
+  STAFF_PASSWORD_RESET
+  PICKUP_VERIFY
+  DELIVERY_VERIFY
+}
+
 model Shop {
-  id                    String             @id @default(cuid())
-  name                  String
-  slug                  String             @unique
-  logoUrl               String?
-  primaryColor          String             @default("#0f766e")
-  secondaryColor        String             @default("#f97316")
-  planTier              PlanTier           @default(BASIC)
-  isActive              Boolean            @default(true)
-  city                  String?
-  country               String?            @default("Ghana")
-  currency              String             @default("GHS")
-  publicOrderingEnabled Boolean            @default(true)
-  storefrontEnabled     Boolean            @default(true)
-  cashOrderHoldMinutes  Int                @default(120)
-  billingCycle          BillingCycle       @default(MONTHLY)
-  subscriptionStatus    SubscriptionStatus @default(TRIAL)
-  monthlyPrice          Decimal?           @db.Decimal(12, 2)
-  yearlyPrice           Decimal?           @db.Decimal(12, 2)
-  subscriptionRenewalAt DateTime?
-  networkCode           String?            @unique
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  id                         String                 @id @default(cuid())
+  name                       String
+  slug                       String                 @unique
+  logoUrl                    String?
+  primaryColor               String                 @default("#0f766e")
+  secondaryColor             String                 @default("#f97316")
+  planTier                   PlanTier               @default(BASIC)
+  isActive                   Boolean                @default(true)
+  city                       String?
+  country                    String?                @default("Ghana")
+  currency                   String                 @default("GHS")
+  publicOrderingEnabled      Boolean                @default(true)
+  storefrontEnabled          Boolean                @default(true)
+  cashOrderHoldMinutes       Int                    @default(120)
+  billingCycle               BillingCycle           @default(MONTHLY)
+  subscriptionStatus         SubscriptionStatus     @default(TRIAL)
+  monthlyPrice               Decimal?               @db.Decimal(12, 2)
+  yearlyPrice                Decimal?               @db.Decimal(12, 2)
+  subscriptionRenewalAt      DateTime?
+  networkCode                String?                @unique
+  staffLoginId               String?                @unique
+  verificationStatus         ShopVerificationStatus @default(PENDING)
+  legalBusinessName          String?
+  businessRegistrationNumber String?
+  taxIdentificationNumber    String?
+  ownerGovernmentId          String?
+  credentialContactName      String?
+  credentialPhone            String?
+  credentialEmail            String?
+  credentialAddress          String?
+  credentialDocumentUrl      String?
+  verifiedAt                 DateTime?
+  verifiedById               String?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
 
   users                 User[]
   categories            Category[]
@@ -195,10 +236,14 @@ model Shop {
   networkLinksReceived  ShopNetworkLink[]   @relation("NetworkPartner")
   networkOrdersSent     ShopNetworkOrder[]  @relation("NetworkOrderRequester")
   networkOrdersReceived ShopNetworkOrder[]  @relation("NetworkOrderPartner")
+  productReviews        ProductReview[]
+  verifiedBy            User?               @relation("ShopVerifiedBy", fields: [verifiedById], references: [id])
 
   @@index([isActive, planTier])
   @@index([subscriptionStatus, subscriptionRenewalAt])
   @@index([networkCode])
+  @@index([staffLoginId])
+  @@index([verificationStatus])
 }
 
 model User {
@@ -226,6 +271,8 @@ model User {
   supplierPortal         Supplier?               @relation("SupplierPortalUser")
   supplierOrdersCreated  SupplierOrder[]         @relation("SupplierOrderCreatedBy")
   dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
+  shopsVerified          Shop[]                  @relation("ShopVerifiedBy")
+  phoneVerificationCodes PhoneVerificationCode[]
 
   @@index([shopId, id])
   @@index([role, isActive])
@@ -287,6 +334,10 @@ model Product {
   isPersonalizable    Boolean          @default(false)
   isService           Boolean          @default(false)
   isRentable          Boolean          @default(false)
+  productType         String?
+  sportType           String?
+  teamName            String?
+  sizeGuide           Json             @default("[]")
   basePrice           Decimal          @db.Decimal(12, 2)
   dailyRentalRate     Decimal?         @db.Decimal(12, 2)
   serviceDurationMins Int?
@@ -298,6 +349,7 @@ model Product {
   shop     Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
   category Category         @relation(fields: [categoryId], references: [id])
   variants ProductVariant[]
+  reviews  ProductReview[]
 
   @@index([shopId, id])
   @@index([shopId, categoryId])
@@ -348,10 +400,31 @@ model Customer {
   @@index([shopId, email])
 }
 
+model BuyerAccount {
+  id              String    @id @default(cuid())
+  email           String?   @unique
+  phone           String    @unique
+  name            String
+  passwordHash    String?
+  phoneVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  orders                 Order[]
+  reviews                ProductReview[]
+  phoneVerificationCodes PhoneVerificationCode[]
+
+  @@index([phone, isActive])
+  @@index([email])
+}
+
 model Order {
   id             String       @id @default(cuid())
   shopId         String
   customerId     String?
+  buyerId        String?
   processedById  String?
   status         OrderStatus  @default(PENDING)
   channel        OrderChannel @default(POS)
@@ -364,21 +437,35 @@ model Order {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  shop              Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  customer          Customer?   @relation(fields: [customerId], references: [id])
-  processedBy       User?       @relation("OrderProcessedBy", fields: [processedById], references: [id])
-  items             OrderItem[]
-  payments          Payment[]
-  debts             Debt[]
-  designJobs        DesignJob[]
-  cashHoldExpiresAt DateTime?
-  publicAccessToken String?     @unique
-  paystackReference String?
+  shop               Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer           Customer?       @relation(fields: [customerId], references: [id])
+  buyer              BuyerAccount?   @relation(fields: [buyerId], references: [id])
+  processedBy        User?           @relation("OrderProcessedBy", fields: [processedById], references: [id])
+  items              OrderItem[]
+  payments           Payment[]
+  debts              Debt[]
+  designJobs         DesignJob[]
+  cashHoldExpiresAt  DateTime?
+  publicAccessToken  String?         @unique
+  paystackReference  String?
+  fulfillmentType    FulfillmentType @default(PICKUP)
+  deliveryStatus     DeliveryStatus  @default(NOT_REQUIRED)
+  deliveryAddress    String?
+  deliveryCity       String?
+  deliveryArea       String?
+  deliveryNotes      String?
+  deliveryFee        Decimal         @default(0) @db.Decimal(12, 2)
+  pickupCodeHash     String?
+  pickupCodeLast4    String?
+  pickupVerifiedAt   DateTime?
+  deliveryVerifiedAt DateTime?
+  customerVerifiedAt DateTime?
 
   @@index([shopId, id])
   @@index([shopId, status])
   @@index([shopId, createdAt])
   @@index([publicAccessToken])
+  @@index([buyerId, createdAt])
 }
 
 model OrderItem {
@@ -432,6 +519,46 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PhoneVerificationCode {
+  id        String                   @id @default(cuid())
+  userId    String?
+  buyerId   String?
+  phone     String
+  purpose   PhoneVerificationPurpose
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int                      @default(0)
+  createdAt DateTime                 @default(now())
+
+  user  User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buyer BuyerAccount? @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@index([phone, purpose, createdAt])
+  @@index([userId, purpose])
+  @@index([buyerId, purpose])
+}
+
+model ProductReview {
+  id         String   @id @default(cuid())
+  shopId     String
+  productId  String
+  buyerId    String
+  rating     Int
+  comment    String?
+  isApproved Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shop    Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer   BuyerAccount @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, buyerId])
+  @@index([shopId, createdAt])
+  @@index([buyerId, createdAt])
 }
 
 model Announcement {

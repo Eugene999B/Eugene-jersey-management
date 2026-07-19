@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 const loginSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1),
+  shopLoginId: z.string().optional(),
   next: z.string().optional(),
 });
 
@@ -38,6 +39,7 @@ export async function loginAction(formData: FormData) {
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
+    shopLoginId: formData.get("shopLoginId") || undefined,
     next: formData.get("next") || undefined,
   });
 
@@ -65,6 +67,17 @@ export async function loginAction(formData: FormData) {
       },
     });
     redirect("/login?error=invalid");
+  }
+
+  const needsShopId = user.shopId && user.role !== Role.SUPPLIER;
+  if (needsShopId) {
+    const enteredShopId = parsed.data.shopLoginId?.trim().toUpperCase();
+    const validShopIds = [user.shop?.staffLoginId, user.shop?.networkCode, user.shop?.slug]
+      .filter(Boolean)
+      .map((value) => String(value).toUpperCase());
+    if (!enteredShopId || !validShopIds.includes(enteredShopId)) {
+      redirect("/login?error=shop-id");
+    }
   }
 
   await prisma.user.update({

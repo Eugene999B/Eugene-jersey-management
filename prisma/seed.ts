@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaClient, Role, PlanTier, ProductCondition, OrderChannel, OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { PrismaClient, Role, PlanTier, ProductCondition, OrderChannel, OrderStatus, PaymentMethod, PaymentStatus, ShopVerificationStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const prisma = new PrismaClient({
@@ -15,6 +15,17 @@ async function main() {
     where: { slug: "accra-pro-sports" },
     update: {
       networkCode: "APS-001",
+      staffLoginId: "APS-STAFF",
+      verificationStatus: ShopVerificationStatus.VERIFIED,
+      legalBusinessName: "Accra Pro Sports Limited",
+      businessRegistrationNumber: "RGD-APS-2026",
+      taxIdentificationNumber: "TIN-APS-0001",
+      ownerGovernmentId: "GHANA-CARD-DEMO-APS",
+      credentialContactName: "Ama Mensah",
+      credentialPhone: "+233200000001",
+      credentialEmail: "owner@accra.test",
+      credentialAddress: "Osu Sports Avenue, Accra, Ghana",
+      verifiedAt: new Date(),
       storefrontEnabled: true,
       publicOrderingEnabled: true,
       paymentConfig: {
@@ -43,6 +54,17 @@ async function main() {
       primaryColor: "#0f766e",
       secondaryColor: "#f97316",
       networkCode: "APS-001",
+      staffLoginId: "APS-STAFF",
+      verificationStatus: ShopVerificationStatus.VERIFIED,
+      legalBusinessName: "Accra Pro Sports Limited",
+      businessRegistrationNumber: "RGD-APS-2026",
+      taxIdentificationNumber: "TIN-APS-0001",
+      ownerGovernmentId: "GHANA-CARD-DEMO-APS",
+      credentialContactName: "Ama Mensah",
+      credentialPhone: "+233200000001",
+      credentialEmail: "owner@accra.test",
+      credentialAddress: "Osu Sports Avenue, Accra, Ghana",
+      verifiedAt: new Date(),
       planTier: PlanTier.PRO,
       city: "Accra",
       country: "Ghana",
@@ -77,20 +99,21 @@ async function main() {
   });
 
   const users = [
-    ["owner@accra.test", "Ama Mensah", Role.OWNER],
-    ["manager@accra.test", "Kofi Boateng", Role.MANAGER],
-    ["cashier@accra.test", "Esi Adjei", Role.CASHIER],
-    ["designer@accra.test", "Nana Print Studio", Role.DESIGNER],
-    ["accountant@accra.test", "Yaw Accounts", Role.ACCOUNTANT],
+    ["owner@accra.test", "Ama Mensah", Role.OWNER, "+233200000001"],
+    ["manager@accra.test", "Kofi Boateng", Role.MANAGER, "+233200000002"],
+    ["cashier@accra.test", "Esi Adjei", Role.CASHIER, "+233200000003"],
+    ["designer@accra.test", "Nana Print Studio", Role.DESIGNER, "+233200000004"],
+    ["accountant@accra.test", "Yaw Accounts", Role.ACCOUNTANT, "+233200000005"],
   ] as const;
 
-  for (const [email, name, role] of users) {
+  for (const [email, name, role, phone] of users) {
     await prisma.user.upsert({
       where: { email },
       update: {
         passwordHash,
         shopId: demoShop.id,
         role,
+        phone,
         failedLoginCount: 0,
         lockUntil: null,
         isActive: true,
@@ -101,7 +124,7 @@ async function main() {
         name,
         role,
         shopId: demoShop.id,
-        phone: "+233200000000",
+        phone,
       },
     });
   }
@@ -201,6 +224,18 @@ async function main() {
     create: { shopId: demoShop.id, name: "Boots & Equipment", attributeTemplateId: equipment.id },
   });
 
+  const balls = await prisma.category.upsert({
+    where: { shopId_name: { shopId: demoShop.id, name: "Balls & Training" } },
+    update: {},
+    create: { shopId: demoShop.id, name: "Balls & Training", attributeTemplateId: equipment.id },
+  });
+
+  const protection = await prisma.category.upsert({
+    where: { shopId_name: { shopId: demoShop.id, name: "Protective Gear" } },
+    update: {},
+    create: { shopId: demoShop.id, name: "Protective Gear", attributeTemplateId: equipment.id },
+  });
+
   const services = await prisma.category.upsert({
     where: { shopId_name: { shopId: demoShop.id, name: "Services" } },
     update: {},
@@ -212,6 +247,10 @@ async function main() {
       categoryId: jerseys.id,
       name: "Home Match Jersey",
       brand: "YPMS Elite",
+      productType: "Team jersey",
+      sportType: "Football",
+      teamName: "Accra Pro",
+      sizeGuide: ["S", "M", "L", "XL", "XXL"],
       condition: ProductCondition.NEW,
       isPersonalizable: true,
       basePrice: "180.00",
@@ -226,6 +265,10 @@ async function main() {
       categoryId: jerseys.id,
       name: "Away Training Kit",
       brand: "YPMS Elite",
+      productType: "Custom print jersey",
+      sportType: "Football",
+      teamName: "Training",
+      sizeGuide: ["XS", "S", "M", "L", "XL"],
       condition: ProductCondition.NEW,
       isPersonalizable: true,
       basePrice: "145.00",
@@ -239,6 +282,10 @@ async function main() {
       categoryId: boots.id,
       name: "Turf Control Boots",
       brand: "KenteSport",
+      productType: "Football boots",
+      sportType: "Football",
+      teamName: "",
+      sizeGuide: ["EU 40", "EU 41", "EU 42", "EU 43", "EU 44"],
       condition: ProductCondition.NEW,
       isRentable: false,
       basePrice: "390.00",
@@ -249,9 +296,65 @@ async function main() {
       ],
     },
     {
+      categoryId: balls.id,
+      name: "FIFA Quality Football",
+      brand: "KenteSport",
+      productType: "Ball",
+      sportType: "Football",
+      teamName: "",
+      sizeGuide: ["Size 4", "Size 5"],
+      condition: ProductCondition.NEW,
+      isPersonalizable: false,
+      basePrice: "120.00",
+      lowStockThreshold: 10,
+      variants: [
+        { sku: "BALL-FIFA-4", stockQty: 18, attributes: { size: "4", color: "White/Orange", equipmentGroup: "Match ball" } },
+        { sku: "BALL-FIFA-5", stockQty: 25, attributes: { size: "5", color: "White/Orange", equipmentGroup: "Match ball" } },
+      ],
+    },
+    {
+      categoryId: protection.id,
+      name: "Carbon Shin Guards",
+      brand: "SafePlay",
+      productType: "Protective gear",
+      sportType: "Football",
+      teamName: "",
+      sizeGuide: ["S", "M", "L"],
+      condition: ProductCondition.NEW,
+      isPersonalizable: false,
+      basePrice: "75.00",
+      lowStockThreshold: 6,
+      variants: [
+        { sku: "SHIN-CARBON-S", stockQty: 14, attributes: { size: "S", color: "Black", equipmentGroup: "Shin guards" } },
+        { sku: "SHIN-CARBON-M", stockQty: 10, attributes: { size: "M", color: "Black", equipmentGroup: "Shin guards" } },
+        { sku: "SHIN-CARBON-L", stockQty: 4, attributes: { size: "L", color: "Black", equipmentGroup: "Shin guards" } },
+      ],
+    },
+    {
+      categoryId: balls.id,
+      name: "Agility Cone Set",
+      brand: "CoachLine",
+      productType: "Training cone",
+      sportType: "General",
+      teamName: "",
+      sizeGuide: ["20-pack", "50-pack"],
+      condition: ProductCondition.NEW,
+      isPersonalizable: false,
+      basePrice: "95.00",
+      lowStockThreshold: 5,
+      variants: [
+        { sku: "CONE-SET-20", stockQty: 12, attributes: { size: "20-pack", color: "Orange", equipmentGroup: "Training" } },
+        { sku: "CONE-SET-50", stockQty: 6, attributes: { size: "50-pack", color: "Mixed", equipmentGroup: "Training" } },
+      ],
+    },
+    {
       categoryId: services.id,
       name: "Name & Number Printing",
       brand: "In-house",
+      productType: "Service",
+      sportType: "General",
+      teamName: "",
+      sizeGuide: [],
       condition: ProductCondition.NEW,
       isService: true,
       basePrice: "55.00",
@@ -269,12 +372,15 @@ async function main() {
       include: { variants: true },
     });
 
-    const product = existing ?? await prisma.product.create({
-      data: {
+    const productDataBase = {
         shopId: demoShop.id,
         categoryId: item.categoryId,
         name: item.name,
         brand: item.brand,
+        productType: item.productType,
+        sportType: item.sportType,
+        teamName: item.teamName,
+        sizeGuide: item.sizeGuide,
         condition: item.condition,
         isPersonalizable: Boolean(item.isPersonalizable),
         isService: Boolean(item.isService),
@@ -283,8 +389,16 @@ async function main() {
         serviceDurationMins: item.serviceDurationMins,
         lowStockThreshold: item.lowStockThreshold,
         description: "Seeded demo inventory for the launch-ready sports shop workflow.",
-      },
-    });
+    };
+
+    const product = existing
+      ? await prisma.product.update({
+          where: { id: existing.id },
+          data: productDataBase,
+        })
+      : await prisma.product.create({
+          data: productDataBase,
+        });
 
     for (const variant of item.variants) {
       await prisma.productVariant.upsert({
@@ -301,6 +415,49 @@ async function main() {
         },
       });
     }
+  }
+
+  const demoBuyer = await prisma.buyerAccount.upsert({
+    where: { phone: "+233550000000" },
+    update: {
+      name: "Demo Buyer",
+      email: "buyer@demo.test",
+      phoneVerifiedAt: new Date(),
+      isActive: true,
+    },
+    create: {
+      name: "Demo Buyer",
+      phone: "+233550000000",
+      email: "buyer@demo.test",
+      phoneVerifiedAt: new Date(),
+      isActive: true,
+    },
+  });
+
+  const reviewProducts = await prisma.product.findMany({
+    where: { shopId: demoShop.id, name: { in: ["Home Match Jersey", "FIFA Quality Football"] } },
+  });
+
+  for (const product of reviewProducts) {
+    await prisma.productReview.upsert({
+      where: { productId_buyerId: { productId: product.id, buyerId: demoBuyer.id } },
+      update: {
+        rating: product.name === "Home Match Jersey" ? 5 : 4,
+        comment: product.name === "Home Match Jersey"
+          ? "Good jersey quality and the name print came out clean."
+          : "Solid match ball for training and weekend games.",
+        isApproved: true,
+      },
+      create: {
+        shopId: demoShop.id,
+        productId: product.id,
+        buyerId: demoBuyer.id,
+        rating: product.name === "Home Match Jersey" ? 5 : 4,
+        comment: product.name === "Home Match Jersey"
+          ? "Good jersey quality and the name print came out clean."
+          : "Solid match ball for training and weekend games.",
+      },
+    });
   }
 
   const owner = await prisma.user.findUniqueOrThrow({ where: { email: "owner@accra.test" } });

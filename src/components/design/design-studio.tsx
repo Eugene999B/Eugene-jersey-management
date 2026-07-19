@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 
 type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training";
 type ViewMode = "front" | "back" | "production";
+type DesignMode = "plain" | "team" | "custom";
 type MaterialPreset = "pu-vinyl" | "flock" | "sublimation" | "twill";
 type CutterProfile = "generic-hpgl" | "graphtec-ce" | "roland-gs" | "silhouette-cameo";
 type LayerKey = "crest" | "sponsor" | "name" | "number" | "sideStripes" | "contour" | "weedBox" | "registration";
@@ -109,6 +110,7 @@ function hpglJob(copies: number, mirrorCut: boolean, contourOffset: number) {
 
 export function DesignStudio() {
   const [garmentStyle, setGarmentStyle] = useState<GarmentStyle>("pro-panel");
+  const [designMode, setDesignMode] = useState<DesignMode>("custom");
   const [baseColor, setBaseColor] = useState("#0f766e");
   const [accentColor, setAccentColor] = useState("#f97316");
   const [trimColor, setTrimColor] = useState("#111827");
@@ -227,6 +229,7 @@ export function DesignStudio() {
 
   const productionManifest = useMemo(() => ({
     jobName: `${playerName || "PLAYER"}-${playerNumber || "00"}`,
+    designMode,
     view,
     garmentStyle,
     material: materialConfig.label,
@@ -258,6 +261,7 @@ export function DesignStudio() {
     copies,
     cutForce,
     cutSpeed,
+    designMode,
     cutterConfig.height,
     cutterConfig.label,
     cutterConfig.width,
@@ -295,8 +299,55 @@ export function DesignStudio() {
     setLayers((current) => ({ ...current, [layer]: !current[layer] }));
   }
 
+  function applyDesignMode(nextMode: DesignMode) {
+    setDesignMode(nextMode);
+
+    if (nextMode === "plain") {
+      setView("production");
+      setLayers({
+        crest: false,
+        sponsor: false,
+        name: false,
+        number: false,
+        sideStripes: false,
+        contour: true,
+        weedBox: true,
+        registration: true,
+      });
+      return;
+    }
+
+    if (nextMode === "team") {
+      setView("front");
+      setLayers({
+        crest: true,
+        sponsor: true,
+        name: false,
+        number: false,
+        sideStripes: true,
+        contour: true,
+        weedBox: true,
+        registration: true,
+      });
+      return;
+    }
+
+    setView("back");
+    setLayers({
+      crest: true,
+      sponsor: true,
+      name: true,
+      number: true,
+      sideStripes: true,
+      contour: true,
+      weedBox: true,
+      registration: true,
+    });
+  }
+
   function resetDesign() {
     setGarmentStyle("pro-panel");
+    setDesignMode("custom");
     setBaseColor("#0f766e");
     setAccentColor("#f97316");
     setTrimColor("#111827");
@@ -348,6 +399,18 @@ export function DesignStudio() {
         </div>
 
         <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {(["plain", "team", "custom"] as const).map((item) => (
+              <button
+                key={item}
+                onClick={() => applyDesignMode(item)}
+                className={`min-h-10 rounded-[8px] px-2 text-sm font-semibold capitalize transition ${designMode === item ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-[#f6f4ef]"}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-3 gap-2">
             {(["front", "back", "production"] as const).map((item) => (
               <button

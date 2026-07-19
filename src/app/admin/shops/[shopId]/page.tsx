@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
-import { toggleShopAction } from "@/app/admin/actions";
+import { rejectShopCredentialsAction, toggleShopAction, verifyShopCredentialsAction } from "@/app/admin/actions";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 
@@ -38,7 +38,9 @@ export default async function AdminShopDetailPage({ params }: Props) {
         <div>
           <Link className="text-sm font-semibold text-slate-500 hover:text-slate-950" href="/admin">Back to shops</Link>
           <h1 className="mt-2 text-3xl font-semibold">{shop.name}</h1>
-          <p className="mt-1 text-sm text-slate-600">/{shop.slug} - code {shop.networkCode ?? "not assigned"} - created {shortDate(shop.createdAt)}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            /{shop.slug} - network {shop.networkCode ?? "not assigned"} - staff ID {shop.staffLoginId ?? "not assigned"} - created {shortDate(shop.createdAt)}
+          </p>
         </div>
         <form action={toggleShopAction}>
           <input type="hidden" name="shopId" value={shop.id} />
@@ -49,6 +51,7 @@ export default async function AdminShopDetailPage({ params }: Props) {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Plan" value={shop.planTier} />
         <StatCard label="Status" value={shop.isActive ? "Active" : "Suspended"} />
+        <StatCard label="Verification" value={titleCase(shop.verificationStatus)} />
         <StatCard label="Products" value={String(shop._count.products)} />
         <StatCard label="30-day sales" value={currency(sales._sum.totalAmount?.toString() ?? "0", shop.currency)} />
         <StatCard label="Renewal" value={shop.subscriptionRenewalAt ? shortDate(shop.subscriptionRenewalAt) : "Not set"} />
@@ -58,6 +61,11 @@ export default async function AdminShopDetailPage({ params }: Props) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
+        <div className="panel p-5">
+          <p className="text-sm font-semibold uppercase text-slate-500">Shop access</p>
+          <h2 className="mt-2 text-xl font-semibold">{shop.staffLoginId ?? "Missing staff ID"}</h2>
+          <p className="mt-2 text-sm text-slate-500">Staff must enter this ID before email and password access opens.</p>
+        </div>
         <div className="panel p-5">
           <p className="text-sm font-semibold uppercase text-slate-500">Payment routing</p>
           <h2 className="mt-2 text-xl font-semibold">{shop.paymentConfig?.paystackSubaccountCode ? "Subaccount ready" : "Needs subaccount"}</h2>
@@ -72,6 +80,76 @@ export default async function AdminShopDetailPage({ params }: Props) {
           <p className="text-sm font-semibold uppercase text-slate-500">Billing</p>
           <h2 className="mt-2 text-xl font-semibold">{shop.billingCycle}</h2>
           <p className="mt-2 text-sm text-slate-500">{shop.subscriptionStatus} - {shop.billingCycle === "YEARLY" ? currency(shop.yearlyPrice?.toString() ?? "0") : currency(shop.monthlyPrice?.toString() ?? "0")}</p>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="panel p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold uppercase text-slate-500">Credential verification</p>
+              <h2 className="mt-2 text-xl font-semibold">{titleCase(shop.verificationStatus)}</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Verify shops only after their business details, owner identity, and settlement details are acceptable.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link className="rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" href={`/admin/shops/${shop.id}/legal-document`}>
+                Legal document
+              </Link>
+              <Link className="rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" href={`/admin/shops/${shop.id}/id-card`}>
+                Seller ID card
+              </Link>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {[
+              ["Legal name", shop.legalBusinessName],
+              ["Registration", shop.businessRegistrationNumber],
+              ["Tax ID", shop.taxIdentificationNumber],
+              ["Owner ID", shop.ownerGovernmentId],
+              ["Contact", shop.credentialContactName],
+              ["Phone", shop.credentialPhone],
+              ["Email", shop.credentialEmail],
+              ["Address", shop.credentialAddress],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-[8px] bg-white p-3 text-sm">
+                <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+                <p className="mt-1 font-semibold text-slate-900">{value || "Not provided"}</p>
+              </div>
+            ))}
+          </div>
+          {shop.credentialDocumentUrl ? (
+            <Link className="mt-4 inline-flex text-sm font-semibold text-[var(--shop-primary)]" href={shop.credentialDocumentUrl}>
+              Open credential document
+            </Link>
+          ) : null}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <form action={verifyShopCredentialsAction}>
+              <input type="hidden" name="shopId" value={shop.id} />
+              <Button>Verify shop</Button>
+            </form>
+            <form action={rejectShopCredentialsAction}>
+              <input type="hidden" name="shopId" value={shop.id} />
+              <Button variant="outline">Reject credentials</Button>
+            </form>
+          </div>
+        </div>
+
+        <div className="panel p-5">
+          <p className="text-sm font-semibold uppercase text-slate-500">Approval record</p>
+          <h2 className="mt-2 text-xl font-semibold">{shop.verifiedAt ? shortDate(shop.verifiedAt) : "Not verified"}</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Verified shops appear in the public marketplace. Pending and rejected shops stay hidden from buyers.
+          </p>
+          <div className="mt-4 grid gap-2 text-sm">
+            <div className="rounded-[8px] bg-white px-3 py-2">
+              Network code: <span className="font-semibold">{shop.networkCode ?? "Not assigned"}</span>
+            </div>
+            <div className="rounded-[8px] bg-white px-3 py-2">
+              Staff login ID: <span className="font-semibold">{shop.staffLoginId ?? "Not assigned"}</span>
+            </div>
+          </div>
         </div>
       </section>
 

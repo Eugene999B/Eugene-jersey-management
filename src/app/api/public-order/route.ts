@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { NotificationChannel, OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { DeliveryStatus, FulfillmentType, NotificationChannel, OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { initializePaystackTransaction } from "@/lib/payments";
 import { sendCustomerMessage } from "@/lib/messaging";
+import { getBuyerSession } from "@/lib/buyer-session";
+import { createNumericCode } from "@/lib/phone-codes";
+import { hashToken } from "@/lib/tokens";
 
 const orderSchema = z.object({
   shopSlug: z.string().min(1),
   variantId: z.string().min(1),
   quantity: z.coerce.number().int().positive().max(100),
-  customerName: z.string().min(2),
-  customerPhone: z.string().optional(),
-  customerEmail: z.string().email().optional(),
   personalizationName: z.string().optional(),
   personalizationNumber: z.string().optional(),
   notes: z.string().optional(),
+  fulfillmentType: z.nativeEnum(FulfillmentType).default(FulfillmentType.PICKUP),
+  deliveryAddress: z.string().optional(),
+  deliveryCity: z.string().optional(),
+  deliveryArea: z.string().optional(),
+  deliveryNotes: z.string().optional(),
   paymentChoice: z.enum(["PAYSTACK", "CASH"]),
 });
 
@@ -35,16 +40,31 @@ export async function POST(request: NextRequest) {
     shopSlug,
     variantId: formData.get("variantId"),
     quantity: formData.get("quantity"),
-    customerName: formData.get("customerName"),
-    customerPhone: formData.get("customerPhone") || undefined,
-    customerEmail: formData.get("customerEmail") || undefined,
     personalizationName: formData.get("personalizationName") || undefined,
     personalizationNumber: formData.get("personalizationNumber") || undefined,
     notes: formData.get("notes") || undefined,
+    fulfillmentType: formData.get("fulfillmentType") || FulfillmentType.PICKUP,
+    deliveryAddress: formData.get("deliveryAddress") || undefined,
+    deliveryCity: formData.get("deliveryCity") || undefined,
+    deliveryArea: formData.get("deliveryArea") || undefined,
+    deliveryNotes: formData.get("deliveryNotes") || undefined,
     paymentChoice: formData.get("paymentChoice"),
   });
 
   if (!parsed.success) return redirectTo(`/shop/${shopSlug}?error=invalid`);
+  if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && !parsed.data.deliveryAddress) {
+    return redirectTo(`/shop/${shopSlug}?error=delivery`);
+  }
+
+  const buyerSession = await getBuyerSession();
+  if (!buyerSession) {
+    return redirectTo(`/buyer/login?next=${encodeURIComponent(`/shop/${parsed.data.shopSlug}`)}&error=login-required`);
+  }
+
+  const buyer = await prisma.buyerAccount.findUnique({ where: { id: buyerSession.id } });
+  if (!buyer || !buyer.isActive || buyer.phone !== buyerSession.phone) {
+    return redirectTo(`/buyer/login?next=${encodeURIComponent(`/shop/${parsed.data.shopSlug}`)}&error=login-required`);
+  }
 
   const shop = await prisma.shop.findUnique({
     where: { slug: parsed.data.shopSlug },
@@ -65,20 +85,22 @@ export async function POST(request: NextRequest) {
   const customer = await prisma.customer.create({
     data: {
       shopId: shop.id,
-      name: parsed.data.customerName,
-      phone: parsed.data.customerPhone,
-      email: parsed.data.customerEmail,
+      name: buyer.name,
+      phone: buyer.phone,
+      email: buyer.email,
       group: "Online",
     },
   });
 
   const unitPrice = Number(variant.priceOverride ?? variant.product.basePrice);
-  const totalAmount = unitPrice * parsed.data.quantity;
+  const deliveryFee = parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? 0 : 0;
+  const totalAmount = unitPrice * parsed.data.quantity + deliveryFee;
   const publicAccessToken = nanoid(32);
   const cashHoldExpiresAt = parsed.data.paymentChoice === "CASH"
     ? new Date(Date.now() + shop.cashOrderHoldMinutes * 60_000)
     : null;
   const paystackReference = `SHOP-${shop.slug}-${Date.now()}-${nanoid(6)}`;
+  const verificationCode = createNumericCode();
 
   const order = await prisma.$transaction(async (tx) => {
     if (!variant.product.isService) {
@@ -96,10 +118,20 @@ export async function POST(request: NextRequest) {
         status: OrderStatus.PENDING,
         channel: "ONLINE",
         totalAmount,
+        buyerId: buyer.id,
         notes: parsed.data.notes,
         publicAccessToken,
         cashHoldExpiresAt,
         paystackReference: parsed.data.paymentChoice === "PAYSTACK" ? paystackReference : null,
+        fulfillmentType: parsed.data.fulfillmentType,
+        deliveryStatus: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? DeliveryStatus.REQUESTED : DeliveryStatus.NOT_REQUIRED,
+        deliveryAddress: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? parsed.data.deliveryAddress : null,
+        deliveryCity: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? parsed.data.deliveryCity : null,
+        deliveryArea: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? parsed.data.deliveryArea : null,
+        deliveryNotes: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? parsed.data.deliveryNotes : null,
+        deliveryFee,
+        pickupCodeHash: hashToken(verificationCode),
+        pickupCodeLast4: verificationCode.slice(-4),
         items: {
           create: {
             productVariantId: variant.id,
@@ -119,7 +151,7 @@ export async function POST(request: NextRequest) {
             method: parsed.data.paymentChoice === "PAYSTACK" ? PaymentMethod.CARD : PaymentMethod.CASH,
             amount: totalAmount,
             status: PaymentStatus.PENDING,
-            providerReference: parsed.data.paymentChoice === "PAYSTACK" ? paystackReference : "CASH-ON-PICKUP",
+            providerReference: parsed.data.paymentChoice === "PAYSTACK" ? paystackReference : "CASH-RESERVATION",
           },
         },
       },
@@ -131,11 +163,18 @@ export async function POST(request: NextRequest) {
     action: "public.order_created",
     entityType: "Order",
     entityId: order.id,
-    metadata: { paymentChoice: parsed.data.paymentChoice, receiptNumber: order.receiptNumber },
+    metadata: {
+      paymentChoice: parsed.data.paymentChoice,
+      fulfillmentType: parsed.data.fulfillmentType,
+      receiptNumber: order.receiptNumber,
+    },
   });
 
   if (customer.phone || customer.email) {
-    const body = `${shop.name}: order ${order.receiptNumber} received. Track it here: ${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}`;
+    const verifyCopy = parsed.data.fulfillmentType === FulfillmentType.PICKUP
+      ? `Pickup code: ${verificationCode}. Bring this code and your phone number when collecting.`
+      : `Delivery verification code: ${verificationCode}. Share it only after receiving the order.`;
+    const body = `${shop.name}: order ${order.receiptNumber} received. ${verifyCopy} Track: ${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}`;
     await Promise.all([
       customer.phone ? sendCustomerMessage({
         shopId: shop.id,
