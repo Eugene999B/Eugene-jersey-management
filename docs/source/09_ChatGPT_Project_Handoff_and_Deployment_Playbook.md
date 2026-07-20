@@ -163,6 +163,8 @@ The design studio provides SVG, JSON job, and PLT exports. Exact direct cutter c
 
 ## Near-Term Development Backlog
 
+- Read docs/source/10_System_Diagnostic_Progress_and_Roadmap.md before starting new work. It contains the latest launch diagnostic, live route checks, known bugs, and the next implementation order.
+- Launch blockers now include production demo seed safety, page-level dashboard RBAC, transaction-safe stock decrement, design undo/redo/delete, grouped templates, machine connection details, Paystack callback verification, and hardened buyer SMS registration.
 - Create production Super Admin setup command and remove dependency on demo seed users.
 - Add real Paystack webhook confirmation and refund handling.
 - Add SMS/WhatsApp provider implementation for Twilio or Africa's Talking.

@@ -11,5 +11,6 @@ Generated files:
 7. docs/word/07_Security_and_Compliance_Runbook.docx
 8. docs/word/08_Database_API_and_Maintenance_Reference.docx
 9. docs/word/09_ChatGPT_Project_Handoff_and_Deployment_Playbook.docx
+10. docs/word/10_System_Diagnostic_Progress_and_Roadmap.docx
 
 Source markdown versions are in docs/source.

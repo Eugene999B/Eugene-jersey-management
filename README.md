@@ -194,3 +194,17 @@ Before editing:
 7. If changing design studio behavior, test selection, movement, mirror view, zoom, and mobile layout.
 
 Generated Word docs live in `docs/word` when `npm.cmd run docs:generate` is run.
+
+## Current Diagnostic
+
+Read `docs/source/10_System_Diagnostic_Progress_and_Roadmap.md` before planning the next major update. It records the latest system check, live route checks, launch blockers, design studio gaps, Paystack/Arkesel setup direction, and the recommended implementation order.
+
+Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc-MipRfi1_5fdJKxahJ-aYWYEj
+
+Highest-priority issues from the latest audit:
+
+- Production deploy still runs demo seed data and can keep `Ghana123` demo accounts alive.
+- Dashboard pages need page-level role permission guards, not only hidden sidebar links.
+- Checkout stock decrement needs transaction-safe stock guards.
+- Design Studio needs undo, redo, delete selected, grouped templates, persistent design jobs, and clearer machine connection details.
+- Paystack and Arkesel hooks exist, but production payment/SMS operations need callback verification, provider dashboards, retries, and monitoring.
