@@ -83,25 +83,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Customer name is required for credit sales." }, { status: 400 });
   }
 
-  const customer = parsed.data.customerName
-    ? await prisma.customer.create({
-        data: {
-          shopId: session.shopId,
-          name: parsed.data.customerName,
-          phone: parsed.data.customerPhone,
-          email: parsed.data.customerEmail,
-        },
-      })
-    : null;
+  let checkoutResult;
+  try {
+    checkoutResult = await prisma.$transaction(async (tx) => {
+      const customer = parsed.data.customerName
+        ? await tx.customer.create({
+            data: {
+              shopId: session.shopId!,
+              name: parsed.data.customerName,
+              phone: parsed.data.customerPhone,
+              email: parsed.data.customerEmail,
+            },
+          })
+        : null;
 
-  const order = await prisma.$transaction(async (tx) => {
     for (const item of parsed.data.items) {
       const variant = variantById.get(item.variantId);
       if (variant && !variant.product.isService) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
+        const updated = await tx.productVariant.updateMany({
+          where: { id: item.variantId, stockQty: { gte: item.quantity } },
           data: { stockQty: { decrement: item.quantity } },
         });
+        if (updated.count !== 1) throw new Error("INSUFFICIENT_STOCK");
       }
     }
 
@@ -167,8 +170,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return createdOrder;
-  });
+      return { order: createdOrder, customer };
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
+      return NextResponse.json({ error: "Stock changed while checking out. Refresh and try again." }, { status: 409 });
+    }
+    throw error;
+  }
+
+  const { order, customer } = checkoutResult;
 
   await audit({
     shopId: session.shopId,

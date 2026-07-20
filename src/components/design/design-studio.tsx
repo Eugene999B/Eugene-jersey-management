@@ -18,6 +18,7 @@ import {
   MousePointer2,
   Palette,
   Printer,
+  Redo2,
   RotateCcw,
   Ruler,
   Save,
@@ -26,13 +27,15 @@ import {
   Settings2,
   Shirt,
   Square,
+  Trash2,
   Type,
+  Undo2,
   WandSparkles,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 
 type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training" | "basketball" | "rugby" | "goalkeeper";
@@ -46,9 +49,9 @@ type StudioTab = "brand" | "assets" | "text" | "layout" | "layers" | "production
 type ActiveTool = "select" | "text" | "image" | "shape" | "measure" | "cut" | "press" | "inspect";
 type PatternStyle = "none" | "pinstripe" | "diagonal" | "chevron" | "halftone" | "speed-lines" | "panel-grid" | "carbon" | "kente-stripe" | "camo-panels" | "gradient-wave";
 type ImageMask = "rectangle" | "circle" | "shield" | "diamond";
-type ShapeKind = "shield" | "circle" | "sash" | "star" | "lightning" | "lion" | "eagle" | "football" | "basketball" | "trophy" | "crown" | "paw";
+type ShapeKind = "shield" | "circle" | "sash" | "star" | "lightning" | "lion" | "eagle" | "football" | "basketball" | "trophy" | "crown" | "paw" | "flame" | "wing" | "boot" | "volleyball" | "tennis" | "boxing";
 type DesignTemplateKey = "elite-home" | "away-velocity" | "keeper-armor" | "training-minimal" | "basketball-city" | "rugby-heritage" | "street-camo" | "gold-final";
-type MachineStatus = "idle" | "connecting" | "sent" | "unsupported" | "failed";
+type MachineStatus = "idle" | "connecting" | "connected" | "sent" | "unsupported" | "failed";
 type SheetPreset = "a4" | "a3" | "vinyl-12x20" | "vinyl-15x20" | "custom";
 type PressAlignment = "center" | "upper-back" | "left-chest" | "full-front" | "sleeve";
 type TextLayerKey = "name" | "number" | "sponsor" | "crest";
@@ -97,6 +100,7 @@ type DragState = {
 type SerialPortLike = {
   open: (options: { baudRate: number }) => Promise<void>;
   close: () => Promise<void>;
+  getInfo?: () => { usbVendorId?: number; usbProductId?: number };
   writable?: WritableStream<Uint8Array> | null;
 };
 
@@ -133,6 +137,93 @@ type DesignTemplate = {
   nameArch: number;
   material: MaterialPreset;
   productionAid: ProductionAid;
+};
+
+type ShapePreset = {
+  label: string;
+  kind: ShapeKind;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  tags: string;
+};
+
+type DesignSnapshot = {
+  activeTab: StudioTab;
+  activeTool: ActiveTool;
+  canvasZoom: number;
+  canvasPanX: number;
+  canvasPanY: number;
+  selectedObject: SelectedObject;
+  textLayers: Record<TextLayerKey, TextLayerState>;
+  garmentStyle: GarmentStyle;
+  designMode: DesignMode;
+  textEffect: TextEffect;
+  productionAid: ProductionAid;
+  baseColor: string;
+  accentColor: string;
+  trimColor: string;
+  vinylColor: string;
+  playerName: string;
+  playerNumber: string;
+  sponsor: string;
+  crest: string;
+  view: ViewMode;
+  patternStyle: PatternStyle;
+  textureStrength: number;
+  textTracking: number;
+  outlineWidth: number;
+  nameY: number;
+  numberY: number;
+  sponsorY: number;
+  numberScale: number;
+  nameArch: number;
+  imageX: number;
+  imageY: number;
+  imageSize: number;
+  imageRotation: number;
+  imageOpacity: number;
+  imageMask: ImageMask;
+  shapeKind: ShapeKind;
+  shapeX: number;
+  shapeY: number;
+  shapeScale: number;
+  shapeRotation: number;
+  shapeOpacity: number;
+  garmentScale: number;
+  sheetPreset: SheetPreset;
+  customSheetWidth: number;
+  customSheetHeight: number;
+  sheetMargin: number;
+  transferOffsetX: number;
+  transferOffsetY: number;
+  pressAlignment: PressAlignment;
+  showTransferSheet: boolean;
+  material: MaterialPreset;
+  cutter: CutterProfile;
+  bladeOffset: number;
+  overcut: number;
+  cutForce: number;
+  cutSpeed: number;
+  contourOffset: number;
+  cornerSmoothing: number;
+  bleedMargin: number;
+  nestingGap: number;
+  pressPasses: number;
+  copies: number;
+  mirrorCut: boolean;
+  preserveCutOrder: boolean;
+  showSafeArea: boolean;
+  showRulers: boolean;
+  autoWeedLines: boolean;
+  snapToGuides: boolean;
+  layers: Record<LayerKey, boolean>;
+};
+
+type DesignHistory = {
+  past: DesignSnapshot[];
+  future: DesignSnapshot[];
 };
 
 const sheetPresets: Record<SheetPreset, { label: string; widthMm: number; heightMm: number }> = {
@@ -198,15 +289,51 @@ const textQuickPositions: Array<{ label: string; x: number; y: number }> = [
   { label: "Lower mark", x: 200, y: 424 },
 ];
 
-const shapePresets: Array<{ label: string; kind: ShapeKind; x: number; y: number; scale: number; rotation: number }> = [
-  { label: "Lion crest", kind: "lion", x: 200, y: 142, scale: 82, rotation: 0 },
-  { label: "Eagle wing", kind: "eagle", x: 200, y: 186, scale: 92, rotation: 0 },
-  { label: "Paw mark", kind: "paw", x: 126, y: 156, scale: 70, rotation: -8 },
-  { label: "Football badge", kind: "football", x: 200, y: 156, scale: 86, rotation: 0 },
-  { label: "Basketball badge", kind: "basketball", x: 200, y: 156, scale: 86, rotation: 0 },
-  { label: "Trophy mark", kind: "trophy", x: 200, y: 178, scale: 88, rotation: 0 },
-  { label: "Crown mark", kind: "crown", x: 200, y: 126, scale: 82, rotation: 0 },
-  { label: "Lightning slash", kind: "lightning", x: 292, y: 236, scale: 72, rotation: 18 },
+const shapeTemplateGroups: Array<{ name: string; detail: string; templates: ShapePreset[] }> = [
+  {
+    name: "Animals",
+    detail: "mascots and club identity",
+    templates: [
+      { label: "Lion crest", kind: "lion", x: 200, y: 142, scale: 82, rotation: 0, tags: "football mascot" },
+      { label: "Eagle wing", kind: "eagle", x: 200, y: 186, scale: 92, rotation: 0, tags: "academy speed" },
+      { label: "Power paw", kind: "paw", x: 126, y: 156, scale: 70, rotation: -8, tags: "kids team" },
+      { label: "Wing badge", kind: "wing", x: 200, y: 150, scale: 88, rotation: 0, tags: "premium crest" },
+    ],
+  },
+  {
+    name: "Sports",
+    detail: "equipment marks",
+    templates: [
+      { label: "Football badge", kind: "football", x: 200, y: 156, scale: 86, rotation: 0, tags: "football jersey" },
+      { label: "Basketball badge", kind: "basketball", x: 200, y: 156, scale: 86, rotation: 0, tags: "basketball kit" },
+      { label: "Volleyball seal", kind: "volleyball", x: 200, y: 156, scale: 86, rotation: -8, tags: "volleyball club" },
+      { label: "Tennis mark", kind: "tennis", x: 200, y: 156, scale: 82, rotation: 0, tags: "tennis academy" },
+      { label: "Boot stamp", kind: "boot", x: 286, y: 224, scale: 78, rotation: -12, tags: "football boot" },
+      { label: "Boxing patch", kind: "boxing", x: 200, y: 180, scale: 82, rotation: 0, tags: "fight team" },
+    ],
+  },
+  {
+    name: "Objects",
+    detail: "badges, awards, energy",
+    templates: [
+      { label: "Trophy mark", kind: "trophy", x: 200, y: 178, scale: 88, rotation: 0, tags: "champion" },
+      { label: "Crown mark", kind: "crown", x: 200, y: 126, scale: 82, rotation: 0, tags: "captain" },
+      { label: "Lightning slash", kind: "lightning", x: 292, y: 236, scale: 72, rotation: 18, tags: "speed" },
+      { label: "Flame mark", kind: "flame", x: 122, y: 226, scale: 76, rotation: -8, tags: "heat press" },
+      { label: "Shield badge", kind: "shield", x: 200, y: 148, scale: 80, rotation: 0, tags: "club crest" },
+      { label: "Star award", kind: "star", x: 200, y: 134, scale: 72, rotation: 0, tags: "winner" },
+    ],
+  },
+  {
+    name: "Ghana And Club",
+    detail: "local style starters",
+    templates: [
+      { label: "Kente sash", kind: "sash", x: 200, y: 382, scale: 92, rotation: -8, tags: "kente stripe" },
+      { label: "Circle initials", kind: "circle", x: 134, y: 136, scale: 66, rotation: 0, tags: "left chest" },
+      { label: "Captain crown", kind: "crown", x: 200, y: 118, scale: 68, rotation: 0, tags: "captain mark" },
+      { label: "Victory star", kind: "star", x: 312, y: 154, scale: 54, rotation: 12, tags: "sleeve mark" },
+    ],
+  },
 ];
 
 function isTextLayerKey(value: SelectedObject): value is TextLayerKey {
@@ -709,6 +836,20 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function serialDeviceName(port: SerialPortLike | null) {
+  const info = port?.getInfo?.();
+  if (!info?.usbVendorId && !info?.usbProductId) return "Browser selected cutter";
+  const vendor = info.usbVendorId ? `VID ${info.usbVendorId.toString(16).toUpperCase().padStart(4, "0")}` : "VID unknown";
+  const product = info.usbProductId ? `PID ${info.usbProductId.toString(16).toUpperCase().padStart(4, "0")}` : "PID unknown";
+  return `${vendor} / ${product}`;
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || tagName === "input" || tagName === "textarea" || tagName === "select";
+}
+
 function PanelHeading({ icon: Icon, title, detail }: { icon: LucideIcon; title: string; detail?: string }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-3">
@@ -760,6 +901,9 @@ export function DesignStudio() {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [baudRate, setBaudRate] = useState(9600);
   const [machineStatus, setMachineStatus] = useState<MachineStatus>("idle");
+  const [machineName, setMachineName] = useState("No cutter selected");
+  const [machineError, setMachineError] = useState("");
+  const [lastSentAt, setLastSentAt] = useState("");
   const [garmentStyle, setGarmentStyle] = useState<GarmentStyle>("pro-panel");
   const [designMode, setDesignMode] = useState<DesignMode>("custom");
   const [textEffect, setTextEffect] = useState<TextEffect>("outline");
@@ -837,6 +981,9 @@ export function DesignStudio() {
     weedBox: true,
     registration: true,
   });
+  const [history, setHistory] = useState<DesignHistory>({ past: [], future: [] });
+  const lastSnapshotRef = useRef("");
+  const restoringSnapshotRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -856,6 +1003,106 @@ export function DesignStudio() {
   const activeLayers = Object.values(layers).filter(Boolean).length;
   const selectedTextKey = isTextLayerKey(selectedObject) ? selectedObject : null;
   const selectedTextLayer = selectedTextKey ? textLayers[selectedTextKey] : null;
+  const canDeleteSelected = selectedObject !== "garment" && selectedObject !== "sheet" && (!selectedTextLayer || !selectedTextLayer.locked);
+  const designSnapshot = useMemo<DesignSnapshot>(() => ({
+    activeTab,
+    activeTool,
+    canvasZoom,
+    canvasPanX,
+    canvasPanY,
+    selectedObject,
+    textLayers: {
+      name: { ...textLayers.name },
+      number: { ...textLayers.number },
+      sponsor: { ...textLayers.sponsor },
+      crest: { ...textLayers.crest },
+    },
+    garmentStyle,
+    designMode,
+    textEffect,
+    productionAid,
+    baseColor,
+    accentColor,
+    trimColor,
+    vinylColor,
+    playerName,
+    playerNumber,
+    sponsor,
+    crest,
+    view,
+    patternStyle,
+    textureStrength,
+    textTracking,
+    outlineWidth,
+    nameY,
+    numberY,
+    sponsorY,
+    numberScale,
+    nameArch,
+    imageX,
+    imageY,
+    imageSize,
+    imageRotation,
+    imageOpacity,
+    imageMask,
+    shapeKind,
+    shapeX,
+    shapeY,
+    shapeScale,
+    shapeRotation,
+    shapeOpacity,
+    garmentScale,
+    sheetPreset,
+    customSheetWidth,
+    customSheetHeight,
+    sheetMargin,
+    transferOffsetX,
+    transferOffsetY,
+    pressAlignment,
+    showTransferSheet,
+    material,
+    cutter,
+    bladeOffset,
+    overcut,
+    cutForce,
+    cutSpeed,
+    contourOffset,
+    cornerSmoothing,
+    bleedMargin,
+    nestingGap,
+    pressPasses,
+    copies,
+    mirrorCut,
+    preserveCutOrder,
+    showSafeArea,
+    showRulers,
+    autoWeedLines,
+    snapToGuides,
+    layers: { ...layers },
+  }), [accentColor, activeTab, activeTool, autoWeedLines, baseColor, bladeOffset, bleedMargin, canvasPanX, canvasPanY, canvasZoom, contourOffset, copies, cornerSmoothing, customSheetHeight, customSheetWidth, cutForce, cutSpeed, cutter, designMode, garmentScale, garmentStyle, imageMask, imageOpacity, imageRotation, imageSize, imageX, imageY, layers, material, mirrorCut, nameArch, nameY, nestingGap, numberScale, numberY, outlineWidth, overcut, patternStyle, playerName, playerNumber, preserveCutOrder, pressAlignment, pressPasses, productionAid, selectedObject, shapeKind, shapeOpacity, shapeRotation, shapeScale, shapeX, shapeY, sheetMargin, sheetPreset, showRulers, showSafeArea, showTransferSheet, snapToGuides, sponsor, sponsorY, textEffect, textLayers, textTracking, textureStrength, transferOffsetX, transferOffsetY, trimColor, view, vinylColor, crest]);
+  const designSnapshotKey = useMemo(() => JSON.stringify(designSnapshot), [designSnapshot]);
+
+  useEffect(() => {
+    if (!lastSnapshotRef.current) {
+      lastSnapshotRef.current = designSnapshotKey;
+      return;
+    }
+
+    if (restoringSnapshotRef.current) {
+      restoringSnapshotRef.current = false;
+      lastSnapshotRef.current = designSnapshotKey;
+      return;
+    }
+
+    if (lastSnapshotRef.current === designSnapshotKey) return;
+
+    const previousSnapshot = JSON.parse(lastSnapshotRef.current) as DesignSnapshot;
+    setHistory((current) => ({
+      past: [...current.past.slice(-79), previousSnapshot],
+      future: [],
+    }));
+    lastSnapshotRef.current = designSnapshotKey;
+  }, [designSnapshotKey]);
 
   const qualityChecks = useMemo(() => {
     const textFits = playerName.length <= 16 && sponsor.length <= 24 && playerNumber.length <= 3;
@@ -1036,6 +1283,24 @@ export function DesignStudio() {
       }
       if (shapeKind === "paw") {
         return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><ellipse cx="0" cy="26" rx="34" ry="28" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="-42" cy="-14" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="-14" cy="-34" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="14" cy="-34" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="42" cy="-14" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "flame") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-8 62 C-54 34 -38 -18 -10 -40 C-4 -8 20 -16 14 -64 C50 -28 64 12 42 42 C30 58 12 68 -8 62Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M0 44 C-18 28 -8 2 8 -14 C10 10 30 8 24 -22 C44 8 38 38 0 44Z" fill="${vinylColor}" opacity="0.88"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "wing") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-92 22 C-54 -34 -10 -50 0 -14 C10 -50 54 -34 92 22 C52 10 34 26 14 54 C6 28 -6 28 -14 54 C-34 26 -52 10 -92 22Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-62 16 C-34 -2 -18 -2 -6 16M62 16 C34 -2 18 -2 6 16M0 -12 V42" fill="none" stroke="${vinylColor}" stroke-width="4" opacity="0.78"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "boot") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-62 -22 C-20 -32 10 -18 30 10 L66 22 C56 44 22 52 -8 42 L-70 40 C-74 12 -70 -8 -62 -22Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-38 -18 L-8 22M-8 -18 L20 20M-44 42 L-52 56M-12 42 L-18 58M24 38 L30 52" stroke="${vinylColor}" stroke-width="4" stroke-linecap="round"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "volleyball") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><circle cx="0" cy="0" r="58" fill="${vinylColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-4 -58 C-36 -36 -46 -2 -34 34M-4 -58 C26 -36 38 -8 34 26M-56 8 C-20 -4 12 4 50 32M-42 -38 C-18 -12 18 -2 54 -10" fill="none" stroke="${accentColor}" stroke-width="5" stroke-linecap="round"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "tennis") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><circle cx="0" cy="0" r="58" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-46 -36 C-12 -8 -12 8 -46 36M46 -36 C12 -8 12 8 46 36" fill="none" stroke="${vinylColor}" stroke-width="5" stroke-linecap="round"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "boxing") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-42 -44 C-2 -66 44 -42 44 4 C44 34 20 54 -10 50 L-30 68 L-54 40 L-44 24 C-66 4 -64 -30 -42 -44Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-28 44 L-52 66M-24 -22 C-4 -34 20 -28 28 -8M-34 8 H30" fill="none" stroke="${vinylColor}" stroke-width="5" stroke-linecap="round" opacity="0.82"/>${shapeSelection}</g>`;
       }
       return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-156 -18 L156 -54 L138 -18 L156 18 L-156 54 L-138 18 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/><path d="M-122 8 L122 -22" stroke="${vinylColor}" stroke-width="4" opacity="0.7"/><rect x="-164" y="-62" width="328" height="124" rx="8" fill="none" stroke="${selectedObject === "shape" ? "#0ea5e9" : "none"}" stroke-width="2" stroke-dasharray="8 6"/></g>`;
     })();
@@ -1552,17 +1817,22 @@ export function DesignStudio() {
 
   function resolveCanvasTarget(event: PointerEvent<HTMLDivElement>): SelectedObject {
     const point = canvasPointFromEvent(event);
+    const scale = garmentScale / 100;
+    const artworkPoint = {
+      x: 200 + (point.x - (200 + transferOffsetX)) / scale,
+      y: 260 + (point.y - (260 + transferOffsetY)) / scale,
+    };
     const backVisible = view === "back" || view === "production";
     const frontVisible = view === "front";
 
-    if (layers.number && backVisible && hitTextLayer("number", point.x, point.y)) return "number";
-    if (layers.name && backVisible && hitTextLayer("name", point.x, point.y)) return "name";
-    if (layers.sponsor && frontVisible && hitTextLayer("sponsor", point.x, point.y)) return "sponsor";
-    if (layers.crest && hitTextLayer("crest", point.x, point.y)) return "crest";
-    if (layers.image && uploadedImage && hitBox(point.x, point.y, imageX, imageY, imageSize + 14, imageSize + 14)) return "image";
+    if (layers.number && backVisible && hitTextLayer("number", artworkPoint.x, artworkPoint.y)) return "number";
+    if (layers.name && backVisible && hitTextLayer("name", artworkPoint.x, artworkPoint.y)) return "name";
+    if (layers.sponsor && frontVisible && hitTextLayer("sponsor", artworkPoint.x, artworkPoint.y)) return "sponsor";
+    if (layers.crest && hitTextLayer("crest", artworkPoint.x, artworkPoint.y)) return "crest";
+    if (layers.image && uploadedImage && hitBox(artworkPoint.x, artworkPoint.y, imageX, imageY, imageSize + 14, imageSize + 14)) return "image";
 
     const shapeHitSize = shapeKind === "sash" ? 260 * (shapeScale / 100) : 128 * (shapeScale / 100);
-    if (layers.shape && hitBox(point.x, point.y, shapeX, shapeY, shapeHitSize, shapeHitSize)) return "shape";
+    if (layers.shape && hitBox(artworkPoint.x, artworkPoint.y, shapeX, shapeY, shapeHitSize, shapeHitSize)) return "shape";
 
     const presetSheet = sheetPresets[sheetPreset];
     const widthMm = sheetPreset === "custom" ? customSheetWidth : presetSheet.widthMm;
@@ -1603,6 +1873,153 @@ export function DesignStudio() {
       setTransferOffsetY((current) => clamp(current + dy, -140, 140));
     }
   }
+
+  function restoreSnapshot(snapshot: DesignSnapshot) {
+    restoringSnapshotRef.current = true;
+    setActiveTab(snapshot.activeTab);
+    setActiveTool(snapshot.activeTool);
+    setCanvasZoom(snapshot.canvasZoom);
+    setCanvasPanX(snapshot.canvasPanX);
+    setCanvasPanY(snapshot.canvasPanY);
+    setSelectedObject(snapshot.selectedObject);
+    setTextLayers({
+      name: { ...snapshot.textLayers.name },
+      number: { ...snapshot.textLayers.number },
+      sponsor: { ...snapshot.textLayers.sponsor },
+      crest: { ...snapshot.textLayers.crest },
+    });
+    setGarmentStyle(snapshot.garmentStyle);
+    setDesignMode(snapshot.designMode);
+    setTextEffect(snapshot.textEffect);
+    setProductionAid(snapshot.productionAid);
+    setBaseColor(snapshot.baseColor);
+    setAccentColor(snapshot.accentColor);
+    setTrimColor(snapshot.trimColor);
+    setVinylColor(snapshot.vinylColor);
+    setPlayerName(snapshot.playerName);
+    setPlayerNumber(snapshot.playerNumber);
+    setSponsor(snapshot.sponsor);
+    setCrest(snapshot.crest);
+    setView(snapshot.view);
+    setPatternStyle(snapshot.patternStyle);
+    setTextureStrength(snapshot.textureStrength);
+    setTextTracking(snapshot.textTracking);
+    setOutlineWidth(snapshot.outlineWidth);
+    setNameY(snapshot.nameY);
+    setNumberY(snapshot.numberY);
+    setSponsorY(snapshot.sponsorY);
+    setNumberScale(snapshot.numberScale);
+    setNameArch(snapshot.nameArch);
+    setImageX(snapshot.imageX);
+    setImageY(snapshot.imageY);
+    setImageSize(snapshot.imageSize);
+    setImageRotation(snapshot.imageRotation);
+    setImageOpacity(snapshot.imageOpacity);
+    setImageMask(snapshot.imageMask);
+    setShapeKind(snapshot.shapeKind);
+    setShapeX(snapshot.shapeX);
+    setShapeY(snapshot.shapeY);
+    setShapeScale(snapshot.shapeScale);
+    setShapeRotation(snapshot.shapeRotation);
+    setShapeOpacity(snapshot.shapeOpacity);
+    setGarmentScale(snapshot.garmentScale);
+    setSheetPreset(snapshot.sheetPreset);
+    setCustomSheetWidth(snapshot.customSheetWidth);
+    setCustomSheetHeight(snapshot.customSheetHeight);
+    setSheetMargin(snapshot.sheetMargin);
+    setTransferOffsetX(snapshot.transferOffsetX);
+    setTransferOffsetY(snapshot.transferOffsetY);
+    setPressAlignment(snapshot.pressAlignment);
+    setShowTransferSheet(snapshot.showTransferSheet);
+    setMaterial(snapshot.material);
+    setCutter(snapshot.cutter);
+    setBladeOffset(snapshot.bladeOffset);
+    setOvercut(snapshot.overcut);
+    setCutForce(snapshot.cutForce);
+    setCutSpeed(snapshot.cutSpeed);
+    setContourOffset(snapshot.contourOffset);
+    setCornerSmoothing(snapshot.cornerSmoothing);
+    setBleedMargin(snapshot.bleedMargin);
+    setNestingGap(snapshot.nestingGap);
+    setPressPasses(snapshot.pressPasses);
+    setCopies(snapshot.copies);
+    setMirrorCut(snapshot.mirrorCut);
+    setPreserveCutOrder(snapshot.preserveCutOrder);
+    setShowSafeArea(snapshot.showSafeArea);
+    setShowRulers(snapshot.showRulers);
+    setAutoWeedLines(snapshot.autoWeedLines);
+    setSnapToGuides(snapshot.snapToGuides);
+    setLayers({ ...snapshot.layers });
+  }
+
+  function undoDesign() {
+    if (!history.past.length) return;
+    const previousSnapshot = history.past[history.past.length - 1];
+    setHistory({
+      past: history.past.slice(0, -1),
+      future: [designSnapshot, ...history.future].slice(0, 80),
+    });
+    restoreSnapshot(previousSnapshot);
+  }
+
+  function redoDesign() {
+    if (!history.future.length) return;
+    const nextSnapshot = history.future[0];
+    setHistory({
+      past: [...history.past.slice(-79), designSnapshot],
+      future: history.future.slice(1),
+    });
+    restoreSnapshot(nextSnapshot);
+  }
+
+  function deleteSelected() {
+    if (!canDeleteSelected) return;
+
+    if (selectedTextKey) {
+      setLayers((current) => ({ ...current, [selectedTextKey]: false }));
+      setSelectedObject("garment");
+      return;
+    }
+
+    if (selectedObject === "image") {
+      setLayers((current) => ({ ...current, image: false }));
+      setSelectedObject("garment");
+      return;
+    }
+
+    if (selectedObject === "shape") {
+      setLayers((current) => ({ ...current, shape: false }));
+      setSelectedObject("garment");
+    }
+  }
+
+  useEffect(() => {
+    function handleEditorShortcuts(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redoDesign();
+        else undoDesign();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && key === "y") {
+        event.preventDefault();
+        redoDesign();
+        return;
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        deleteSelected();
+      }
+    }
+
+    window.addEventListener("keydown", handleEditorShortcuts);
+    return () => window.removeEventListener("keydown", handleEditorShortcuts);
+  });
 
   function placeTextLayer(layer: TextLayerKey, x: number, y: number) {
     updateTextLayer(layer, { x, y });
@@ -1656,26 +2073,35 @@ export function DesignStudio() {
     const zoomFactor = Math.max(0.5, canvasZoom / 100);
     const dx = Math.round((event.clientX - dragState.startClientX) / zoomFactor);
     const dy = Math.round((event.clientY - dragState.startClientY) / zoomFactor);
-    const nextX = dragState.originX + visualDxForTarget(dragState.target, dx);
-    const nextY = dragState.originY + dy;
 
     if (isTextLayerKey(dragState.target)) {
+      const scale = garmentScale / 100;
+      const nextX = dragState.originX + visualDxForTarget(dragState.target, Math.round(dx / scale));
+      const nextY = dragState.originY + Math.round(dy / scale);
       updateTextLayer(dragState.target, { x: nextX, y: nextY });
       return;
     }
 
     if (dragState.target === "image") {
+      const scale = garmentScale / 100;
+      const nextX = dragState.originX + visualDxForTarget(dragState.target, Math.round(dx / scale));
+      const nextY = dragState.originY + Math.round(dy / scale);
       setImageX(clamp(nextX, -80, 480));
       setImageY(clamp(nextY, -80, 600));
       return;
     }
 
     if (dragState.target === "shape") {
+      const scale = garmentScale / 100;
+      const nextX = dragState.originX + visualDxForTarget(dragState.target, Math.round(dx / scale));
+      const nextY = dragState.originY + Math.round(dy / scale);
       setShapeX(clamp(nextX, -80, 480));
       setShapeY(clamp(nextY, -80, 600));
       return;
     }
 
+    const nextX = dragState.originX + visualDxForTarget(dragState.target, dx);
+    const nextY = dragState.originY + dy;
     setTransferOffsetX(clamp(nextX, -120, 120));
     setTransferOffsetY(clamp(nextY, -140, 140));
   }
@@ -1930,24 +2356,33 @@ export function DesignStudio() {
 
     if (!serial) {
       setMachineStatus("unsupported");
+      setMachineName("Web Serial unavailable");
+      setMachineError("Use Chrome or Edge on HTTPS, then connect a supported USB/serial cutter.");
       return;
     }
 
     let port: SerialPortLike | null = null;
     setMachineStatus("connecting");
+    setMachineError("");
 
     try {
       port = await serial.requestPort();
+      setMachineName(serialDeviceName(port));
       await port.open({ baudRate });
       const writer = port.writable?.getWriter();
 
       if (!writer) throw new Error("Cutter port is not writable.");
 
-      await writer.write(new TextEncoder().encode(hpglJob(copies, mirrorCut, contourOffset, cornerSmoothing)));
-      writer.releaseLock();
+      try {
+        await writer.write(new TextEncoder().encode(hpglJob(copies, mirrorCut, contourOffset, cornerSmoothing)));
+      } finally {
+        writer.releaseLock();
+      }
+
       await port.close();
       setMachineStatus("sent");
-    } catch {
+      setLastSentAt(new Date().toLocaleString());
+    } catch (error) {
       if (port) {
         try {
           await port.close();
@@ -1956,6 +2391,40 @@ export function DesignStudio() {
         }
       }
       setMachineStatus("failed");
+      setMachineError(error instanceof Error ? error.message : "The cutter connection failed.");
+    }
+  }
+
+  async function testCutterConnection() {
+    const serial = (navigator as NavigatorWithSerial).serial;
+
+    if (!serial) {
+      setMachineStatus("unsupported");
+      setMachineName("Web Serial unavailable");
+      setMachineError("Use Chrome or Edge on HTTPS, then connect a supported USB/serial cutter.");
+      return;
+    }
+
+    let port: SerialPortLike | null = null;
+    setMachineStatus("connecting");
+    setMachineError("");
+
+    try {
+      port = await serial.requestPort();
+      setMachineName(serialDeviceName(port));
+      await port.open({ baudRate });
+      await port.close();
+      setMachineStatus("connected");
+    } catch (error) {
+      if (port) {
+        try {
+          await port.close();
+        } catch {
+          // The browser may already have closed the serial port.
+        }
+      }
+      setMachineStatus("failed");
+      setMachineError(error instanceof Error ? error.message : "The cutter test failed.");
     }
   }
 
@@ -2358,29 +2827,47 @@ export function DesignStudio() {
             <option value="trophy">Trophy</option>
             <option value="crown">Crown</option>
             <option value="paw">Paw</option>
+            <option value="flame">Flame</option>
+            <option value="wing">Wing badge</option>
+            <option value="boot">Boot stamp</option>
+            <option value="volleyball">Volleyball</option>
+            <option value="tennis">Tennis ball</option>
+            <option value="boxing">Boxing patch</option>
           </select>
         </label>
 
         <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
           <span className="mb-2 block text-sm font-semibold">Insert design templates</span>
-          <div className="grid grid-cols-2 gap-2">
-            {shapePresets.map((preset) => (
-              <button
-                key={preset.label}
-                className="min-h-10 rounded-[8px] bg-[#f6f4ef] px-3 text-left text-xs font-semibold text-slate-700 hover:bg-[#ece7dd]"
-                onClick={() => {
-                  setShapeKind(preset.kind);
-                  setShapeX(preset.x);
-                  setShapeY(preset.y);
-                  setShapeScale(preset.scale);
-                  setShapeRotation(preset.rotation);
-                  setShapeOpacity(90);
-                  setLayers((current) => ({ ...current, shape: true }));
-                  selectDesignObject("shape");
-                }}
-              >
-                {preset.label}
-              </button>
+          <div className="space-y-3">
+            {shapeTemplateGroups.map((group) => (
+              <div key={group.name} className="rounded-[8px] border border-[#ebe4d8] bg-[#fbfaf7] p-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{group.name}</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{group.detail}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.templates.map((preset) => (
+                    <button
+                      key={`${group.name}-${preset.label}`}
+                      className="min-h-12 rounded-[8px] bg-white px-3 text-left text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-[#eee8df] hover:bg-[#ece7dd]"
+                      title={preset.tags}
+                      onClick={() => {
+                        setShapeKind(preset.kind);
+                        setShapeX(preset.x);
+                        setShapeY(preset.y);
+                        setShapeScale(preset.scale);
+                        setShapeRotation(preset.rotation);
+                        setShapeOpacity(90);
+                        setLayers((current) => ({ ...current, shape: true }));
+                        selectDesignObject("shape");
+                      }}
+                    >
+                      <span className="block">{preset.label}</span>
+                      <span className="block truncate text-[10px] font-medium text-slate-500">{preset.tags}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -2567,7 +3054,7 @@ export function DesignStudio() {
             <span className="text-sm font-semibold">Direct cutter link</span>
             <span className="rounded-[8px] bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{machineStatus}</span>
           </div>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-slate-500">Baud rate</span>
               <select className="field" value={baudRate} onChange={(event) => setBaudRate(Number(event.target.value))}>
@@ -2578,9 +3065,17 @@ export function DesignStudio() {
                 <option value={115200}>115200</option>
               </select>
             </label>
+            <Button variant="outline" className="self-end" onClick={() => void testCutterConnection()} disabled={machineStatus === "connecting"}>
+              <Gauge size={16} /> Test
+            </Button>
             <Button variant="secondary" className="self-end" onClick={() => void sendHpglToCutter()} disabled={machineStatus === "connecting"}>
               <Printer size={16} /> Send
             </Button>
+          </div>
+          <div className="mt-3 space-y-1 rounded-[8px] bg-[#f6f4ef] p-3 text-xs text-slate-600">
+            <p><span className="font-semibold text-slate-800">Device:</span> {machineName}</p>
+            {lastSentAt ? <p><span className="font-semibold text-slate-800">Last sent:</span> {lastSentAt}</p> : null}
+            {machineError ? <p className="font-semibold text-red-700">Error: {machineError}</p> : null}
           </div>
         </div>
       </div>
@@ -2664,6 +3159,8 @@ export function DesignStudio() {
             <p>Image: {uploadedImage ? "optimized asset included" : "no imported image"}</p>
             <p>Sheet: {sheetConfig.label} / {garmentScale}%</p>
             <p>Machine: {cutterConfig.label} / {baudRate} baud / {machineStatus}</p>
+            <p>Device: {machineName}</p>
+            {machineError ? <p className="font-semibold text-red-700">Machine error: {machineError}</p> : null}
           </div>
         </div>
 
@@ -2724,6 +3221,15 @@ export function DesignStudio() {
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-1 2xl:pb-0">
+            <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40" onClick={undoDesign} disabled={!history.past.length} title="Undo">
+              <Undo2 size={16} /> Undo
+            </Button>
+            <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40" onClick={redoDesign} disabled={!history.future.length} title="Redo">
+              <Redo2 size={16} /> Redo
+            </Button>
+            <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40" onClick={deleteSelected} disabled={!canDeleteSelected} title="Delete selected layer">
+              <Trash2 size={16} /> Delete
+            </Button>
             <Button variant="outline" className="shrink-0 border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={resetDesign}>
               <RotateCcw size={16} /> Reset
             </Button>
@@ -2887,6 +3393,8 @@ export function DesignStudio() {
                 <p>Scale: <span className="font-semibold text-slate-900">{garmentScale}%</span></p>
                 <p>Image: <span className="font-semibold text-slate-900">{uploadedImage ? "optimized" : "none"}</span></p>
                 <p>Machine: <span className="font-semibold text-slate-900">{machineStatus}</span></p>
+                <p>Device: <span className="font-semibold text-slate-900">{machineName}</span></p>
+                {machineError ? <p className="font-semibold text-red-700">Error: {machineError}</p> : null}
               </div>
             </div>
 

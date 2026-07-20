@@ -82,16 +82,6 @@ export async function POST(request: NextRequest) {
     return redirectTo(`/shop/${shop.slug}?error=stock`);
   }
 
-  const customer = await prisma.customer.create({
-    data: {
-      shopId: shop.id,
-      name: buyer.name,
-      phone: buyer.phone,
-      email: buyer.email,
-      group: "Online",
-    },
-  });
-
   const unitPrice = Number(variant.priceOverride ?? variant.product.basePrice);
   const deliveryFee = parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? 0 : 0;
   const totalAmount = unitPrice * parsed.data.quantity + deliveryFee;
@@ -102,15 +92,28 @@ export async function POST(request: NextRequest) {
   const paystackReference = `SHOP-${shop.slug}-${Date.now()}-${nanoid(6)}`;
   const verificationCode = createNumericCode();
 
-  const order = await prisma.$transaction(async (tx) => {
+  let orderResult;
+  try {
+    orderResult = await prisma.$transaction(async (tx) => {
     if (!variant.product.isService) {
-      await tx.productVariant.update({
-        where: { id: variant.id },
+      const updated = await tx.productVariant.updateMany({
+        where: { id: variant.id, stockQty: { gte: parsed.data.quantity } },
         data: { stockQty: { decrement: parsed.data.quantity } },
       });
+      if (updated.count !== 1) throw new Error("INSUFFICIENT_STOCK");
     }
 
-    return tx.order.create({
+    const customer = await tx.customer.create({
+      data: {
+        shopId: shop.id,
+        name: buyer.name,
+        phone: buyer.phone,
+        email: buyer.email,
+        group: "Online",
+      },
+    });
+
+    const order = await tx.order.create({
       data: {
         shopId: shop.id,
         customerId: customer.id,
@@ -156,7 +159,16 @@ export async function POST(request: NextRequest) {
         },
       },
     });
-  });
+    return { order, customer };
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
+      return redirectTo(`/shop/${shop.slug}?error=stock`);
+    }
+    throw error;
+  }
+
+  const { order, customer } = orderResult;
 
   await audit({
     shopId: shop.id,

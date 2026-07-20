@@ -199,23 +199,26 @@ export async function checkoutCartAction(formData: FormData) {
     ? new Date(Date.now() + shop.cashOrderHoldMinutes * 60_000)
     : null;
 
-  const customer = await prisma.customer.create({
-    data: {
-      shopId: shop.id,
-      name: buyer.name,
-      phone: buyer.phone,
-      email: buyer.email,
-      group: "Online",
-    },
-  });
+  let checkoutResult;
+  try {
+    checkoutResult = await prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.create({
+      data: {
+        shopId: shop.id,
+        name: buyer.name,
+        phone: buyer.phone,
+        email: buyer.email,
+        group: "Online",
+      },
+    });
 
-  const order = await prisma.$transaction(async (tx) => {
     for (const item of cartItems) {
       if (!item.productVariant.product.isService) {
-        await tx.productVariant.update({
-          where: { id: item.productVariantId },
+        const updated = await tx.productVariant.updateMany({
+          where: { id: item.productVariantId, stockQty: { gte: item.quantity } },
           data: { stockQty: { decrement: item.quantity } },
         });
+        if (updated.count !== 1) throw new Error("INSUFFICIENT_STOCK");
       }
     }
 
@@ -270,8 +273,16 @@ export async function checkoutCartAction(formData: FormData) {
     });
 
     await tx.buyerCartItem.deleteMany({ where: { buyerId: buyer.id, shopId: shop.id } });
-    return createdOrder;
-  });
+    return { order: createdOrder, customer };
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
+      redirect("/cart?error=stock");
+    }
+    throw error;
+  }
+
+  const { order, customer } = checkoutResult;
 
   await audit({
     shopId: shop.id,

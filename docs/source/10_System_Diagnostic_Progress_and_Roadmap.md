@@ -70,92 +70,94 @@ Seeded live account checks:
 - APS-DESIGNER with Ghana123 opened /dashboard/designs.
 - APS-SUPPLIER with Ghana123 opened /supplier.
 
-## Launch Blockers
+## Launch Blockers and Resolved Items
 
-### 1. Production seed still creates demo accounts
+### 1. Resolved: production deploy no longer runs demo seed
 
-railway.toml runs npm run db:seed before every deploy. The current seed creates demo accounts and defaults to Ghana123 unless SEED_DEMO_PASSWORD is set.
+railway.toml now runs only `npx prisma migrate deploy` before deployment. The demo seed refuses to run in production unless `SAFE_DEMO_SEED=true` or the explicit demo command is used.
 
-Risk:
+Implemented:
 
-- Demo credentials can remain live in production.
-- Deployments can reset seeded demo user passwords.
-- This is not acceptable for a platform that will be sold to shops.
+- `npm run db:seed:demo` runs demo data intentionally.
+- `npm run setup:demo` uses the demo seed path for local setup.
+- `npm run admin:bootstrap` creates or updates a real Super Admin from environment variables.
+- `scripts/bootstrap-admin.ts` requires `ADMIN_EMAIL` and a strong `ADMIN_PASSWORD`.
+- Railway pre-deploy no longer creates or refreshes Ghana123 demo accounts.
 
-Required fix:
+Remaining production action:
 
-- Split demo seed from production bootstrap.
-- Create a secure one-time platform admin bootstrap command.
-- Make production seeding refuse to run unless an explicit SAFE_DEMO_SEED=true variable is set.
-- Remove Ghana123 from any production path.
+- Rotate any old live demo passwords before selling to shops.
+- Create the real production Super Admin using the bootstrap command and a strong password.
 
-### 2. Dashboard page-level permissions are incomplete
+### 2. Resolved: dashboard page-level permissions now have a central guard
 
-The proxy blocks unauthenticated users, Super Admin dashboard access, and supplier dashboard access. The sidebar hides pages based on role. However, many dashboard pages do not enforce their own permission group.
+The proxy now uses `src/lib/dashboard-access.ts` to block direct dashboard URLs when a staff role should not access the page.
 
-Observed live issue:
+Implemented:
 
-- A designer can directly open /dashboard/pos and /dashboard/settings.
-- A cashier can directly open /dashboard/designs and /dashboard/staff.
+- Designer is allowed on `/dashboard/designs` but blocked from `/dashboard/pos` and `/dashboard/settings`.
+- Cashier is allowed on `/dashboard/pos` but blocked from `/dashboard/designs` and `/dashboard/staff`.
+- Owner, Manager, Accountant, Inventory Clerk, and Viewer have explicit page groups.
+- RBAC tests were expanded for blocked and allowed dashboard routes.
 
-Risk:
+Remaining work:
 
-- Staff may view pages their role should not view.
-- Write actions are more protected, but page data visibility and professional access control are not complete.
+- Add page-level server assertions on sensitive dashboard pages as a second layer.
+- Add browser tests that verify blocked users stay out after direct navigation.
 
-Required fix:
+### 3. Resolved: checkout stock decrement is transaction-safe
 
-- Add a helper such as requireDashboardPermission(permissionKey).
-- Apply it to every dashboard page.
-- Add tests for direct URL access by Cashier, Designer, Accountant, Viewer, Owner, Manager, and Supplier.
+POS, cart checkout, and public order flows now decrement stock with `updateMany` guarded by `stockQty >= quantity` inside the transaction.
 
-### 3. Stock decrement can race under concurrent checkout
+Implemented:
 
-POS, cart checkout, and public order flows check stock before a transaction, then decrement stock inside the transaction without a conditional stock guard.
+- POS checkout returns HTTP 409 when stock is gone before the transaction completes.
+- Public online order redirects with a stock error instead of overselling.
+- Cart checkout redirects with a stock error instead of overselling.
 
-Risk:
+Remaining work:
 
-- Two checkouts can pass the pre-check at the same time and push stock below zero.
+- Add true concurrent checkout tests against a test database.
+- Add a user-friendly stock message near affected cart/POS lines.
 
-Required fix:
+### 4. Partially improved: Design studio machine integration
 
-- Use conditional updateMany with stockQty >= quantity inside the transaction.
-- Fail the checkout if the update count is 0.
-- Add concurrency tests for POS and online checkout.
+The design studio has Web Serial send, machine status, HPGL export, DXF export, SVG export, and tech pack export. Direct cutter support is still a browser/device-dependent feature, but the interface now gives clearer connection feedback.
 
-### 4. Design studio machine integration is not production-ready
+Implemented:
 
-The design studio has Web Serial sending, machine status, HPGL export, DXF export, SVG export, and tech pack export. However, direct cutter support is still a prototype.
+- Separate Test and Send buttons.
+- Device name based on browser serial vendor/product info where available.
+- Last sent time.
+- Clear machine error messages.
+- Unsupported-browser message for environments without Web Serial.
 
-Current limitations:
+Still limited:
 
-- Machine status is only idle, connecting, sent, unsupported, or failed.
-- It does not show the connected device name, USB vendor/product details, or selected port.
-- It does not show the exact error message when a connection fails.
 - HPGL output is currently generic and does not fully convert every visible artwork path into machine-ready cut paths.
-- There is no machine compatibility test screen.
 - There is no per-shop saved machine profile and calibration result.
 
-Required fix:
+Next fix:
 
-- Add selectedDeviceName, selectedDeviceInfo, lastMachineError, and lastSentAt.
-- Add "Connect device" separate from "Send to cutter".
 - Add device capability checks and clear error copy.
 - Add machine profiles for common cutting plotters used by shops.
 - Build a real SVG-to-cut-path pipeline for HPGL, DXF, and future device bridges.
 
-### 5. Design editor lacks core professional editing controls
+### 5. Partially improved: Design editor professional controls
 
-The current editor has selection, movement, layers, text controls, image placement, shape placement, zoom, pan, export, and material controls. It still needs the editor basics users expect.
+The editor now has selection, movement, layers, text controls, image placement, shape placement, zoom, pan, export, material controls, undo, redo, delete selected, keyboard shortcuts, and safer selection math for scaled jerseys.
 
-Missing controls:
+Implemented:
 
-- Undo
-- Redo
-- Delete selected
+- Undo and redo history stack.
+- Delete selected text/image/shape layer.
+- Ctrl/Cmd+Z, Ctrl/Cmd+Y, Ctrl/Cmd+Shift+Z, Delete, and Backspace shortcuts.
+- Scaled-jersey hit testing and dragging fixes.
+
+Still missing:
+
 - Duplicate selected
 - Copy and paste selected
-- Keyboard shortcuts
 - Snap indicators
 - Multi-select
 - Group and ungroup
@@ -164,29 +166,27 @@ Missing controls:
 
 Required fix:
 
-- Add a history stack with undo/redo.
-- Add deleteSelected and duplicateSelected.
+- Add duplicateSelected.
 - Persist productionManifest/canvasJson to DesignJob.
 - Add load/edit saved DesignJob.
 - Add browser interaction tests for selection, move, undo, redo, delete, zoom, and export.
 
-### 6. Design templates need grouping and expansion
+### 6. Partially improved: design templates are grouped and expanded
 
-Shape templates exist, but they are a flat list.
+Shape templates are now grouped and expanded with more vector symbols.
 
-Required groups:
+Implemented groups:
 
-- Animals: lion, eagle, paw, tiger, horse, dragon, snake, elephant.
-- Sports: football, basketball, tennis ball, volleyball, boxing glove, boot, whistle, trophy.
-- Objects: crown, shield, star, lightning, flame, badge, ribbon, wings.
-- Ghana and club styles: kente stripes, flags, initials, number shields.
-- Jersey styles: plain, football club, basketball, rugby, goalkeeper, training kit, tracksuit.
+- Animals: lion, eagle, paw, wing.
+- Sports: football, basketball, volleyball, tennis, boot, boxing.
+- Objects: trophy, crown, lightning, flame, shield, star.
+- Ghana and club starters: kente sash, circle initials, captain crown, victory star.
 
-Required fix:
+Still needed:
 
-- Create grouped template data with category, tags, preview, sport, and recommended placement.
 - Add template search and filter.
-- Add one-click insert to selected side of jersey.
+- Add richer previews and more local badge packs.
+- Add saved team kit templates per shop.
 
 ### 7. Buyer signup updates password before SMS verification
 
@@ -284,10 +284,10 @@ Required fix:
 
 ## Security Improvements Needed Before Real Shops
 
-- Remove demo seed from production deploy.
-- Enforce page-level dashboard permissions.
+- Rotate or disable any old demo users that existed before production seed removal.
+- Keep page-level dashboard permissions and add server-page assertions for sensitive pages.
 - Add two-factor authentication for platform admin and shop owners.
-- Add production admin bootstrap command.
+- Run the production admin bootstrap command with a strong real password.
 - Add CSRF strategy review for API routes using cookie sessions.
 - Reduce CSP unsafe-inline and unsafe-eval where possible.
 - Add audit entries for sensitive reads and all staff/admin mutations.
@@ -305,20 +305,21 @@ Current tools:
 - Brand tab: color palettes, garment style, design mode, and jersey identity.
 - Assets tab: insert a photo/logo, mask it, resize it, rotate it, and position it.
 - Text tab: edit player name, number, sponsor, crest, text effect, spacing, position, scale, rotation, opacity, and lock state.
-- Layout tab: choose pattern system, fabric texture, vector shape, and insert basic object templates.
+- Layout tab: choose pattern system, fabric texture, vector shape, and insert grouped animal, sports, object, Ghana, and club starter templates.
 - Layers tab: turn layers on/off and select text/image/shape layers.
-- Production tab: material preset, heat press recipe, sheet size, garment scale, sheet margin, sheet offset, cutter profile, blade settings, contour, bleed, nesting, mirror cut, registration marks, weed lines, and Web Serial send.
+- Production tab: material preset, heat press recipe, sheet size, garment scale, sheet margin, sheet offset, cutter profile, blade settings, contour, bleed, nesting, mirror cut, registration marks, weed lines, Web Serial test, and Web Serial send.
 - Quality tab: production score, cut complexity, press estimate, and checklist.
 - Export tab: SVG, PLT, DXF, JSON production job, and printable tech pack.
+- Top toolbar: select/image/text/shape/cut/press/inspect tools, undo, redo, delete selected, reset, and export shortcuts.
 
 How it should work after next update:
 
 - User selects an object by clicking it on the jersey.
 - User moves selected object by dragging or using arrow controls.
-- Undo and redo move backward/forward through design state.
-- Delete selected removes the active text/image/shape layer or hides it.
-- Templates are grouped by type and inserted directly into the jersey.
-- Machine panel shows "Connected to [device name]" or a clear error.
+- Undo and redo now move backward/forward through design state.
+- Delete selected now removes the active text/image/shape layer or hides it.
+- Templates are now grouped by type and inserted directly into the jersey.
+- Machine panel now shows a selected device name where the browser provides it, plus clear errors.
 - Saved jobs can be reopened and exported again.
 
 ## Admin Account Setup Way Forward
@@ -330,10 +331,10 @@ Current test admin:
 
 Production plan:
 
-1. Create a one-time admin bootstrap command.
+1. Run the one-time admin bootstrap command with `ADMIN_EMAIL` and a strong `ADMIN_PASSWORD`.
 2. Require a strong password and phone number.
 3. Require SMS verification or 2FA before activating the platform admin.
-4. Disable demo accounts.
+4. Disable or rotate any old demo accounts.
 5. Create admin worker accounts from /admin only.
 6. Track admin worker activity in audit logs.
 7. Prevent a platform admin from suspending himself.
@@ -375,17 +376,17 @@ For WhatsApp:
 
 ## Recommended Next Implementation Order
 
-1. Fix production seed safety and admin bootstrap.
-2. Add page-level dashboard permission guards.
-3. Fix checkout stock race conditions.
-4. Add design undo, redo, delete selected, duplicate, and history.
-5. Add grouped design template library.
-6. Add machine connection details, error reporting, and compatibility test.
-7. Persist design jobs and uploaded design assets.
-8. Complete Paystack callback verification and POS real payment path.
-9. Harden buyer SMS registration and password reset.
-10. Add mobile dashboard/design usability improvements.
-11. Add E2E tests and screenshot tests.
+1. Rotate any old demo credentials on the live Railway database and bootstrap the real Super Admin.
+2. Add browser/E2E tests for direct dashboard role blocking, login, checkout, and design editor controls.
+3. Persist design jobs and uploaded design assets so shops can reopen production work.
+4. Add duplicate, copy/paste, multi-select, group/ungroup, snap indicators, and template search to the design studio.
+5. Build a real SVG-to-cut-path conversion pipeline for HPGL/DXF and per-shop machine calibration profiles.
+6. Complete Paystack production checkout, callbacks, subaccount settlement review, refunds, and reconciliation.
+7. Harden buyer SMS registration and password reset so passwords update only after SMS verification.
+8. Add mobile dashboard/design usability improvements and screenshot tests.
+9. Add server-page assertions on sensitive dashboard pages as a second RBAC layer.
+10. Add stock concurrency tests against a test database.
+11. Add queue/retry/monitoring for Arkesel SMS, WhatsApp, receipts, debt reminders, and pickup/delivery codes.
 12. Clean the Turbopack media-storage warning.
 
 ## AI Handoff Instructions

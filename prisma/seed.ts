@@ -8,6 +8,11 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
+  const demoSeedAllowed = process.argv.includes("--demo") || process.env.SAFE_DEMO_SEED === "true" || process.env.NODE_ENV !== "production";
+  if (!demoSeedAllowed) {
+    throw new Error("Demo seed is disabled in production. Use `npm run db:seed:demo` only for demo work, or run `npm run admin:bootstrap` to create the real platform admin.");
+  }
+
   const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "Ghana123";
   const passwordHash = await bcrypt.hash(demoPassword, 12);
 

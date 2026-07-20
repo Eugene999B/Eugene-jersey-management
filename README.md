@@ -106,8 +106,10 @@ The design studio supports:
 - Correct left/right movement in mirrored production view.
 - Real zoom/pan and centered canvas layout.
 - Text effects: flat, outline, shadow, arch, split, double outline, badge block.
-- Insertable vector templates: lion, eagle, paw, football, basketball, trophy, crown, lightning, shield, circle, star, sash.
-- Transfer sheet, material, cutter, heat press, and export manifest controls.
+- Undo, redo, delete selected, keyboard shortcuts, and safer click/drag selection on scaled jerseys.
+- Grouped insertable vector templates for animals, sports marks, objects, Ghana/club starters, and badges.
+- Insertable vector templates include lion, eagle, paw, wing, football, basketball, volleyball, tennis, boxing, boot, trophy, crown, lightning, flame, shield, circle, star, and sash.
+- Transfer sheet, material, cutter, heat press, device test/send, device status, and export manifest controls.
 
 When editing this area, test selection carefully:
 
@@ -153,6 +155,7 @@ npx.cmd tsc --noEmit
 npm.cmd test
 npm.cmd run build
 npm.cmd run docs:generate
+npm.cmd run admin:bootstrap
 ```
 
 ## Railway Deployment
@@ -160,8 +163,10 @@ npm.cmd run docs:generate
 Railway uses `railway.toml`:
 
 - Build: `npx prisma generate && npm run build`
-- Pre-deploy: `npx prisma migrate deploy && npm run db:seed`
+- Pre-deploy: `npx prisma migrate deploy`
 - Start: `HOSTNAME=0.0.0.0 npm run start`
+
+Production deploys must not run the demo seed. For a real platform admin, set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optional `ADMIN_LOGIN_ID`, `ADMIN_NAME`, `ADMIN_PHONE`, then run `npm.cmd run admin:bootstrap` once against the intended production database. Use `npm.cmd run db:seed:demo` only for local/demo data.
 
 Do not connect this repository to the Chalin project. This repository deploys to the Railway project named `Eugene Jersey Management`.
 
@@ -170,6 +175,7 @@ Do not connect this repository to the Chalin project. This repository deploys to
 - `prisma/schema.prisma`: Database model.
 - `prisma/migrations`: Production migrations.
 - `prisma/seed.ts`: Demo accounts, shop, supplier, buyer, products.
+- `scripts/bootstrap-admin.ts`: Safe production Super Admin bootstrap.
 - `src/app/login/page.tsx`: Role-detect login UI.
 - `src/app/api/auth/login/route.ts`: Staff/admin/supplier login backend.
 - `src/app/buyer/login`: Buyer login and SMS recovery.
@@ -179,6 +185,7 @@ Do not connect this repository to the Chalin project. This repository deploys to
 - `src/lib/auth.ts`: Staff/admin session helpers.
 - `src/lib/buyer-session.ts`: Buyer session helpers.
 - `src/lib/rbac.ts`: Role permissions.
+- `src/lib/dashboard-access.ts`: Page-level dashboard route access rules.
 - `src/lib/audit.ts`: Activity logging.
 
 ## AI Handoff Notes
@@ -201,10 +208,11 @@ Read `docs/source/10_System_Diagnostic_Progress_and_Roadmap.md` before planning 
 
 Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc-MipRfi1_5fdJKxahJ-aYWYEj
 
-Highest-priority issues from the latest audit:
+Highest-priority status from the latest audit:
 
-- Production deploy still runs demo seed data and can keep `Ghana123` demo accounts alive.
-- Dashboard pages need page-level role permission guards, not only hidden sidebar links.
-- Checkout stock decrement needs transaction-safe stock guards.
-- Design Studio needs undo, redo, delete selected, grouped templates, persistent design jobs, and clearer machine connection details.
+- Production demo seeding has been removed from Railway pre-deploy, and a secure admin bootstrap command now exists.
+- Dashboard pages now have central page-level role guards in `src/lib/dashboard-access.ts`.
+- POS, cart checkout, and public ordering now use transaction-safe conditional stock decrements.
+- Design Studio now has undo, redo, delete selected, grouped templates, richer shapes, improved selection math, and clearer machine connection details.
+- Still needed: persistent saved design jobs, duplicate/copy/paste, multi-select/grouping, deeper machine path conversion, and broader browser/mobile tests.
 - Paystack and Arkesel hooks exist, but production payment/SMS operations need callback verification, provider dashboards, retries, and monitoring.

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canAccessDashboardPath } from "@/lib/dashboard-access";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
 export async function proxy(request: NextRequest) {
@@ -26,6 +27,10 @@ export async function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/dashboard") && session?.role === "SUPPLIER") {
     return NextResponse.redirect(new URL("/supplier", request.url));
+  }
+
+  if (pathname.startsWith("/dashboard") && !canAccessDashboardPath(pathname, session?.role)) {
+    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
   }
 
   if (pathname.startsWith("/supplier") && session?.role !== "SUPPLIER") {
