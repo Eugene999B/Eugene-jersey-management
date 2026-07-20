@@ -32,7 +32,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 
 type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training" | "basketball" | "rugby" | "goalkeeper";
@@ -51,6 +51,8 @@ type DesignTemplateKey = "elite-home" | "away-velocity" | "keeper-armor" | "trai
 type MachineStatus = "idle" | "connecting" | "sent" | "unsupported" | "failed";
 type SheetPreset = "a4" | "a3" | "vinyl-12x20" | "vinyl-15x20" | "custom";
 type PressAlignment = "center" | "upper-back" | "left-chest" | "full-front" | "sleeve";
+type TextLayerKey = "name" | "number" | "sponsor" | "crest";
+type SelectedObject = TextLayerKey | "image" | "shape" | "garment" | "sheet";
 type LayerKey =
   | "texture"
   | "pattern"
@@ -72,6 +74,24 @@ type UploadedImage = {
   height: number;
   originalSize: number;
   optimizedSize: number;
+};
+
+type TextLayerState = {
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+  opacity: number;
+  locked: boolean;
+};
+
+type DragState = {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  target: SelectedObject;
+  originX: number;
+  originY: number;
 };
 
 type SerialPortLike = {
@@ -154,6 +174,42 @@ const layerLabels: Record<LayerKey, string> = {
   weedBox: "Weed box",
   registration: "Registration marks",
 };
+
+const textLayerLabels: Record<TextLayerKey, string> = {
+  name: "Player name",
+  number: "Player number",
+  sponsor: "Sponsor",
+  crest: "Crest",
+};
+
+const defaultTextLayers: Record<TextLayerKey, TextLayerState> = {
+  name: { x: 200, y: 212, rotation: 0, scale: 100, opacity: 100, locked: false },
+  number: { x: 200, y: 318, rotation: 0, scale: 100, opacity: 100, locked: false },
+  sponsor: { x: 200, y: 262, rotation: 0, scale: 100, opacity: 100, locked: false },
+  crest: { x: 200, y: 132, rotation: 0, scale: 100, opacity: 100, locked: false },
+};
+
+const textQuickPositions: Array<{ label: string; x: number; y: number }> = [
+  { label: "Left chest", x: 134, y: 132 },
+  { label: "Center chest", x: 200, y: 230 },
+  { label: "Upper back", x: 200, y: 202 },
+  { label: "Number zone", x: 200, y: 318 },
+  { label: "Sleeve", x: 318, y: 156 },
+  { label: "Lower mark", x: 200, y: 424 },
+];
+
+function isTextLayerKey(value: SelectedObject): value is TextLayerKey {
+  return value === "name" || value === "number" || value === "sponsor" || value === "crest";
+}
+
+function createDefaultTextLayers() {
+  return {
+    name: { ...defaultTextLayers.name },
+    number: { ...defaultTextLayers.number },
+    sponsor: { ...defaultTextLayers.sponsor },
+    crest: { ...defaultTextLayers.crest },
+  };
+}
 
 const tabItems: Array<{ key: StudioTab; label: string; icon: LucideIcon }> = [
   { key: "brand", label: "Brand", icon: Palette },
@@ -686,6 +742,11 @@ export function DesignStudio() {
   const [activeTab, setActiveTab] = useState<StudioTab>("brand");
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
   const [canvasZoom, setCanvasZoom] = useState(100);
+  const [canvasPanX, setCanvasPanX] = useState(0);
+  const [canvasPanY, setCanvasPanY] = useState(0);
+  const [selectedObject, setSelectedObject] = useState<SelectedObject>("name");
+  const [textLayers, setTextLayers] = useState<Record<TextLayerKey, TextLayerState>>(createDefaultTextLayers);
+  const [dragState, setDragState] = useState<DragState | null>(null);
   const [baudRate, setBaudRate] = useState(9600);
   const [machineStatus, setMachineStatus] = useState<MachineStatus>("idle");
   const [garmentStyle, setGarmentStyle] = useState<GarmentStyle>("pro-panel");
@@ -782,6 +843,8 @@ export function DesignStudio() {
   };
   const totalLayers = Object.keys(layerLabels).length;
   const activeLayers = Object.values(layers).filter(Boolean).length;
+  const selectedTextKey = isTextLayerKey(selectedObject) ? selectedObject : null;
+  const selectedTextLayer = selectedTextKey ? textLayers[selectedTextKey] : null;
 
   const qualityChecks = useMemo(() => {
     const textFits = playerName.length <= 16 && sponsor.length <= 24 && playerNumber.length <= 3;
@@ -790,6 +853,7 @@ export function DesignStudio() {
     const cutterReady = material === "sublimation" || (cutForce > 0 && cutSpeed > 0 && layers.contour);
     const machinePackageReady = layers.contour && layers.registration && bleedMargin >= 1 && nestingGap >= 2;
     const transferSheetReady = sheetConfig.widthMm <= cutterConfig.width && sheetConfig.heightMm <= Math.max(cutterConfig.height, 305) && sheetMargin >= 4;
+    const freeTextReady = Object.values(textLayers).every((layer) => layer.x >= -40 && layer.x <= 440 && layer.y >= -40 && layer.y <= 560);
 
     return [
       { label: "Safe print area", ok: showSafeArea },
@@ -802,8 +866,9 @@ export function DesignStudio() {
       { label: "HTV mirror", ok: material !== "pu-vinyl" || mirrorCut },
       { label: "Machine package", ok: machinePackageReady },
       { label: "Transfer sheet fit", ok: transferSheetReady },
+      { label: "Free text placement", ok: freeTextReady },
     ];
-  }, [baseColor, bleedMargin, cutForce, cutSpeed, cutterConfig.height, cutterConfig.width, layers.contour, layers.image, layers.registration, layers.weedBox, material, mirrorCut, nestingGap, playerName.length, playerNumber.length, sheetConfig.heightMm, sheetConfig.widthMm, sheetMargin, showSafeArea, sponsor.length, trimColor, uploadedImage, vinylColor]);
+  }, [baseColor, bleedMargin, cutForce, cutSpeed, cutterConfig.height, cutterConfig.width, layers.contour, layers.image, layers.registration, layers.weedBox, material, mirrorCut, nestingGap, playerName.length, playerNumber.length, sheetConfig.heightMm, sheetConfig.widthMm, sheetMargin, showSafeArea, sponsor.length, textLayers, trimColor, uploadedImage, vinylColor]);
 
   const passedChecks = qualityChecks.filter((check) => check.ok).length;
   const productionScore = Math.round((passedChecks / qualityChecks.length) * 72 + (activeLayers / totalLayers) * 18 + (preserveCutOrder ? 5 : 0) + (snapToGuides ? 5 : 0));
@@ -957,46 +1022,84 @@ export function DesignStudio() {
           <rect x="${-imageSize / 2}" y="${-imageSize / 2}" width="${imageSize}" height="${imageSize}" rx="8" fill="none" stroke="${trimColor}" stroke-width="2" opacity="0.65"/>
         </g>`
       : "";
+    const textLayerTransform = (layer: TextLayerState) => `translate(${layer.x} ${layer.y}) rotate(${layer.rotation}) scale(${layer.scale / 100})`;
+    const selectionBox = (key: TextLayerKey, width: number, height: number, y = -height) => selectedObject === key
+      ? `<rect x="${-width / 2}" y="${y}" width="${width}" height="${height}" rx="5" fill="none" stroke="#0ea5e9" stroke-width="1.6" stroke-dasharray="7 5"/><circle cx="${width / 2}" cy="${y}" r="4" fill="#0ea5e9"/><circle cx="${-width / 2}" cy="${y + height}" r="4" fill="#0ea5e9"/>`
+      : "";
+    const crestLayer = textLayers.crest;
+    const sponsorLayer = textLayers.sponsor;
+    const nameLayer = textLayers.name;
+    const numberLayer = textLayers.number;
     const crestShape = layers.crest
       ? `
-        <g>
-          <path d="M177 118 L200 102 L223 118 L216 148 L184 148 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/>
-          <text x="200" y="139" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff">${safeCrest}</text>
+        <g transform="${textLayerTransform(crestLayer)}" opacity="${crestLayer.opacity / 100}">
+          <path d="M-23 -14 L0 -30 L23 -14 L16 16 L-16 16 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/>
+          <text x="0" y="7" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff">${safeCrest}</text>
+          ${selectionBox("crest", 58, 58, -34)}
         </g>`
       : "";
+    const sponsorWidth = clamp(sponsor.length * sponsorSize * 0.68 + 44, 120, 330);
     const sponsorText = layers.sponsor && frontVisible
-      ? `<text x="200" y="${sponsorY}" text-anchor="middle" font-size="${sponsorSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" stroke="${textEffect === "outline" ? trimColor : "none"}" stroke-width="${textEffect === "outline" ? outlineWidth : 0}" paint-order="stroke fill">${safeSponsor}</text>`
+      ? `
+        <g transform="${textLayerTransform(sponsorLayer)}" opacity="${sponsorLayer.opacity / 100}">
+          <text x="0" y="0" text-anchor="middle" font-size="${sponsorSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" stroke="${textEffect === "outline" ? trimColor : "none"}" stroke-width="${textEffect === "outline" ? outlineWidth : 0}" paint-order="stroke fill">${safeSponsor}</text>
+          ${selectionBox("sponsor", sponsorWidth, sponsorSize + 20, -sponsorSize)}
+        </g>`
       : "";
     const nameText = (() => {
       if (!layers.name || !backVisible) return "";
+      const nameWidth = clamp(playerName.length * nameSize * 0.72 + 40, 120, 340);
+      const nameFrame = selectionBox("name", nameWidth, nameSize + 26, -nameSize - 10);
       if (textEffect === "arch") {
         return `
-          <path id="nameArc" d="M116 ${nameY} C150 ${nameY - nameArch} 250 ${nameY - nameArch} 284 ${nameY}" fill="none"/>
-          <text font-size="${nameSize}" font-weight="900" letter-spacing="${textTracking}" fill="${vinylColor}" stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill">
-            <textPath href="#nameArc" startOffset="50%" text-anchor="middle">${safePlayerName}</textPath>
-          </text>`;
+          <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
+            <path id="nameArc" d="M-94 0 C-54 ${-nameArch} 54 ${-nameArch} 94 0" fill="none"/>
+            <text font-size="${nameSize}" font-weight="900" letter-spacing="${textTracking}" fill="${vinylColor}" stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill">
+              <textPath href="#nameArc" startOffset="50%" text-anchor="middle">${safePlayerName}</textPath>
+            </text>
+            ${nameFrame}
+          </g>`;
       }
       if (textEffect === "shadow") {
         return `
-          <text x="204" y="${nameY + 4}" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerName}</text>
-          <text x="200" y="${nameY}" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}">${safePlayerName}</text>`;
+          <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
+            <text x="4" y="4" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerName}</text>
+            <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}">${safePlayerName}</text>
+            ${nameFrame}
+          </g>`;
       }
       if (textEffect === "split") {
         return `
-          <text x="200" y="${nameY}" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill">${safePlayerName}</text>
-          <path d="M112 ${nameY - nameSize / 2.4} H288" stroke="${accentColor}" stroke-width="4" opacity="0.8"/>`;
+          <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
+            <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill">${safePlayerName}</text>
+            <path d="M${-nameWidth / 2} ${-nameSize / 2.4} H${nameWidth / 2}" stroke="${accentColor}" stroke-width="4" opacity="0.8"/>
+            ${nameFrame}
+          </g>`;
       }
-      return `<text x="200" y="${nameY}" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" ${textEffect === "outline" ? `stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill"` : ""}>${safePlayerName}</text>`;
+      return `
+        <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
+          <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" ${textEffect === "outline" ? `stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill"` : ""}>${safePlayerName}</text>
+          ${nameFrame}
+        </g>`;
     })();
     const numberSize = Math.round(104 * (numberScale / 100));
     const numberText = (() => {
       if (!layers.number || !backVisible) return "";
+      const numberWidth = clamp(playerNumber.length * numberSize * 0.62 + 42, 96, 280);
+      const numberFrame = selectionBox("number", numberWidth, numberSize + 30, -numberSize - 12);
       if (textEffect === "shadow") {
         return `
-          <text x="207" y="${numberY + 6}" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerNumber}</text>
-          <text x="200" y="${numberY}" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}">${safePlayerNumber}</text>`;
+          <g transform="${textLayerTransform(numberLayer)}" opacity="${numberLayer.opacity / 100}">
+            <text x="7" y="6" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerNumber}</text>
+            <text x="0" y="0" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}">${safePlayerNumber}</text>
+            ${numberFrame}
+          </g>`;
       }
-      return `<text x="200" y="${numberY}" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}" ${textEffect !== "flat" ? `stroke="${trimColor}" stroke-width="${outlineWidth + 2}" paint-order="stroke fill"` : ""}>${safePlayerNumber}</text>`;
+      return `
+        <g transform="${textLayerTransform(numberLayer)}" opacity="${numberLayer.opacity / 100}">
+          <text x="0" y="0" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}" ${textEffect !== "flat" ? `stroke="${trimColor}" stroke-width="${outlineWidth + 2}" paint-order="stroke fill"` : ""}>${safePlayerNumber}</text>
+          ${numberFrame}
+        </g>`;
     })();
     const backText = backVisible
       ? `
@@ -1072,9 +1175,7 @@ export function DesignStudio() {
     materialConfig.label,
     mirrorCut,
     nameArch,
-    nameY,
     numberScale,
-    numberY,
     outlineWidth,
     patternStyle,
     playerName,
@@ -1089,12 +1190,13 @@ export function DesignStudio() {
     sheetConfig.label,
     sheetConfig.widthMm,
     sheetMargin,
+    selectedObject,
     showRulers,
     showSafeArea,
     showTransferSheet,
     sponsor,
-    sponsorY,
     textEffect,
+    textLayers,
     textTracking,
     textureStrength,
     trimColor,
@@ -1111,6 +1213,12 @@ export function DesignStudio() {
     designMode,
     activeTool,
     activeTab,
+    canvas: {
+      zoom: canvasZoom,
+      panX: canvasPanX,
+      panY: canvasPanY,
+      selectedObject,
+    },
     textEffect,
     productionAid,
     view,
@@ -1171,7 +1279,19 @@ export function DesignStudio() {
         }
       : null,
     shape: { kind: shapeKind, x: shapeX, y: shapeY, scale: shapeScale, rotation: shapeRotation, opacity: shapeOpacity },
-    text: { playerName, playerNumber, sponsor, crest, textTracking, outlineWidth, nameY, numberY, sponsorY, numberScale, nameArch },
+    text: {
+      playerName,
+      playerNumber,
+      sponsor,
+      crest,
+      textTracking,
+      outlineWidth,
+      numberScale,
+      nameArch,
+      selectedLayer: selectedTextKey,
+      layers: textLayers,
+      legacyBaseline: { nameY, numberY, sponsorY },
+    },
     layers,
     colors: { baseColor, accentColor, trimColor, vinylColor },
     score: { productionScore, cutComplexity, vinylUsage, pressMinutes, passedChecks, totalChecks: qualityChecks.length },
@@ -1184,6 +1304,9 @@ export function DesignStudio() {
     bladeOffset,
     baudRate,
     bleedMargin,
+    canvasPanX,
+    canvasPanY,
+    canvasZoom,
     contourOffset,
     copies,
     cornerSmoothing,
@@ -1237,9 +1360,12 @@ export function DesignStudio() {
     sheetConfig.widthMm,
     sheetMargin,
     sheetPreset,
+    selectedObject,
+    selectedTextKey,
     sponsor,
     sponsorY,
     textEffect,
+    textLayers,
     textTracking,
     trimColor,
     transferOffsetX,
@@ -1266,6 +1392,155 @@ export function DesignStudio() {
     setCutter(nextCutter);
     setBladeOffset(profile.offset);
     setOvercut(profile.overcut);
+  }
+
+  function syncLegacyTextY(layer: TextLayerKey, y: number) {
+    if (layer === "name") setNameY(y);
+    if (layer === "number") setNumberY(y);
+    if (layer === "sponsor") setSponsorY(y);
+  }
+
+  function updateTextLayer(layer: TextLayerKey, patch: Partial<TextLayerState>) {
+    setTextLayers((current) => {
+      const existing = current[layer];
+      if (existing.locked && patch.locked !== false) return current;
+
+      const next = {
+        ...existing,
+        ...patch,
+        x: clamp(patch.x ?? existing.x, -80, 480),
+        y: clamp(patch.y ?? existing.y, -80, 600),
+        rotation: clamp(patch.rotation ?? existing.rotation, -180, 180),
+        scale: clamp(patch.scale ?? existing.scale, 25, 240),
+        opacity: clamp(patch.opacity ?? existing.opacity, 0, 100),
+      };
+
+      return { ...current, [layer]: next };
+    });
+
+    if (typeof patch.y === "number") syncLegacyTextY(layer, clamp(patch.y, -80, 600));
+  }
+
+  function selectDesignObject(target: SelectedObject) {
+    setSelectedObject(target);
+    if (isTextLayerKey(target)) {
+      setActiveTool("text");
+      setActiveTab("text");
+      return;
+    }
+    if (target === "image") {
+      setActiveTool("image");
+      setActiveTab("assets");
+      return;
+    }
+    if (target === "shape") {
+      setActiveTool("shape");
+      setActiveTab("layout");
+      return;
+    }
+    if (target === "sheet" || target === "garment") {
+      setActiveTool(target === "sheet" ? "cut" : "select");
+      setActiveTab("production");
+    }
+  }
+
+  function nudgeSelected(dx: number, dy: number) {
+    if (selectedTextKey && selectedTextLayer) {
+      updateTextLayer(selectedTextKey, { x: selectedTextLayer.x + dx, y: selectedTextLayer.y + dy });
+      return;
+    }
+
+    if (selectedObject === "image") {
+      setImageX((current) => clamp(current + dx, -80, 480));
+      setImageY((current) => clamp(current + dy, -80, 600));
+      return;
+    }
+
+    if (selectedObject === "shape") {
+      setShapeX((current) => clamp(current + dx, -80, 480));
+      setShapeY((current) => clamp(current + dy, -80, 600));
+      return;
+    }
+
+    if (selectedObject === "sheet" || selectedObject === "garment") {
+      setTransferOffsetX((current) => clamp(current + dx, -120, 120));
+      setTransferOffsetY((current) => clamp(current + dy, -140, 140));
+    }
+  }
+
+  function placeTextLayer(layer: TextLayerKey, x: number, y: number) {
+    updateTextLayer(layer, { x, y });
+    selectDesignObject(layer);
+  }
+
+  function beginCanvasDrag(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+
+    let originX = 0;
+    let originY = 0;
+
+    if (isTextLayerKey(selectedObject)) {
+      const layer = textLayers[selectedObject];
+      if (layer.locked) return;
+      originX = layer.x;
+      originY = layer.y;
+    } else if (selectedObject === "image") {
+      originX = imageX;
+      originY = imageY;
+    } else if (selectedObject === "shape") {
+      originX = shapeX;
+      originY = shapeY;
+    } else {
+      originX = transferOffsetX;
+      originY = transferOffsetY;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragState({
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      target: selectedObject,
+      originX,
+      originY,
+    });
+  }
+
+  function moveCanvasDrag(event: PointerEvent<HTMLDivElement>) {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+    const zoomFactor = Math.max(0.5, canvasZoom / 100);
+    const dx = Math.round((event.clientX - dragState.startClientX) / zoomFactor);
+    const dy = Math.round((event.clientY - dragState.startClientY) / zoomFactor);
+    const nextX = dragState.originX + dx;
+    const nextY = dragState.originY + dy;
+
+    if (isTextLayerKey(dragState.target)) {
+      updateTextLayer(dragState.target, { x: nextX, y: nextY });
+      return;
+    }
+
+    if (dragState.target === "image") {
+      setImageX(clamp(nextX, -80, 480));
+      setImageY(clamp(nextY, -80, 600));
+      return;
+    }
+
+    if (dragState.target === "shape") {
+      setShapeX(clamp(nextX, -80, 480));
+      setShapeY(clamp(nextY, -80, 600));
+      return;
+    }
+
+    setTransferOffsetX(clamp(nextX, -120, 120));
+    setTransferOffsetY(clamp(nextY, -140, 140));
+  }
+
+  function endCanvasDrag(event: PointerEvent<HTMLDivElement>) {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragState(null);
   }
 
   function toggleLayer(layer: LayerKey) {
@@ -1316,6 +1591,13 @@ export function DesignStudio() {
     setNameY(template.nameY);
     setNumberY(template.numberY);
     setSponsorY(template.sponsorY);
+    setTextLayers((current) => ({
+      ...current,
+      name: { ...current.name, x: 200, y: template.nameY, rotation: 0, scale: 100, opacity: 100 },
+      number: { ...current.number, x: 200, y: template.numberY, rotation: 0, scale: 100, opacity: 100 },
+      sponsor: { ...current.sponsor, x: 200, y: template.sponsorY, rotation: 0, scale: 100, opacity: 100 },
+      crest: { ...current.crest, x: 200, y: 132, rotation: 0, scale: 100, opacity: 100 },
+    }));
     setNumberScale(template.numberScale);
     setNameArch(template.nameArch);
     setProductionAid(template.productionAid);
@@ -1402,6 +1684,11 @@ export function DesignStudio() {
     setActiveTab("brand");
     setActiveTool("select");
     setCanvasZoom(100);
+    setCanvasPanX(0);
+    setCanvasPanY(0);
+    setSelectedObject("name");
+    setTextLayers(createDefaultTextLayers());
+    setDragState(null);
     setBaudRate(9600);
     setMachineStatus("idle");
     setGarmentStyle("pro-panel");
@@ -1764,9 +2051,27 @@ export function DesignStudio() {
   }
 
   function renderTextPanel() {
+    const activeTextKey = selectedTextKey ?? "name";
+    const activeTextLayer = textLayers[activeTextKey];
+
     return (
       <div className="space-y-4">
         <PanelHeading icon={Type} title="Names, Numbers, Sponsor" detail={textEffect} />
+
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(textLayerLabels) as TextLayerKey[]).map((layer) => (
+            <button
+              key={layer}
+              onClick={() => selectDesignObject(layer)}
+              className={clsx(
+                "min-h-10 rounded-[8px] border px-3 text-left text-sm font-semibold transition",
+                activeTextKey === layer ? "border-slate-950 bg-slate-950 text-white" : "border-[#ded8cd] bg-white text-slate-700 hover:bg-[#f6f4ef]",
+              )}
+            >
+              {textLayerLabels[layer]}
+            </button>
+          ))}
+        </div>
 
         <label className="block">
           <span className="mb-1 block text-sm font-semibold">Text engine</span>
@@ -1779,28 +2084,91 @@ export function DesignStudio() {
           </select>
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Player name</span>
-          <input className="field" value={playerName} onChange={(event) => setPlayerName(event.target.value.toUpperCase().slice(0, 16))} />
-        </label>
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold">Selected object</span>
+            <span className={clsx("rounded-[8px] px-2 py-1 text-xs font-semibold", activeTextLayer.locked ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
+              {activeTextLayer.locked ? "Locked" : "Free move"}
+            </span>
+          </div>
+
+          {activeTextKey === "name" ? (
+            <label className="mb-3 block">
+              <span className="mb-1 block text-sm font-semibold">Player name</span>
+              <input className="field" value={playerName} onChange={(event) => setPlayerName(event.target.value.toUpperCase().slice(0, 16))} />
+            </label>
+          ) : null}
+
+          {activeTextKey === "number" ? (
+            <label className="mb-3 block">
+              <span className="mb-1 block text-sm font-semibold">Player number</span>
+              <input className="field" value={playerNumber} onChange={(event) => setPlayerNumber(event.target.value.replace(/[^0-9]/g, "").slice(0, 3))} />
+            </label>
+          ) : null}
+
+          {activeTextKey === "sponsor" ? (
+            <label className="mb-3 block">
+              <span className="mb-1 block text-sm font-semibold">Sponsor</span>
+              <input className="field" value={sponsor} onChange={(event) => setSponsor(event.target.value.toUpperCase().slice(0, 24))} />
+            </label>
+          ) : null}
+
+          {activeTextKey === "crest" ? (
+            <label className="mb-3 block">
+              <span className="mb-1 block text-sm font-semibold">Crest letters</span>
+              <input className="field" value={crest} onChange={(event) => setCrest(event.target.value.toUpperCase().slice(0, 5))} />
+            </label>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button className="rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(0, -1)}>Up 1</button>
+            <button className="rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(0, 1)}>Down 1</button>
+            <button className="rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(-1, 0)}>Left 1</button>
+            <button className="rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(1, 0)}>Right 1</button>
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button className="rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(0, -10)}>Up 10</button>
+            <button className="rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(0, 10)}>Down 10</button>
+            <button className="rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(-10, 0)}>Left 10</button>
+            <button className="rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" onClick={() => nudgeSelected(10, 0)}>Right 10</button>
+          </div>
+
+          <Button
+            variant="outline"
+            className="mt-3 w-full"
+            onClick={() => updateTextLayer(activeTextKey, { locked: !activeTextLayer.locked })}
+          >
+            <Lock size={16} /> {activeTextLayer.locked ? "Unlock selected layer" : "Lock selected layer"}
+          </Button>
+        </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold">Number</span>
-            <input className="field" value={playerNumber} onChange={(event) => setPlayerNumber(event.target.value.replace(/[^0-9]/g, "").slice(0, 3))} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold">Sponsor</span>
-            <input className="field" value={sponsor} onChange={(event) => setSponsor(event.target.value.toUpperCase().slice(0, 24))} />
-          </label>
+          <RangeControl label="Layer X" value={activeTextLayer.x} min={-40} max={440} onChange={(value) => updateTextLayer(activeTextKey, { x: value })} />
+          <RangeControl label="Layer Y" value={activeTextLayer.y} min={-40} max={560} onChange={(value) => updateTextLayer(activeTextKey, { y: value })} />
+          <RangeControl label="Layer scale" value={activeTextLayer.scale} min={25} max={240} suffix="%" onChange={(value) => updateTextLayer(activeTextKey, { scale: value })} />
+          <RangeControl label="Layer rotation" value={activeTextLayer.rotation} min={-180} max={180} suffix="deg" onChange={(value) => updateTextLayer(activeTextKey, { rotation: value })} />
+        </div>
+        <RangeControl label="Layer opacity" value={activeTextLayer.opacity} min={0} max={100} suffix="%" onChange={(value) => updateTextLayer(activeTextKey, { opacity: value })} />
+
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+          <span className="mb-2 block text-sm font-semibold">Quick placement</span>
+          <div className="grid grid-cols-2 gap-2">
+            {textQuickPositions.map((position) => (
+              <button
+                key={position.label}
+                className="min-h-10 rounded-[8px] bg-[#f6f4ef] px-3 text-left text-xs font-semibold text-slate-700 hover:bg-[#ece7dd]"
+                onClick={() => placeTextLayer(activeTextKey, position.x, position.y)}
+              >
+                {position.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <RangeControl label="Letter spacing" value={textTracking} min={0} max={7} onChange={setTextTracking} />
         <RangeControl label="Outline width" value={outlineWidth} min={0} max={8} onChange={setOutlineWidth} />
-        <RangeControl label="Name height" value={nameY} min={176} max={260} onChange={setNameY} />
-        <RangeControl label="Number height" value={numberY} min={260} max={376} onChange={setNumberY} />
-        <RangeControl label="Sponsor height" value={sponsorY} min={210} max={320} onChange={setSponsorY} />
-        <RangeControl label="Number scale" value={numberScale} min={68} max={132} suffix="%" onChange={setNumberScale} />
+        <RangeControl label="Number font size" value={numberScale} min={68} max={132} suffix="%" onChange={setNumberScale} />
         <RangeControl label="Arch strength" value={nameArch} min={12} max={82} onChange={setNameArch} />
       </div>
     );
@@ -1855,15 +2223,31 @@ export function DesignStudio() {
       <div className="space-y-4">
         <PanelHeading icon={Layers} title="Layer Stack" detail={`${activeLayers}/${totalLayers}`} />
         <div className="grid gap-2">
-          {(Object.keys(layerLabels) as LayerKey[]).map((layer) => (
-            <label key={layer} className="flex min-h-11 items-center justify-between gap-3 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm">
-              <span className="flex items-center gap-2 font-semibold">
-                {layers[layer] ? <Eye size={15} className="text-emerald-600" /> : <EyeOff size={15} className="text-slate-400" />}
-                {layerLabels[layer]}
-              </span>
-              <input type="checkbox" checked={layers[layer]} onChange={() => toggleLayer(layer)} />
-            </label>
-          ))}
+          {(Object.keys(layerLabels) as LayerKey[]).map((layer) => {
+            const selectableObject: SelectedObject | null = isTextLayerKey(layer as SelectedObject)
+              ? layer as TextLayerKey
+              : layer === "image" || layer === "shape"
+                ? layer
+                : null;
+            const selected = selectableObject === selectedObject;
+            const textLayer = isTextLayerKey(layer as SelectedObject) ? textLayers[layer as TextLayerKey] : null;
+
+            return (
+              <div key={layer} className={clsx("flex min-h-11 items-center justify-between gap-3 rounded-[8px] border px-3 text-sm transition", selected ? "border-slate-950 bg-slate-950 text-white" : "border-[#ded8cd] bg-white")}>
+                <button
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left font-semibold"
+                  onClick={() => {
+                    if (selectableObject) selectDesignObject(selectableObject);
+                  }}
+                >
+                  {layers[layer] ? <Eye size={15} className={selected ? "text-emerald-300" : "text-emerald-600"} /> : <EyeOff size={15} className={selected ? "text-slate-300" : "text-slate-400"} />}
+                  <span className="truncate">{layerLabels[layer]}</span>
+                  {textLayer?.locked ? <Lock size={13} className={selected ? "text-amber-200" : "text-amber-600"} /> : null}
+                </button>
+                <input type="checkbox" checked={layers[layer]} onChange={() => toggleLayer(layer)} />
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -2219,25 +2603,75 @@ export function DesignStudio() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
-              <button className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-white text-slate-700" title="Zoom out" onClick={() => setCanvasZoom((current) => clamp(current - 10, 70, 150))}>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-white text-slate-700" title="Zoom out" onClick={() => setCanvasZoom((current) => clamp(current - 10, 50, 240))}>
                 <ZoomOut size={17} />
               </button>
-              <span className="inline-flex h-10 min-w-14 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600">{canvasZoom}%</span>
-              <button className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-white text-slate-700" title="Zoom in" onClick={() => setCanvasZoom((current) => clamp(current + 10, 70, 150))}>
+              <button className="inline-flex h-10 min-w-14 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Reset zoom" onClick={() => setCanvasZoom(100)}>{canvasZoom}%</button>
+              <button className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-white text-slate-700" title="Zoom in" onClick={() => setCanvasZoom((current) => clamp(current + 10, 50, 240))}>
                 <ZoomIn size={17} />
               </button>
+              <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas left" onClick={() => setCanvasPanX((current) => clamp(current - 30, -240, 240))}>L</button>
+              <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas up" onClick={() => setCanvasPanY((current) => clamp(current - 30, -240, 240))}>U</button>
+              <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas down" onClick={() => setCanvasPanY((current) => clamp(current + 30, -240, 240))}>D</button>
+              <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas right" onClick={() => setCanvasPanX((current) => clamp(current + 30, -240, 240))}>R</button>
+              <button className="inline-flex h-10 min-w-14 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Fit canvas" onClick={() => { setCanvasZoom(100); setCanvasPanX(0); setCanvasPanY(0); }}>Fit</button>
             </div>
           </div>
 
-          <div className="flex min-h-[610px] items-center justify-center rounded-[8px] border border-[#d7dce2] bg-[#f8fafc] p-3 sm:p-6">
-            <div className="aspect-[400/520] w-full rounded-[8px] bg-white shadow-[0_24px_60px_rgb(15_23_42/0.14)]" style={{ maxWidth: `${Math.round(560 * (canvasZoom / 100))}px` }} dangerouslySetInnerHTML={{ __html: svg }} />
+          <div className="relative min-h-[610px] overflow-auto rounded-[8px] border border-[#d7dce2] bg-[#f8fafc] p-3 sm:p-6">
+            <div className="relative min-h-[700px] min-w-[620px]">
+              <div
+                className={clsx("absolute left-1/2 top-1/2 aspect-[400/520] w-[560px] touch-none rounded-[8px] bg-white shadow-[0_24px_60px_rgb(15_23_42/0.14)] transition-transform duration-150", dragState ? "cursor-grabbing" : "cursor-grab")}
+                style={{ transform: `translate(-50%, -50%) translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasZoom / 100})`, transformOrigin: "center" }}
+                onPointerDown={beginCanvasDrag}
+                onPointerMove={moveCanvasDrag}
+                onPointerUp={endCanvasDrag}
+                onPointerCancel={endCanvasDrag}
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            </div>
           </div>
         </main>
 
         <aside className="border-t border-[#d7dce2] bg-[#fbfcfd] p-4 xl:border-l xl:border-t-0">
           <div className="space-y-4">
             <PanelHeading icon={Settings2} title="Live Inspector" detail={activeTool} />
+
+            <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold">Selected layer</span>
+                <span className="rounded-[8px] bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                  {selectedTextKey ? textLayerLabels[selectedTextKey] : selectedObject}
+                </span>
+              </div>
+              {selectedTextKey && selectedTextLayer ? (
+                <div className="mb-3 grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="rounded-[8px] bg-[#f6f4ef] p-2">
+                    <p className="text-slate-500">X</p>
+                    <p className="font-semibold">{selectedTextLayer.x}</p>
+                  </div>
+                  <div className="rounded-[8px] bg-[#f6f4ef] p-2">
+                    <p className="text-slate-500">Y</p>
+                    <p className="font-semibold">{selectedTextLayer.y}</p>
+                  </div>
+                  <div className="rounded-[8px] bg-[#f6f4ef] p-2">
+                    <p className="text-slate-500">Scale</p>
+                    <p className="font-semibold">{selectedTextLayer.scale}%</p>
+                  </div>
+                  <div className="rounded-[8px] bg-[#f6f4ef] p-2">
+                    <p className="text-slate-500">Angle</p>
+                    <p className="font-semibold">{selectedTextLayer.rotation}</p>
+                  </div>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-4 gap-2">
+                <button className="rounded-[8px] bg-[#f6f4ef] py-2 text-xs font-semibold" onClick={() => nudgeSelected(-5, 0)}>Left</button>
+                <button className="rounded-[8px] bg-[#f6f4ef] py-2 text-xs font-semibold" onClick={() => nudgeSelected(5, 0)}>Right</button>
+                <button className="rounded-[8px] bg-[#f6f4ef] py-2 text-xs font-semibold" onClick={() => nudgeSelected(0, -5)}>Up</button>
+                <button className="rounded-[8px] bg-[#f6f4ef] py-2 text-xs font-semibold" onClick={() => nudgeSelected(0, 5)}>Down</button>
+              </div>
+            </div>
 
             <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
               <div className="mb-3 flex items-center justify-between gap-2">
