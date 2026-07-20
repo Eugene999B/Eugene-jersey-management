@@ -77,6 +77,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] bg-slate-950 px-3 text-sm font-semibold text-white" href="/admin#support">
                   <MessageCircle size={16} /> Issues
                 </Link>
+                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold lg:hidden" href="/logout">
+                  <LogOut size={16} /> Sign out
+                </Link>
               </div>
             </div>
           </header>

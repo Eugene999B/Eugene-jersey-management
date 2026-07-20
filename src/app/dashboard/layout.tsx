@@ -47,6 +47,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <DashboardSidebar role={session.role} shop={shop} />
       </div>
       <div className="min-w-0">
+        <div className="lg:hidden">
+          <DashboardSidebar role={session.role} shop={shop} variant="mobile" />
+        </div>
         <DashboardTopbar session={session} shopId={shop.id} />
         <main className="p-4 lg:p-6">{children}</main>
       </div>

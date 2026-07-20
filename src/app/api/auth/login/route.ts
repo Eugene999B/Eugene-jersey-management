@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const parsed = loginSchema.safeParse({
     loginId: formData.get("loginId") || undefined,
-    email: formData.get("email"),
+    email: formData.get("email") || undefined,
     password: formData.get("password"),
     shopLoginId: formData.get("shopLoginId") || undefined,
     next: formData.get("next") || undefined,

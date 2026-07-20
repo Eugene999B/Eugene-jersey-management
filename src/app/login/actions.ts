@@ -66,7 +66,7 @@ async function findLoginUser(input: { email?: string; loginId?: string }) {
 export async function loginAction(formData: FormData) {
   const parsed = loginSchema.safeParse({
     loginId: formData.get("loginId") || undefined,
-    email: formData.get("email"),
+    email: formData.get("email") || undefined,
     password: formData.get("password"),
     shopLoginId: formData.get("shopLoginId") || undefined,
     next: formData.get("next") || undefined,

@@ -35,11 +35,57 @@ type SidebarProps = {
     logoUrl: string | null;
     planTier: string;
   };
+  variant?: "desktop" | "mobile";
 };
 
-export function DashboardSidebar({ role, shop }: SidebarProps) {
+export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarProps) {
   const pathname = usePathname();
   const visible = canSeeNav(role);
+  const items = navItems.filter((item) => visible[item.key]);
+
+  if (variant === "mobile") {
+    return (
+      <section className="border-b border-[#ded8cd] bg-[#fffdf8]">
+        <div className="flex items-center justify-between gap-3 px-3 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Image src={shop.logoUrl || "/brand/accra-pro.svg"} alt={shop.name} width={38} height={38} className="rounded-[8px]" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-950">{shop.name}</p>
+              <p className="text-xs text-slate-500">{roleLabels[role]}</p>
+            </div>
+          </div>
+          <Link
+            href="/logout"
+            prefetch={false}
+            className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold text-slate-700"
+          >
+            <LogOut size={16} />
+            Sign out
+          </Link>
+        </div>
+        <nav className="flex gap-2 overflow-x-auto px-3 pb-3">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={false}
+                className={clsx(
+                  "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold transition",
+                  isActive ? "bg-[var(--shop-primary)] text-white" : "bg-white text-slate-700 hover:bg-[#f6f4ef]",
+                )}
+              >
+                <Icon size={16} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </section>
+    );
+  }
 
   return (
     <aside className="flex h-full min-h-screen flex-col border-r border-[#ded8cd] bg-[#fffdf8]">
@@ -54,9 +100,7 @@ export function DashboardSidebar({ role, shop }: SidebarProps) {
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
-        {navItems
-          .filter((item) => visible[item.key])
-          .map((item) => {
+        {items.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
             return (

@@ -38,7 +38,7 @@ import { Button } from "@/components/ui/button";
 type GarmentStyle = "classic" | "raglan" | "pro-panel" | "training" | "basketball" | "rugby" | "goalkeeper";
 type ViewMode = "front" | "back" | "production";
 type DesignMode = "plain" | "team" | "custom";
-type TextEffect = "flat" | "outline" | "shadow" | "arch" | "split";
+type TextEffect = "flat" | "outline" | "shadow" | "arch" | "split" | "double-outline" | "badge";
 type ProductionAid = "balanced" | "speed" | "precision" | "waste-saver";
 type MaterialPreset = "pu-vinyl" | "flock" | "sublimation" | "twill";
 type CutterProfile = "generic-hpgl" | "graphtec-ce" | "roland-gs" | "silhouette-cameo";
@@ -46,7 +46,7 @@ type StudioTab = "brand" | "assets" | "text" | "layout" | "layers" | "production
 type ActiveTool = "select" | "text" | "image" | "shape" | "measure" | "cut" | "press" | "inspect";
 type PatternStyle = "none" | "pinstripe" | "diagonal" | "chevron" | "halftone" | "speed-lines" | "panel-grid" | "carbon" | "kente-stripe" | "camo-panels" | "gradient-wave";
 type ImageMask = "rectangle" | "circle" | "shield" | "diamond";
-type ShapeKind = "shield" | "circle" | "sash" | "star" | "lightning";
+type ShapeKind = "shield" | "circle" | "sash" | "star" | "lightning" | "lion" | "eagle" | "football" | "basketball" | "trophy" | "crown" | "paw";
 type DesignTemplateKey = "elite-home" | "away-velocity" | "keeper-armor" | "training-minimal" | "basketball-city" | "rugby-heritage" | "street-camo" | "gold-final";
 type MachineStatus = "idle" | "connecting" | "sent" | "unsupported" | "failed";
 type SheetPreset = "a4" | "a3" | "vinyl-12x20" | "vinyl-15x20" | "custom";
@@ -196,6 +196,17 @@ const textQuickPositions: Array<{ label: string; x: number; y: number }> = [
   { label: "Number zone", x: 200, y: 318 },
   { label: "Sleeve", x: 318, y: 156 },
   { label: "Lower mark", x: 200, y: 424 },
+];
+
+const shapePresets: Array<{ label: string; kind: ShapeKind; x: number; y: number; scale: number; rotation: number }> = [
+  { label: "Lion crest", kind: "lion", x: 200, y: 142, scale: 82, rotation: 0 },
+  { label: "Eagle wing", kind: "eagle", x: 200, y: 186, scale: 92, rotation: 0 },
+  { label: "Paw mark", kind: "paw", x: 126, y: 156, scale: 70, rotation: -8 },
+  { label: "Football badge", kind: "football", x: 200, y: 156, scale: 86, rotation: 0 },
+  { label: "Basketball badge", kind: "basketball", x: 200, y: 156, scale: 86, rotation: 0 },
+  { label: "Trophy mark", kind: "trophy", x: 200, y: 178, scale: 88, rotation: 0 },
+  { label: "Crown mark", kind: "crown", x: 200, y: 126, scale: 82, rotation: 0 },
+  { label: "Lightning slash", kind: "lightning", x: 292, y: 236, scale: 72, rotation: 18 },
 ];
 
 function isTextLayerKey(value: SelectedObject): value is TextLayerKey {
@@ -744,7 +755,7 @@ export function DesignStudio() {
   const [canvasZoom, setCanvasZoom] = useState(100);
   const [canvasPanX, setCanvasPanX] = useState(0);
   const [canvasPanY, setCanvasPanY] = useState(0);
-  const [selectedObject, setSelectedObject] = useState<SelectedObject>("name");
+  const [selectedObject, setSelectedObject] = useState<SelectedObject>("garment");
   const [textLayers, setTextLayers] = useState<Record<TextLayerKey, TextLayerState>>(createDefaultTextLayers);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [baudRate, setBaudRate] = useState(9600);
@@ -992,19 +1003,41 @@ export function DesignStudio() {
     const shape = (() => {
       if (!layers.shape) return "";
       const transform = `translate(${shapeX} ${shapeY}) rotate(${shapeRotation}) scale(${shapeScale / 100})`;
+      const shapeSelection = selectedObject === "shape" ? `<rect x="-72" y="-72" width="144" height="144" rx="8" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-dasharray="8 6"/>` : "";
       if (shapeKind === "circle") {
-        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><circle cx="0" cy="0" r="46" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="0" cy="0" r="30" fill="none" stroke="${vinylColor}" stroke-width="3" opacity="0.75"/></g>`;
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><circle cx="0" cy="0" r="46" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="0" cy="0" r="30" fill="none" stroke="${vinylColor}" stroke-width="3" opacity="0.75"/>${shapeSelection}</g>`;
       }
       if (shapeKind === "shield") {
-        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-48 -50 L48 -50 L38 22 L0 58 L-38 22 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-28 -28 H28 L20 12 L0 34 L-20 12 Z" fill="none" stroke="${vinylColor}" stroke-width="3" opacity="0.85"/></g>`;
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-48 -50 L48 -50 L38 22 L0 58 L-38 22 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-28 -28 H28 L20 12 L0 34 L-20 12 Z" fill="none" stroke="${vinylColor}" stroke-width="3" opacity="0.85"/>${shapeSelection}</g>`;
       }
       if (shapeKind === "star") {
-        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M0 -62 L14 -18 L60 -18 L23 8 L37 54 L0 26 L-37 54 L-23 8 L-60 -18 L-14 -18 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/></g>`;
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M0 -62 L14 -18 L60 -18 L23 8 L37 54 L0 26 L-37 54 L-23 8 L-60 -18 L-14 -18 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/>${shapeSelection}</g>`;
       }
       if (shapeKind === "lightning") {
-        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-10 -64 L46 -10 L12 -8 L30 64 L-46 0 L-12 0 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/></g>`;
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-10 -64 L46 -10 L12 -8 L30 64 L-46 0 L-12 0 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/>${shapeSelection}</g>`;
       }
-      return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-156 -18 L156 -54 L138 -18 L156 18 L-156 54 L-138 18 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/><path d="M-122 8 L122 -22" stroke="${vinylColor}" stroke-width="4" opacity="0.7"/></g>`;
+      if (shapeKind === "lion") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M0 -66 L16 -34 L50 -44 L42 -10 L70 12 L34 20 L42 56 L10 40 L0 72 L-10 40 L-42 56 L-34 20 L-70 12 L-42 -10 L-50 -44 L-16 -34 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-22 -8 C-8 -28 18 -28 30 -8 C28 20 12 34 -2 34 C-18 34 -30 18 -22 -8Z" fill="${vinylColor}" opacity="0.9"/><circle cx="-12" cy="-4" r="3" fill="${trimColor}"/><path d="M6 0 L24 -4 L8 10" fill="${trimColor}" opacity="0.75"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "eagle") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-94 -12 C-54 -48 -22 -42 0 -16 C22 -42 54 -48 94 -12 C52 -10 26 8 0 42 C-26 8 -52 -10 -94 -12Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-22 -18 L0 -54 L22 -18 L8 -22 L8 28 L-8 28 L-8 -22 Z" fill="${vinylColor}" stroke="${trimColor}" stroke-width="3"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "football") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><circle cx="0" cy="0" r="58" fill="${vinylColor}" stroke="${trimColor}" stroke-width="4"/><path d="M0 -24 L22 -8 L14 20 L-14 20 L-22 -8 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/><path d="M0 -58 L0 -24M55 -18 L22 -8M34 47 L14 20M-34 47 L-14 20M-55 -18 L-22 -8" stroke="${trimColor}" stroke-width="3"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "basketball") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><circle cx="0" cy="0" r="58" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-58 0H58M0 -58V58M-40 -40 C-8 -16 -8 16 -40 40M40 -40 C8 -16 8 16 40 40" fill="none" stroke="${vinylColor}" stroke-width="4" opacity="0.9"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "trophy") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-34 -54 H34 V-10 C34 18 18 34 0 34 C-18 34 -34 18 -34 -10 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-34 -42 H-62 C-60 -8 -44 4 -34 4M34 -42 H62 C60 -8 44 4 34 4" fill="none" stroke="${trimColor}" stroke-width="4"/><path d="M0 34 V54M-32 54 H32" stroke="${trimColor}" stroke-width="5"/><path d="M-16 -28 H16" stroke="${vinylColor}" stroke-width="5" opacity="0.8"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "crown") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-64 28 L-52 -36 L-18 4 L0 -48 L18 4 L52 -36 L64 28 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><path d="M-54 42 H54" stroke="${trimColor}" stroke-width="8"/><circle cx="-52" cy="-36" r="7" fill="${vinylColor}"/><circle cx="0" cy="-48" r="7" fill="${vinylColor}"/><circle cx="52" cy="-36" r="7" fill="${vinylColor}"/>${shapeSelection}</g>`;
+      }
+      if (shapeKind === "paw") {
+        return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><ellipse cx="0" cy="26" rx="34" ry="28" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="-42" cy="-14" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="-14" cy="-34" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="14" cy="-34" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/><circle cx="42" cy="-14" r="16" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/>${shapeSelection}</g>`;
+      }
+      return `<g transform="${transform}" opacity="${shapeOpacity / 100}"><path d="M-156 -18 L156 -54 L138 -18 L156 18 L-156 54 L-138 18 Z" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/><path d="M-122 8 L122 -22" stroke="${vinylColor}" stroke-width="4" opacity="0.7"/><rect x="-164" y="-62" width="328" height="124" rx="8" fill="none" stroke="${selectedObject === "shape" ? "#0ea5e9" : "none"}" stroke-width="2" stroke-dasharray="8 6"/></g>`;
     })();
     const imageClip = (() => {
       const half = imageSize / 2;
@@ -1042,6 +1075,8 @@ export function DesignStudio() {
     const sponsorText = layers.sponsor && frontVisible
       ? `
         <g transform="${textLayerTransform(sponsorLayer)}" opacity="${sponsorLayer.opacity / 100}">
+          ${textEffect === "badge" ? `<rect x="${-sponsorWidth / 2}" y="${-sponsorSize - 10}" width="${sponsorWidth}" height="${sponsorSize + 20}" rx="10" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/>` : ""}
+          ${textEffect === "double-outline" ? `<text x="0" y="0" text-anchor="middle" font-size="${sponsorSize}" letter-spacing="${textTracking}" font-weight="900" fill="none" stroke="${trimColor}" stroke-width="${outlineWidth + 6}" paint-order="stroke fill">${safeSponsor}</text>` : ""}
           <text x="0" y="0" text-anchor="middle" font-size="${sponsorSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" stroke="${textEffect === "outline" ? trimColor : "none"}" stroke-width="${textEffect === "outline" ? outlineWidth : 0}" paint-order="stroke fill">${safeSponsor}</text>
           ${selectionBox("sponsor", sponsorWidth, sponsorSize + 20, -sponsorSize)}
         </g>`
@@ -1076,6 +1111,22 @@ export function DesignStudio() {
             ${nameFrame}
           </g>`;
       }
+      if (textEffect === "double-outline") {
+        return `
+          <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
+            <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="none" stroke="${trimColor}" stroke-width="${outlineWidth + 7}" paint-order="stroke fill">${safePlayerName}</text>
+            <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" stroke="${accentColor}" stroke-width="${outlineWidth + 2}" paint-order="stroke fill">${safePlayerName}</text>
+            ${nameFrame}
+          </g>`;
+      }
+      if (textEffect === "badge") {
+        return `
+          <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
+            <rect x="${-nameWidth / 2 - 8}" y="${-nameSize - 12}" width="${nameWidth + 16}" height="${nameSize + 24}" rx="10" fill="${accentColor}" stroke="${trimColor}" stroke-width="3"/>
+            <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}">${safePlayerName}</text>
+            ${nameFrame}
+          </g>`;
+      }
       return `
         <g transform="${textLayerTransform(nameLayer)}" opacity="${nameLayer.opacity / 100}">
           <text x="0" y="0" text-anchor="middle" font-size="${nameSize}" letter-spacing="${textTracking}" font-weight="900" fill="${vinylColor}" ${textEffect === "outline" ? `stroke="${trimColor}" stroke-width="${outlineWidth}" paint-order="stroke fill"` : ""}>${safePlayerName}</text>
@@ -1091,6 +1142,22 @@ export function DesignStudio() {
         return `
           <g transform="${textLayerTransform(numberLayer)}" opacity="${numberLayer.opacity / 100}">
             <text x="7" y="6" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${trimColor}" opacity="0.45">${safePlayerNumber}</text>
+            <text x="0" y="0" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}">${safePlayerNumber}</text>
+            ${numberFrame}
+          </g>`;
+      }
+      if (textEffect === "double-outline") {
+        return `
+          <g transform="${textLayerTransform(numberLayer)}" opacity="${numberLayer.opacity / 100}">
+            <text x="0" y="0" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="none" stroke="${trimColor}" stroke-width="${outlineWidth + 10}" paint-order="stroke fill">${safePlayerNumber}</text>
+            <text x="0" y="0" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}" stroke="${accentColor}" stroke-width="${outlineWidth + 4}" paint-order="stroke fill">${safePlayerNumber}</text>
+            ${numberFrame}
+          </g>`;
+      }
+      if (textEffect === "badge") {
+        return `
+          <g transform="${textLayerTransform(numberLayer)}" opacity="${numberLayer.opacity / 100}">
+            <rect x="${-numberWidth / 2 - 10}" y="${-numberSize - 14}" width="${numberWidth + 20}" height="${numberSize + 28}" rx="14" fill="${accentColor}" stroke="${trimColor}" stroke-width="4"/>
             <text x="0" y="0" text-anchor="middle" font-size="${numberSize}" font-weight="900" fill="${vinylColor}">${safePlayerNumber}</text>
             ${numberFrame}
           </g>`;
@@ -1440,30 +1507,99 @@ export function DesignStudio() {
     }
     if (target === "sheet" || target === "garment") {
       setActiveTool(target === "sheet" ? "cut" : "select");
-      setActiveTab("production");
+      if (target === "sheet") setActiveTab("production");
     }
   }
 
+  function isMirroredArtwork(target: SelectedObject) {
+    return view === "production" && mirrorCut && target !== "sheet";
+  }
+
+  function visualDxForTarget(target: SelectedObject, dx: number) {
+    return isMirroredArtwork(target) ? -dx : dx;
+  }
+
+  function canvasPointFromEvent(event: PointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const rawX = clamp(((event.clientX - rect.left) / rect.width) * 400, 0, 400);
+    const y = clamp(((event.clientY - rect.top) / rect.height) * 520, 0, 520);
+    return {
+      rawX,
+      x: view === "production" && mirrorCut ? 400 - rawX : rawX,
+      y,
+    };
+  }
+
+  function hitBox(x: number, y: number, centerX: number, centerY: number, width: number, height: number) {
+    return x >= centerX - width / 2 && x <= centerX + width / 2 && y >= centerY - height / 2 && y <= centerY + height / 2;
+  }
+
+  function hitTextLayer(layer: TextLayerKey, x: number, y: number) {
+    const textLayer = textLayers[layer];
+    const scale = textLayer.scale / 100;
+    const nameSize = fitNameSize(playerName);
+    const sponsorSize = fitSponsorSize(sponsor);
+    const numberSize = Math.round(104 * (numberScale / 100));
+    const bounds: Record<TextLayerKey, { width: number; height: number; centerYOffset: number }> = {
+      name: { width: clamp(playerName.length * nameSize * 0.72 + 40, 120, 340) * scale, height: (nameSize + 34) * scale, centerYOffset: (-nameSize / 2) * scale },
+      number: { width: clamp(playerNumber.length * numberSize * 0.62 + 42, 96, 280) * scale, height: (numberSize + 36) * scale, centerYOffset: (-numberSize / 2) * scale },
+      sponsor: { width: clamp(sponsor.length * sponsorSize * 0.68 + 44, 120, 330) * scale, height: (sponsorSize + 24) * scale, centerYOffset: (-sponsorSize / 2) * scale },
+      crest: { width: 64 * scale, height: 64 * scale, centerYOffset: -7 * scale },
+    };
+    const box = bounds[layer];
+    return hitBox(x, y, textLayer.x, textLayer.y + box.centerYOffset, box.width, box.height);
+  }
+
+  function resolveCanvasTarget(event: PointerEvent<HTMLDivElement>): SelectedObject {
+    const point = canvasPointFromEvent(event);
+    const backVisible = view === "back" || view === "production";
+    const frontVisible = view === "front";
+
+    if (layers.number && backVisible && hitTextLayer("number", point.x, point.y)) return "number";
+    if (layers.name && backVisible && hitTextLayer("name", point.x, point.y)) return "name";
+    if (layers.sponsor && frontVisible && hitTextLayer("sponsor", point.x, point.y)) return "sponsor";
+    if (layers.crest && hitTextLayer("crest", point.x, point.y)) return "crest";
+    if (layers.image && uploadedImage && hitBox(point.x, point.y, imageX, imageY, imageSize + 14, imageSize + 14)) return "image";
+
+    const shapeHitSize = shapeKind === "sash" ? 260 * (shapeScale / 100) : 128 * (shapeScale / 100);
+    if (layers.shape && hitBox(point.x, point.y, shapeX, shapeY, shapeHitSize, shapeHitSize)) return "shape";
+
+    const presetSheet = sheetPresets[sheetPreset];
+    const widthMm = sheetPreset === "custom" ? customSheetWidth : presetSheet.widthMm;
+    const heightMm = sheetPreset === "custom" ? customSheetHeight : presetSheet.heightMm;
+    const sheetScale = Math.min(330 / widthMm, 454 / heightMm);
+    const sheetWidth = Math.round(widthMm * sheetScale);
+    const sheetHeight = Math.round(heightMm * sheetScale);
+    const sheetX = Math.round((400 - sheetWidth) / 2 + transferOffsetX);
+    const sheetY = Math.round((520 - sheetHeight) / 2 + transferOffsetY);
+    if (showTransferSheet && point.rawX >= sheetX && point.rawX <= sheetX + sheetWidth && point.y >= sheetY && point.y <= sheetY + sheetHeight) return "sheet";
+
+    return "garment";
+  }
+
   function nudgeSelected(dx: number, dy: number) {
+    const target = selectedTextKey ?? selectedObject;
+    const adjustedDx = visualDxForTarget(target, dx);
+
     if (selectedTextKey && selectedTextLayer) {
-      updateTextLayer(selectedTextKey, { x: selectedTextLayer.x + dx, y: selectedTextLayer.y + dy });
+      updateTextLayer(selectedTextKey, { x: selectedTextLayer.x + adjustedDx, y: selectedTextLayer.y + dy });
       return;
     }
 
     if (selectedObject === "image") {
-      setImageX((current) => clamp(current + dx, -80, 480));
+      setImageX((current) => clamp(current + adjustedDx, -80, 480));
       setImageY((current) => clamp(current + dy, -80, 600));
       return;
     }
 
     if (selectedObject === "shape") {
-      setShapeX((current) => clamp(current + dx, -80, 480));
+      setShapeX((current) => clamp(current + adjustedDx, -80, 480));
       setShapeY((current) => clamp(current + dy, -80, 600));
       return;
     }
 
     if (selectedObject === "sheet" || selectedObject === "garment") {
-      setTransferOffsetX((current) => clamp(current + dx, -120, 120));
+      setTransferOffsetX((current) => clamp(current + adjustedDx, -120, 120));
       setTransferOffsetY((current) => clamp(current + dy, -140, 140));
     }
   }
@@ -1476,18 +1612,25 @@ export function DesignStudio() {
   function beginCanvasDrag(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
 
+    const target = resolveCanvasTarget(event);
+    selectDesignObject(target);
+    if (target === "garment") {
+      event.preventDefault();
+      return;
+    }
+
     let originX = 0;
     let originY = 0;
 
-    if (isTextLayerKey(selectedObject)) {
-      const layer = textLayers[selectedObject];
+    if (isTextLayerKey(target)) {
+      const layer = textLayers[target];
       if (layer.locked) return;
       originX = layer.x;
       originY = layer.y;
-    } else if (selectedObject === "image") {
+    } else if (target === "image") {
       originX = imageX;
       originY = imageY;
-    } else if (selectedObject === "shape") {
+    } else if (target === "shape") {
       originX = shapeX;
       originY = shapeY;
     } else {
@@ -1501,7 +1644,7 @@ export function DesignStudio() {
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
-      target: selectedObject,
+      target,
       originX,
       originY,
     });
@@ -1513,7 +1656,7 @@ export function DesignStudio() {
     const zoomFactor = Math.max(0.5, canvasZoom / 100);
     const dx = Math.round((event.clientX - dragState.startClientX) / zoomFactor);
     const dy = Math.round((event.clientY - dragState.startClientY) / zoomFactor);
-    const nextX = dragState.originX + dx;
+    const nextX = dragState.originX + visualDxForTarget(dragState.target, dx);
     const nextY = dragState.originY + dy;
 
     if (isTextLayerKey(dragState.target)) {
@@ -1686,7 +1829,7 @@ export function DesignStudio() {
     setCanvasZoom(100);
     setCanvasPanX(0);
     setCanvasPanY(0);
-    setSelectedObject("name");
+    setSelectedObject("garment");
     setTextLayers(createDefaultTextLayers());
     setDragState(null);
     setBaudRate(9600);
@@ -2081,6 +2224,8 @@ export function DesignStudio() {
             <option value="shadow">Shadow stack</option>
             <option value="arch">Arched name</option>
             <option value="split">Split stripe</option>
+            <option value="double-outline">Double outline</option>
+            <option value="badge">Badge block</option>
           </select>
         </label>
 
@@ -2206,8 +2351,39 @@ export function DesignStudio() {
             <option value="circle">Circle badge</option>
             <option value="star">Star</option>
             <option value="lightning">Lightning</option>
+            <option value="lion">Lion</option>
+            <option value="eagle">Eagle</option>
+            <option value="football">Football</option>
+            <option value="basketball">Basketball</option>
+            <option value="trophy">Trophy</option>
+            <option value="crown">Crown</option>
+            <option value="paw">Paw</option>
           </select>
         </label>
+
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+          <span className="mb-2 block text-sm font-semibold">Insert design templates</span>
+          <div className="grid grid-cols-2 gap-2">
+            {shapePresets.map((preset) => (
+              <button
+                key={preset.label}
+                className="min-h-10 rounded-[8px] bg-[#f6f4ef] px-3 text-left text-xs font-semibold text-slate-700 hover:bg-[#ece7dd]"
+                onClick={() => {
+                  setShapeKind(preset.kind);
+                  setShapeX(preset.x);
+                  setShapeY(preset.y);
+                  setShapeScale(preset.scale);
+                  setShapeRotation(preset.rotation);
+                  setShapeOpacity(90);
+                  setLayers((current) => ({ ...current, shape: true }));
+                  selectDesignObject("shape");
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <RangeControl label="Shape horizontal" value={shapeX} min={70} max={330} onChange={setShapeX} />
         <RangeControl label="Shape vertical" value={shapeY} min={120} max={438} onChange={setShapeY} />
