@@ -6,8 +6,11 @@ import {
   Bike,
   CreditCard,
   LogIn,
+  Mail,
+  MapPin,
   MessageCircle,
   PackageCheck,
+  Phone,
   Search,
   ShieldCheck,
   ShoppingBag,
@@ -122,8 +125,8 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                 <LogIn size={15} /> Login
               </Link>
             )}
-            <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href={`/shop/${shop.slug}/chat`}>
-              <MessageCircle size={15} /> Chat
+            <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href={buyer ? `/shop/${shop.slug}/chat` : `/buyer/login?next=/shop/${shop.slug}/chat`}>
+              <MessageCircle size={15} /> {buyer ? "Chat" : "Login to chat"}
             </Link>
           </div>
         </div>
@@ -186,6 +189,17 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
               <div className="flex items-center justify-between rounded-[8px] bg-[#f6f4ef] px-3 py-2">
                 <span className="font-semibold">Cash hold</span>
                 <span>{shop.cashOrderHoldMinutes} minutes</span>
+              </div>
+              <div className="rounded-[8px] bg-[#f6f4ef] px-3 py-2">
+                <p className="mb-2 font-semibold">Contact details</p>
+                <div className="space-y-2 text-slate-600">
+                  <p className="flex items-center gap-2"><Phone size={14} /> {shop.credentialPhone ?? "Phone not listed"}</p>
+                  <p className="flex items-center gap-2"><Mail size={14} /> {shop.credentialEmail ?? "Email not listed"}</p>
+                  <p className="flex items-center gap-2"><MapPin size={14} /> {shop.credentialAddress ?? `${shop.city ?? "Online"}${shop.country ? `, ${shop.country}` : ""}`}</p>
+                </div>
+                <Link className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white" href={buyer ? `/shop/${shop.slug}/chat` : `/buyer/login?next=/shop/${shop.slug}/chat`}>
+                  <MessageCircle size={15} /> {buyer ? "Message shop" : "Login to message"}
+                </Link>
               </div>
             </div>
           </div>

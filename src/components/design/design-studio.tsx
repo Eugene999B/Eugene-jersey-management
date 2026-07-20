@@ -2615,15 +2615,18 @@ export function DesignStudio() {
               <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas up" onClick={() => setCanvasPanY((current) => clamp(current - 30, -240, 240))}>U</button>
               <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas down" onClick={() => setCanvasPanY((current) => clamp(current + 30, -240, 240))}>D</button>
               <button className="inline-flex h-10 min-w-12 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Pan canvas right" onClick={() => setCanvasPanX((current) => clamp(current + 30, -240, 240))}>R</button>
-              <button className="inline-flex h-10 min-w-14 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Fit canvas" onClick={() => { setCanvasZoom(100); setCanvasPanX(0); setCanvasPanY(0); }}>Fit</button>
+              <button className="inline-flex h-10 min-w-16 items-center justify-center rounded-[8px] bg-white px-2 text-xs font-semibold text-slate-600" title="Center canvas" onClick={() => { setCanvasZoom(100); setCanvasPanX(0); setCanvasPanY(0); }}>Center</button>
             </div>
           </div>
 
-          <div className="relative min-h-[610px] overflow-auto rounded-[8px] border border-[#d7dce2] bg-[#f8fafc] p-3 sm:p-6">
-            <div className="relative min-h-[700px] min-w-[620px]">
+          <div className="relative min-h-[640px] overflow-hidden rounded-[8px] border border-[#d7dce2] bg-[#f8fafc] p-3 sm:p-6">
+            <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-[8px] bg-white/90 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">
+              Drag selected object. Use Center if the sheet moves away.
+            </div>
+            <div className="absolute inset-0">
               <div
-                className={clsx("absolute left-1/2 top-1/2 aspect-[400/520] w-[560px] touch-none rounded-[8px] bg-white shadow-[0_24px_60px_rgb(15_23_42/0.14)] transition-transform duration-150", dragState ? "cursor-grabbing" : "cursor-grab")}
-                style={{ transform: `translate(-50%, -50%) translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasZoom / 100})`, transformOrigin: "center" }}
+                className={clsx("absolute left-1/2 top-1/2 aspect-[400/520] touch-none rounded-[8px] bg-white shadow-[0_24px_60px_rgb(15_23_42/0.14)] transition-transform duration-150", dragState ? "cursor-grabbing" : "cursor-grab")}
+                style={{ width: "min(430px, calc(100% - 32px))", transform: `translate(-50%, -50%) translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasZoom / 100})`, transformOrigin: "center" }}
                 onPointerDown={beginCanvasDrag}
                 onPointerMove={moveCanvasDrag}
                 onPointerUp={endCanvasDrag}

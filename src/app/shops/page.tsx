@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, Search, ShieldCheck, ShoppingBag, Star, Store } from "lucide-react";
+import { Mail, MapPin, MessageCircle, Phone, Search, ShieldCheck, ShoppingBag, Star, Store } from "lucide-react";
 import { ShopVerificationStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
@@ -129,6 +129,18 @@ export default async function ShopsPage({ searchParams }: Props) {
                     {!shop.products.length ? <p className="rounded-[8px] bg-[#f6f4ef] px-3 py-2 text-sm text-slate-500">Catalog coming soon</p> : null}
                   </div>
 
+                  <div className="mt-4 grid gap-2 rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] p-3 text-xs text-slate-600">
+                    <p className="flex items-center gap-2">
+                      <Phone size={13} /> {shop.credentialPhone ?? "Phone available after shop setup"}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Mail size={13} /> {shop.credentialEmail ?? "Email not listed"}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <MapPin size={13} /> {shop.credentialAddress ?? `${shop.city ?? "Online"}${shop.country ? `, ${shop.country}` : ""}`}
+                    </p>
+                  </div>
+
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge>{shop._count.products} products</Badge>
@@ -138,6 +150,9 @@ export default async function ShopsPage({ searchParams }: Props) {
                       Shop <ShoppingBag size={15} />
                     </Link>
                   </div>
+                  <Link className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold text-slate-800" href={buyer ? `/shop/${shop.slug}/chat` : `/buyer/login?next=/shop/${shop.slug}/chat`}>
+                    <MessageCircle size={15} /> {buyer ? "Chat with shop" : "Login to message"}
+                  </Link>
                 </div>
               </article>
             );

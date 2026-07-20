@@ -84,17 +84,23 @@ async function main() {
   await prisma.user.upsert({
     where: { email: "super@ypms.test" },
     update: {
+      adminLoginId: "YPMS-ADMIN-ROOT",
       passwordHash,
       failedLoginCount: 0,
       lockUntil: null,
       isActive: true,
+      staffTitle: "Founder Super Admin",
+      department: "Platform Command",
     },
     create: {
+      adminLoginId: "YPMS-ADMIN-ROOT",
       email: "super@ypms.test",
       passwordHash,
       name: "YPMS Super Admin",
       role: Role.SUPER_ADMIN,
       isActive: true,
+      staffTitle: "Founder Super Admin",
+      department: "Platform Command",
     },
   });
 
@@ -107,24 +113,34 @@ async function main() {
   ] as const;
 
   for (const [email, name, role, phone] of users) {
+    const loginPrefix = email.split("@")[0].toUpperCase().replace(/[^A-Z0-9]/g, "-");
+    const staffTitle = role === Role.OWNER ? "Shop Owner" : role === Role.MANAGER ? "Operations Manager" : role === Role.CASHIER ? "POS Cashier" : role === Role.DESIGNER ? "Design Studio Lead" : "Accounts Officer";
+    const department = role === Role.DESIGNER ? "Production" : role === Role.ACCOUNTANT ? "Finance" : "Store Operations";
+
     await prisma.user.upsert({
       where: { email },
       update: {
+        adminLoginId: `APS-${loginPrefix}`,
         passwordHash,
         shopId: demoShop.id,
         role,
         phone,
+        staffTitle,
+        department,
         failedLoginCount: 0,
         lockUntil: null,
         isActive: true,
       },
       create: {
+        adminLoginId: `APS-${loginPrefix}`,
         email,
         passwordHash,
         name,
         role,
         shopId: demoShop.id,
         phone,
+        staffTitle,
+        department,
       },
     });
   }
@@ -132,20 +148,26 @@ async function main() {
   const supplierUser = await prisma.user.upsert({
     where: { email: "supplier@accra.test" },
     update: {
+      adminLoginId: "APS-SUPPLIER",
       passwordHash,
       shopId: demoShop.id,
       role: Role.SUPPLIER,
+      staffTitle: "Supplier Portal Lead",
+      department: "Supplier Network",
       failedLoginCount: 0,
       lockUntil: null,
       isActive: true,
     },
     create: {
+      adminLoginId: "APS-SUPPLIER",
       email: "supplier@accra.test",
       passwordHash,
       name: "Elite Kits Supply",
       role: Role.SUPPLIER,
       shopId: demoShop.id,
       phone: "+233270000000",
+      staffTitle: "Supplier Portal Lead",
+      department: "Supplier Network",
       isActive: true,
     },
   });

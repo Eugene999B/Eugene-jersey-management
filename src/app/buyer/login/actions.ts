@@ -8,6 +8,7 @@ import { createPhoneCode, consumePhoneCode } from "@/lib/phone-codes";
 import { setBuyerSessionCookie } from "@/lib/buyer-session";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { normalizePhone, phoneRateKey } from "@/lib/phone";
+import { hashPassword, verifyPassword } from "@/lib/auth";
 
 const nextPath = (value: FormDataEntryValue | null) => {
   const raw = String(value ?? "").trim();
@@ -18,6 +19,7 @@ const nextPath = (value: FormDataEntryValue | null) => {
 const requestSchema = z.object({
   name: z.string().min(2).max(80),
   phone: z.string().min(8).max(24),
+  password: z.string().min(6).max(80),
   email: z.string().email().optional(),
   next: z.string().optional(),
 });
@@ -28,11 +30,18 @@ const verifySchema = z.object({
   next: z.string().optional(),
 });
 
+const passwordLoginSchema = z.object({
+  phone: z.string().min(8).max(24),
+  password: z.string().min(1),
+  next: z.string().optional(),
+});
+
 export async function requestBuyerLoginCodeAction(formData: FormData) {
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const parsed = requestSchema.safeParse({
     name: formData.get("name"),
     phone,
+    password: formData.get("password"),
     email: formData.get("email") || undefined,
     next: formData.get("next") || undefined,
   });
@@ -49,17 +58,20 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
     redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
+  const passwordHash = await hashPassword(parsed.data.password);
   const buyer = await prisma.buyerAccount.upsert({
     where: { phone: parsed.data.phone },
     update: {
       name: parsed.data.name,
       email: parsed.data.email,
+      passwordHash,
       isActive: true,
     },
     create: {
       name: parsed.data.name,
       phone: parsed.data.phone,
       email: parsed.data.email,
+      passwordHash,
     },
   });
 
@@ -72,6 +84,47 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
   });
 
   redirect(`/buyer/login?sent=1&phone=${encodeURIComponent(buyer.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+}
+
+export async function buyerPasswordLoginAction(formData: FormData) {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const parsed = passwordLoginSchema.safeParse({
+    phone,
+    password: formData.get("password"),
+    next: formData.get("next") || undefined,
+  });
+
+  if (!parsed.success) redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(nextPath(formData.get("next")))}`);
+
+  try {
+    await enforceRateLimit({
+      key: `buyer-password-login:${phoneRateKey(parsed.data.phone)}`,
+      limit: 8,
+      windowSeconds: 15 * 60,
+    });
+  } catch {
+    redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  }
+
+  const buyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
+  const validPassword = buyer?.passwordHash ? await verifyPassword(parsed.data.password, buyer.passwordHash) : false;
+  if (!buyer || !buyer.isActive || !validPassword) {
+    redirect(`/buyer/login?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  }
+
+  const updated = await prisma.buyerAccount.update({
+    where: { id: buyer.id },
+    data: { lastLoginAt: new Date() },
+  });
+
+  await setBuyerSessionCookie({
+    id: updated.id,
+    phone: updated.phone,
+    email: updated.email,
+    name: updated.name,
+  });
+
+  redirect(nextPath(parsed.data.next ?? null));
 }
 
 export async function verifyBuyerLoginCodeAction(formData: FormData) {

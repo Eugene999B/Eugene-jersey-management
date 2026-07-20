@@ -7,6 +7,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { adminUpdateOrderStatusAction, closeCustomerThreadAction, createGlobalAnnouncementAction, createPlatformWorkerAction, togglePlatformWorkerAction, toggleShopAction, updateReturnIssueAction, updateShopSubscriptionAction } from "@/app/admin/actions";
 import { prisma } from "@/lib/db";
 import { compactNumber, currency, shortDate } from "@/lib/format";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 type AdminPageProps = {
   searchParams?: Promise<{ error?: string }>;
@@ -29,9 +31,11 @@ function adminPermissions(value: unknown) {
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = (await searchParams) ?? {};
+  const session = await requireRole(permissions.superAdmin);
   const staleOrderDate = new Date();
   staleOrderDate.setHours(staleOrderDate.getHours() - 24);
-  const [shops, shopCount, userCount, orderAggregate, debtAggregate, recentLogs, platformWorkers, returnIssues, openThreads, stuckOrders, failedMessages] = await Promise.all([
+  const [currentAdmin, shops, shopCount, userCount, buyerCount, orderAggregate, debtAggregate, recentLogs, platformWorkers, returnIssues, openThreads, stuckOrders, failedMessages, failedLoginEvents] = await Promise.all([
+    prisma.user.findUnique({ where: { id: session.id } }),
     prisma.shop.findMany({
       include: {
         _count: { select: { users: true, products: true, orders: true, debts: true } },
@@ -41,10 +45,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     }),
     prisma.shop.count(),
     prisma.user.count(),
+    prisma.buyerAccount.count(),
     prisma.order.aggregate({ _sum: { totalAmount: true }, _count: true }),
     prisma.debt.aggregate({ _sum: { principalAmount: true, paidAmount: true }, _count: true }),
-    prisma.auditLog.findMany({ include: { user: true, shop: true }, orderBy: { createdAt: "desc" }, take: 10 }),
-    prisma.user.findMany({ where: { role: Role.SUPER_ADMIN, shopId: null }, orderBy: { createdAt: "desc" }, take: 20 }),
+    prisma.auditLog.findMany({ include: { user: true, shop: true }, orderBy: { createdAt: "desc" }, take: 16 }),
+    prisma.user.findMany({
+      where: { role: Role.SUPER_ADMIN, shopId: null },
+      include: {
+        auditLogs: { orderBy: { createdAt: "desc" }, take: 3 },
+        _count: { select: { auditLogs: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
     prisma.returnRequest.findMany({
       where: { status: { in: [ReturnRequestStatus.REQUESTED, ReturnRequestStatus.APPROVED, ReturnRequestStatus.RECEIVED] } },
       include: { shop: true, order: true, buyer: true },
@@ -64,6 +77,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       take: 6,
     }),
     prisma.customerMessage.count({ where: { status: "FAILED" } }),
+    prisma.auditLog.count({ where: { action: "auth.login_failed", createdAt: { gte: staleOrderDate } } }),
   ]);
 
   const openDebt = Number(debtAggregate._sum.principalAmount ?? 0) - Number(debtAggregate._sum.paidAmount ?? 0);
@@ -74,17 +88,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const activeShops = shops.filter((shop) => shop.isActive).length;
   const pastDueShops = shops.filter((shop) => shop.subscriptionStatus === "PAST_DUE").length;
   const supportQueue = returnIssues.length + openThreads.length + stuckOrders.length + failedMessages;
-  const platformCode = process.env.SUPER_ADMIN_ACCESS_CODE ? "Configured in Railway" : "YPMS-ADMIN";
   const atRiskShops = shops
     .filter((shop) => !shop.isActive || shop.subscriptionStatus === "PAST_DUE" || !shop.publicOrderingEnabled || !shop.orders.length)
     .slice(0, 8);
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div id="overview" className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Platform control</h1>
-          <p className="mt-2 text-sm text-slate-600">Manage tenants, activation status, plans, usage, and global messages.</p>
+          <h1 className="text-3xl font-semibold">Platform command center</h1>
+          <p className="mt-2 text-sm text-slate-600">Control shops, admin workers, buyers, support issues, billing, activity, and security from one place.</p>
         </div>
         <Link href="/admin/shops/new" className="inline-flex items-center gap-2 rounded-[8px] bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
           <Plus size={16} /> Create shop
@@ -101,6 +114,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <StatCard label="Shops" value={compactNumber(shopCount)} icon={<Store size={20} />} />
         <StatCard label="Active shops" value={compactNumber(activeShops)} icon={<CheckCircle2 size={20} />} />
         <StatCard label="Users" value={compactNumber(userCount)} />
+        <StatCard label="Buyers" value={compactNumber(buyerCount)} />
         <StatCard label="Orders" value={compactNumber(orderAggregate._count)} />
         <StatCard label="Gross sales" value={currency(orderAggregate._sum.totalAmount?.toString() ?? "0")} icon={<TrendingUp size={20} />} />
         <StatCard label="Open debt" value={currency(openDebt)} icon={<Banknote size={20} />} />
@@ -109,7 +123,41 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <StatCard label="Past due shops" value={compactNumber(pastDueShops)} icon={<AlertTriangle size={20} />} />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+      <section id="security" className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="panel p-5">
+          <div className="flex items-center gap-2">
+            <Shield size={18} className="text-[var(--shop-primary)]" />
+            <h2 className="text-xl font-semibold">Admin security guard</h2>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-[8px] bg-white p-3 text-sm">
+              <p className="text-slate-500">Your Login ID</p>
+              <p className="mt-1 font-semibold">{currentAdmin?.adminLoginId ?? currentAdmin?.email ?? "Current admin"}</p>
+            </div>
+            <div className="rounded-[8px] bg-white p-3 text-sm">
+              <p className="text-slate-500">Self protection</p>
+              <p className="mt-1 font-semibold">Cannot suspend yourself</p>
+            </div>
+            <div className="rounded-[8px] bg-white p-3 text-sm">
+              <p className="text-slate-500">Failed logins today</p>
+              <p className="mt-1 font-semibold">{compactNumber(failedLoginEvents)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="panel p-5">
+          <div className="flex items-center gap-2">
+            <KeyRound size={18} className="text-[var(--shop-primary)]" />
+            <h2 className="text-xl font-semibold">Login policy</h2>
+          </div>
+          <div className="mt-4 space-y-2 text-sm text-slate-600">
+            <p>Public login shows only Login ID first. Super Admin access code is not exposed on the page.</p>
+            <p>Wrong passwords are logged and temporarily locked after repeated attempts.</p>
+            <p>Buyers use a separate marketplace path and never need staff IDs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="support" className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-5">
             <div className="flex items-center gap-2">
@@ -166,16 +214,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </div>
         </div>
 
-        <div className="panel p-5">
+        <div id="workers" className="panel p-5">
           <div className="mb-4 flex items-center gap-2">
             <UserCog size={18} className="text-[var(--shop-primary)]" />
-            <h2 className="text-xl font-semibold">Platform Workers</h2>
+            <h2 className="text-xl font-semibold">Admin staff control</h2>
           </div>
           <form action={createPlatformWorkerAction} className="grid gap-3">
-            <input className="field" name="name" placeholder="Worker name" required />
-            <input className="field" name="email" type="email" placeholder="worker@example.com" required />
-            <input className="field" name="phone" placeholder="Phone optional" />
-            <input className="field" name="password" type="text" placeholder="Temporary password" defaultValue="Ghana123" required />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input className="field" name="name" placeholder="Worker full name" required />
+              <input className="field uppercase" name="adminLoginId" placeholder="Login ID, e.g. ADM-SUPPORT-01" />
+              <input className="field" name="email" type="email" placeholder="worker@example.com" required />
+              <input className="field" name="phone" placeholder="Phone" />
+              <input className="field" name="staffTitle" placeholder="Role/title" />
+              <input className="field" name="department" placeholder="Department" />
+              <input className="field" name="emergencyContact" placeholder="Emergency contact" />
+              <input className="field" name="password" type="text" placeholder="Temporary password" defaultValue="Ghana123" required />
+            </div>
+            <textarea className="field min-h-20" name="staffNotes" placeholder="Internal notes, assigned queues, training status, or restrictions" />
             <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-white p-3 text-sm">
               {adminPermissionOptions.map(([key, label]) => (
                 <label key={key} className="flex items-center gap-2">
@@ -195,17 +250,36 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <p className="font-semibold">{worker.name}</p>
                       <p className="text-slate-500">{worker.email}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-600">ID: {worker.adminLoginId ?? "Not assigned"}</p>
+                      <p className="text-xs text-slate-500">{worker.staffTitle ?? "Admin worker"}{worker.department ? ` - ${worker.department}` : ""}</p>
                     </div>
                     <form action={togglePlatformWorkerAction}>
                       <input type="hidden" name="userId" value={worker.id} />
-                      <Button variant={worker.isActive ? "outline" : "primary"} className="min-h-8 px-2 py-1 text-xs">{worker.isActive ? "Suspend" : "Activate"}</Button>
+                      <Button disabled={worker.id === session.id} variant={worker.isActive ? "outline" : "primary"} className="min-h-8 px-2 py-1 text-xs">
+                        {worker.id === session.id ? "Protected" : worker.isActive ? "Suspend" : "Activate"}
+                      </Button>
                     </form>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                    <p>Last login: <span className="font-semibold text-slate-700">{worker.lastLoginAt ? shortDate(worker.lastLoginAt) : "Never"}</span></p>
+                    <p>Actions: <span className="font-semibold text-slate-700">{compactNumber(worker._count.auditLogs)}</span></p>
+                    <p>Phone: <span className="font-semibold text-slate-700">{worker.phone ?? "None"}</span></p>
+                    <p>Emergency: <span className="font-semibold text-slate-700">{worker.emergencyContact ?? "None"}</span></p>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {(workerPermissions.length ? workerPermissions : ["full-access"]).map((permission) => (
                       <Badge key={permission} tone={permission === "full-access" ? "green" : "blue"}>{permission}</Badge>
                     ))}
                   </div>
+                  {worker.auditLogs.length ? (
+                    <div className="mt-2 rounded-[8px] bg-[#f6f4ef] p-2 text-xs text-slate-600">
+                      <p className="font-semibold text-slate-800">Recent actions</p>
+                      {worker.auditLogs.map((log) => (
+                        <p key={log.id} className="mt-1">{log.action} - {shortDate(log.createdAt)}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {worker.staffNotes ? <p className="mt-2 rounded-[8px] bg-[#f8fafc] p-2 text-xs text-slate-600">{worker.staffNotes}</p> : null}
                 </div>
               );
             })}
@@ -213,7 +287,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+      <section id="shops" className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-5">
             <h2 className="text-xl font-semibold">Tenant shops</h2>
@@ -300,7 +374,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+      <section id="billing" className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
         <div className="panel p-5">
           <h2 className="text-xl font-semibold">Subscription update</h2>
           <p className="mt-2 text-sm text-slate-500">Change plan, billing cycle, price, renewal date, or payment status.</p>
@@ -331,7 +405,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </form>
         </div>
 
-        <div className="panel overflow-hidden">
+        <div id="activity" className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-5">
             <div className="flex items-center gap-2">
               <Activity size={18} className="text-[var(--shop-primary)]" />
@@ -349,15 +423,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-3">
-        <div className="panel p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <KeyRound size={18} className="text-[var(--shop-primary)]" />
-            <h2 className="text-xl font-semibold">Admin Access Code</h2>
-          </div>
-          <p className="rounded-[8px] bg-white p-3 text-sm font-semibold">{platformCode}</p>
-          <p className="mt-3 text-sm text-slate-500">Set SUPER_ADMIN_ACCESS_CODE in Railway to replace the default code.</p>
-        </div>
+      <section id="settings" className="grid gap-5 xl:grid-cols-2">
         <div className="panel p-5">
           <div className="mb-4 flex items-center gap-2">
             <Settings size={18} className="text-[var(--shop-primary)]" />
@@ -366,8 +432,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <div className="space-y-2 text-sm text-slate-600">
             <p>Failed messages: <span className="font-semibold text-slate-950">{failedMessages}</span></p>
             <p>Worker access: <span className="font-semibold text-slate-950">permission scoped</span></p>
-            <p>Shop login: <span className="font-semibold text-slate-950">staff ID required</span></p>
-            <p>Admin login: <span className="font-semibold text-slate-950">special code required</span></p>
+            <p>Shop login: <span className="font-semibold text-slate-950">Login ID detection</span></p>
+            <p>Admin login: <span className="font-semibold text-slate-950">hidden role detection</span></p>
+            <p>Buyer login: <span className="font-semibold text-slate-950">phone password + SMS recovery</span></p>
           </div>
         </div>
         <div className="panel p-5">

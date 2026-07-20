@@ -8,12 +8,12 @@ import { setSessionCookie, verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 
 const loginSchema = z.object({
-  email: z.string().email().transform((value) => value.toLowerCase()),
+  loginId: z.string().optional(),
+  email: z.string().email().transform((value) => value.toLowerCase()).optional(),
   password: z.string().min(1),
   shopLoginId: z.string().optional(),
-  adminCode: z.string().optional(),
   next: z.string().optional(),
-});
+}).refine((value) => value.email || value.loginId, { path: ["loginId"] });
 
 function safeNext(value: string | undefined, role: Role) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -36,17 +36,39 @@ function safeNext(value: string | undefined, role: Role) {
   return value;
 }
 
-function validSuperAdminCode(value: string | undefined) {
-  const expected = (process.env.SUPER_ADMIN_ACCESS_CODE ?? "YPMS-ADMIN").trim().toUpperCase();
-  return value?.trim().toUpperCase() === expected;
+function cleanLoginId(value: string | undefined) {
+  return value?.trim() ?? "";
+}
+
+async function findLoginUser(input: { email?: string; loginId?: string }) {
+  if (input.email) {
+    return prisma.user.findUnique({
+      where: { email: input.email },
+      include: { shop: true },
+    });
+  }
+
+  const loginId = cleanLoginId(input.loginId);
+  if (!loginId) return null;
+
+  return prisma.user.findFirst({
+    where: {
+      OR: [
+        { adminLoginId: loginId.toUpperCase() },
+        { email: loginId.toLowerCase() },
+        { phone: loginId },
+      ],
+    },
+    include: { shop: true },
+  });
 }
 
 export async function loginAction(formData: FormData) {
   const parsed = loginSchema.safeParse({
+    loginId: formData.get("loginId") || undefined,
     email: formData.get("email"),
     password: formData.get("password"),
     shopLoginId: formData.get("shopLoginId") || undefined,
-    adminCode: formData.get("adminCode") || undefined,
     next: formData.get("next") || undefined,
   });
 
@@ -54,35 +76,42 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=invalid");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    include: { shop: true },
-  });
+  const user = await findLoginUser(parsed.data);
 
   if (!user || !user.isActive) {
     redirect("/login?error=invalid");
   }
 
+  if (user.lockUntil && user.lockUntil > new Date()) {
+    redirect("/login?error=locked");
+  }
+
   const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
 
   if (!validPassword) {
+    const failedLoginCount = user.failedLoginCount + 1;
+    const shouldLock = failedLoginCount >= 6;
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        failedLoginCount: 0,
-        lockUntil: null,
+        failedLoginCount,
+        lockUntil: shouldLock ? new Date(Date.now() + 10 * 60 * 1000) : null,
       },
     });
-    redirect("/login?error=invalid");
-  }
-
-  if (user.role === Role.SUPER_ADMIN && !validSuperAdminCode(parsed.data.adminCode)) {
-    redirect("/login?error=admin-code");
+    await audit({
+      shopId: user.shopId,
+      userId: user.id,
+      action: "auth.login_failed",
+      entityType: "User",
+      entityId: user.id,
+      metadata: { failedLoginCount },
+    });
+    redirect(`/login?error=${shouldLock ? "locked" : "invalid"}`);
   }
 
   const needsShopId = user.shopId && user.role !== Role.SUPPLIER;
   if (needsShopId) {
-    const enteredShopId = parsed.data.shopLoginId?.trim().toUpperCase();
+    const enteredShopId = (parsed.data.shopLoginId || parsed.data.loginId)?.trim().toUpperCase();
     const validShopIds = [user.shop?.staffLoginId, user.shop?.networkCode, user.shop?.slug]
       .filter(Boolean)
       .map((value) => String(value).toUpperCase());

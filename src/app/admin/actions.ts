@@ -325,30 +325,63 @@ export async function createGlobalAnnouncementAction(formData: FormData) {
 
 const platformWorkerSchema = z.object({
   name: z.string().min(2),
+  adminLoginId: z.string().optional(),
   email: z.string().email().transform((value) => value.toLowerCase()),
   phone: z.string().optional(),
+  staffTitle: z.string().optional(),
+  department: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  staffNotes: z.string().optional(),
   password: z.string().min(6),
   adminPermissions: z.array(z.enum(platformPermissionValues)).min(1),
 });
+
+function platformWorkerLoginId(name: string, provided?: string) {
+  const clean = provided?.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  if (clean && clean.length >= 5) return clean;
+
+  const prefix = name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+
+  return `ADM-${prefix || "STAFF"}-${nanoid(4).toUpperCase()}`;
+}
 
 export async function createPlatformWorkerAction(formData: FormData) {
   const session = await requirePlatformPermission("workers");
   const parsed = platformWorkerSchema.safeParse({
     name: formData.get("name"),
+    adminLoginId: formData.get("adminLoginId") || undefined,
     email: formData.get("email"),
     phone: formData.get("phone") || undefined,
+    staffTitle: formData.get("staffTitle") || undefined,
+    department: formData.get("department") || undefined,
+    emergencyContact: formData.get("emergencyContact") || undefined,
+    staffNotes: formData.get("staffNotes") || undefined,
     password: formData.get("password"),
     adminPermissions: formData.getAll("adminPermissions").map(String),
   });
 
   if (!parsed.success) redirect("/admin?error=worker");
 
+  const existingWorker = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
+  if (existingWorker?.id === session.id) redirect("/admin?error=worker");
+
   const passwordHash = await hashPassword(parsed.data.password);
+  const adminLoginId = platformWorkerLoginId(parsed.data.name, parsed.data.adminLoginId);
   const worker = await prisma.user.upsert({
     where: { email: parsed.data.email },
     update: {
       name: parsed.data.name,
+      adminLoginId,
       phone: parsed.data.phone,
+      staffTitle: parsed.data.staffTitle,
+      department: parsed.data.department,
+      emergencyContact: parsed.data.emergencyContact,
+      staffNotes: parsed.data.staffNotes,
       passwordHash,
       role: Role.SUPER_ADMIN,
       shopId: null,
@@ -359,8 +392,13 @@ export async function createPlatformWorkerAction(formData: FormData) {
     },
     create: {
       name: parsed.data.name,
+      adminLoginId,
       email: parsed.data.email,
       phone: parsed.data.phone,
+      staffTitle: parsed.data.staffTitle,
+      department: parsed.data.department,
+      emergencyContact: parsed.data.emergencyContact,
+      staffNotes: parsed.data.staffNotes,
       passwordHash,
       role: Role.SUPER_ADMIN,
       adminPermissions: parsed.data.adminPermissions,
@@ -373,7 +411,7 @@ export async function createPlatformWorkerAction(formData: FormData) {
     action: "admin.platform_worker_saved",
     entityType: "User",
     entityId: worker.id,
-    metadata: { email: worker.email, adminPermissions: parsed.data.adminPermissions },
+    metadata: { email: worker.email, adminLoginId, adminPermissions: parsed.data.adminPermissions, department: parsed.data.department },
   });
 
   revalidatePath("/admin");

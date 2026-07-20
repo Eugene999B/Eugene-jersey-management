@@ -298,10 +298,15 @@ model Shop {
 model User {
   id               String    @id @default(cuid())
   shopId           String?
+  adminLoginId     String?   @unique
   email            String    @unique
   passwordHash     String
   name             String
   phone            String?
+  staffTitle       String?
+  department       String?
+  emergencyContact String?
+  staffNotes       String?
   role             Role
   adminPermissions Json      @default("[]")
   isActive         Boolean   @default(true)

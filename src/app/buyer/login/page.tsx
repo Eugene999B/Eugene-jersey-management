@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, MessageSquareText, Phone, ShieldCheck, Store } from "lucide-react";
-import { requestBuyerLoginCodeAction, verifyBuyerLoginCodeAction } from "@/app/buyer/login/actions";
+import { buyerPasswordLoginAction, requestBuyerLoginCodeAction, verifyBuyerLoginCodeAction } from "@/app/buyer/login/actions";
 
 type Props = {
   searchParams?: Promise<{ sent?: string; phone?: string; next?: string; error?: string }>;
@@ -65,16 +65,33 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
               </div>
             ) : null}
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4">
+              <form action={buyerPasswordLoginAction} className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Phone size={17} className="text-[#0f766e]" />
+                  <h3 className="font-semibold">Phone and password</h3>
+                </div>
+                <input type="hidden" name="next" value={next} />
+                <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                  <input className="field" name="phone" placeholder="+233..." defaultValue={params.phone ?? ""} required />
+                  <input className="field" name="password" type="password" placeholder="Password" required />
+                  <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">
+                    Sign in <ArrowRight size={16} />
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid gap-4 lg:grid-cols-2">
               <form action={requestBuyerLoginCodeAction} className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <MessageSquareText size={17} className="text-[#0f766e]" />
-                  <h3 className="font-semibold">Send code</h3>
+                  <h3 className="font-semibold">SMS setup or recovery</h3>
                 </div>
                 <input type="hidden" name="next" value={next} />
                 <div className="space-y-3">
                   <input className="field" name="name" placeholder="Full name" required />
                   <input className="field" name="phone" placeholder="+233..." defaultValue={params.phone ?? ""} required />
+                  <input className="field" name="password" type="password" placeholder="New password" required />
                   <input className="field" name="email" type="email" placeholder="Email optional" />
                   <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">
                     Send SMS <ArrowRight size={16} />
@@ -96,6 +113,7 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
                   </button>
                 </div>
               </form>
+              </div>
             </div>
 
             {params.sent ? (
