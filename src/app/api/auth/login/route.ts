@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
   const needsShopId = user.shopId && user.role !== Role.SUPPLIER;
   if (needsShopId) {
     const enteredShopId = (parsed.data.shopLoginId || parsed.data.loginId)?.trim().toUpperCase();
-    const validShopIds = [user.shop?.staffLoginId, user.shop?.networkCode, user.shop?.slug]
+    const validShopIds = [user.adminLoginId, user.shop?.staffLoginId, user.shop?.networkCode, user.shop?.slug]
       .filter(Boolean)
       .map((value) => String(value).toUpperCase());
     if (!enteredShopId || !validShopIds.includes(enteredShopId)) {

@@ -38,6 +38,8 @@ Staff/admin/supplier users use `/login`:
 3. User enters password.
 4. Redirect is role-safe.
 
+Shop staff can sign in with their own assigned worker Login ID, such as `APS-OWNER`, or through the shop workspace ID, such as `APS-STAFF`, followed by staff email and password.
+
 Current seeded login IDs:
 
 - Super Admin Login ID: `YPMS-ADMIN-ROOT`
