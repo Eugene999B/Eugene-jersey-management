@@ -3,7 +3,9 @@ import type { Role } from "@prisma/client";
 import type { SessionUser } from "@/lib/rbac";
 
 export const SESSION_COOKIE = "sports_shop_session";
-export const SESSION_TTL_SECONDS = 60 * 60 * 10;
+// Keep staff signed in across normal shop usage and refresh this window on every
+// authenticated dashboard request. Explicit logout still invalidates the cookie.
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getSecret() {
   const secret = process.env.SESSION_SECRET;

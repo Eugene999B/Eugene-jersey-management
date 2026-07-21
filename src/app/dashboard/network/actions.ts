@@ -20,7 +20,7 @@ const linkSchema = z.object({
 
 export async function linkShopByCodeAction(formData: FormData) {
   const session = await requireRole(permissions.network);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = linkSchema.safeParse({ partnerCode: formData.get("partnerCode") });
   if (!parsed.success) redirect("/dashboard/network?error=code");
@@ -66,7 +66,7 @@ const networkOrderSchema = z.object({
 
 export async function createNetworkOrderAction(formData: FormData) {
   const session = await requireRole(permissions.network);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = networkOrderSchema.safeParse({
     partnerShopId: formData.get("partnerShopId"),

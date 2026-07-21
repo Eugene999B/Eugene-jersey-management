@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessDashboardPath } from "@/lib/dashboard-access";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
+import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySessionToken } from "@/lib/session-token";
+
+async function withRefreshedSession(response: NextResponse, session: NonNullable<Awaited<ReturnType<typeof verifySessionToken>>>) {
+  response.cookies.set(SESSION_COOKIE, await signSession(session), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: SESSION_TTL_SECONDS,
+    path: "/",
+  });
+  return response;
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -17,30 +28,30 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (pathname.startsWith("/admin") && session?.role !== "SUPER_ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
+  if (pathname.startsWith("/admin") && session && session.role !== "SUPER_ADMIN") {
+    return withRefreshedSession(NextResponse.redirect(new URL("/dashboard?error=permission", request.url)), session);
   }
 
   if (pathname.startsWith("/dashboard") && session?.role === "SUPER_ADMIN") {
-    return NextResponse.redirect(new URL("/admin", request.url));
+    return withRefreshedSession(NextResponse.redirect(new URL("/admin", request.url)), session);
   }
 
   if (pathname.startsWith("/dashboard") && session?.role === "SUPPLIER") {
-    return NextResponse.redirect(new URL("/supplier", request.url));
+    return withRefreshedSession(NextResponse.redirect(new URL("/supplier", request.url)), session);
   }
 
   if (pathname.startsWith("/dashboard") && !canAccessDashboardPath(pathname, session?.role)) {
     const url = new URL("/dashboard", request.url);
     url.searchParams.set("error", "permission");
     url.searchParams.set("from", pathname);
-    return NextResponse.redirect(url);
+    return withRefreshedSession(NextResponse.redirect(url), session!);
   }
 
-  if (pathname.startsWith("/supplier") && session?.role !== "SUPPLIER") {
-    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
+  if (pathname.startsWith("/supplier") && session && session.role !== "SUPPLIER") {
+    return withRefreshedSession(NextResponse.redirect(new URL("/dashboard?error=permission", request.url)), session);
   }
 
-  return NextResponse.next();
+  return session ? withRefreshedSession(NextResponse.next(), session) : NextResponse.next();
 }
 
 export const config = {

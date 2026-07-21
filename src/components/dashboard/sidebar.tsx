@@ -12,7 +12,7 @@ const navItems = [
   { section: "Run shop", key: "dashboard", href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { section: "Run shop", key: "pos", href: "/dashboard/pos", label: "Sales & POS", icon: ShoppingCart },
   { section: "Run shop", key: "orders", href: "/dashboard/orders", label: "Orders & production", icon: ClipboardList },
-  { section: "Run shop", key: "designs", href: "/dashboard/designs", label: "Transfer studio", icon: Palette },
+  { section: "Run shop", key: "designs", href: "/dashboard/designs", label: "Design Studio", icon: Palette },
   { section: "Customers", key: "customers", href: "/dashboard/customers", label: "Customer records", icon: Users },
   { section: "Customers", key: "debts", href: "/dashboard/debts", label: "Credit & debts", icon: CreditCard },
   { section: "Customers", key: "messages", href: "/dashboard/messages", label: "Messages", icon: MessageCircle },

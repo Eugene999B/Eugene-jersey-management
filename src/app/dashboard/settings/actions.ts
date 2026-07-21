@@ -35,7 +35,7 @@ const schema = z.object({
 
 export async function updateShopSettingsAction(formData: FormData) {
   const session = await requireRole(permissions.settings);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = schema.safeParse({
     name: formData.get("name"),

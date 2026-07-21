@@ -28,10 +28,15 @@ function dateBounds(value: Date) {
 
 async function expectedTotals(shopId: string, businessDate: Date) {
   const { start, end } = dateBounds(businessDate);
-  const orders = await prisma.order.findMany({
-    where: { shopId, createdAt: { gte: start, lt: end }, status: { not: "CANCELLED" } },
-    include: { payments: true },
-  });
+  const [orders, debtPayments] = await Promise.all([
+    prisma.order.findMany({
+      where: { shopId, createdAt: { gte: start, lt: end }, status: { not: "CANCELLED" } },
+      include: { payments: true },
+    }),
+    prisma.debtPayment.findMany({
+      where: { shopId, receivedAt: { gte: start, lt: end } },
+    }),
+  ]);
 
   const totals = {
     expectedCash: 0,
@@ -40,6 +45,10 @@ async function expectedTotals(shopId: string, businessDate: Date) {
     creditSales: 0,
     totalSales: 0,
     orderCount: orders.length,
+    debtCollections: 0,
+    debtCash: 0,
+    debtCard: 0,
+    debtMomo: 0,
   };
 
   orders.forEach((order) => {
@@ -53,12 +62,26 @@ async function expectedTotals(shopId: string, businessDate: Date) {
     });
   });
 
+  debtPayments.forEach((payment) => {
+    const amount = Number(payment.amount);
+    totals.debtCollections += amount;
+    if (payment.method === PaymentMethod.CASH) totals.debtCash += amount;
+    if (payment.method === PaymentMethod.CARD) totals.debtCard += amount;
+    if (payment.method === PaymentMethod.MOMO) totals.debtMomo += amount;
+  });
+
+  // Debt collections are cash inflows, not new sales. Include them in tender
+  // reconciliation while keeping totalSales limited to orders for this day.
+  totals.expectedCash += totals.debtCash;
+  totals.expectedCard += totals.debtCard;
+  totals.expectedMomo += totals.debtMomo;
+
   return totals;
 }
 
 export async function closeDayAction(formData: FormData) {
   const session = await requireRole(permissions.closing);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = closingSchema.safeParse({
     businessDate: formData.get("businessDate"),
@@ -95,6 +118,10 @@ export async function closeDayAction(formData: FormData) {
       totalSales: expected.totalSales,
       expenses: parsed.data.expenses,
       refunds: parsed.data.refunds,
+      debtCollections: expected.debtCollections,
+      debtCash: expected.debtCash,
+      debtCard: expected.debtCard,
+      debtMomo: expected.debtMomo,
       orderCount: expected.orderCount,
       status,
       notes: parsed.data.notes,
@@ -113,6 +140,10 @@ export async function closeDayAction(formData: FormData) {
       totalSales: expected.totalSales,
       expenses: parsed.data.expenses,
       refunds: parsed.data.refunds,
+      debtCollections: expected.debtCollections,
+      debtCash: expected.debtCash,
+      debtCard: expected.debtCard,
+      debtMomo: expected.debtMomo,
       orderCount: expected.orderCount,
       status,
       notes: parsed.data.notes,

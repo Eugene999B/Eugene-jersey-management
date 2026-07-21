@@ -2,7 +2,7 @@ import { Plus, Search, SlidersHorizontal } from "lucide-react";
 import { ProductCondition } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createCategoryAction, createProductAction } from "@/app/dashboard/catalog/actions";
+import { createCategoryAction, createProductAction, updateCategoryAction, updateProductAction } from "@/app/dashboard/catalog/actions";
 import { prisma } from "@/lib/db";
 import { currency, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
@@ -17,6 +17,12 @@ function stockTone(stock: number, threshold: number) {
   if (stock <= 0) return "red";
   if (stock <= threshold) return "orange";
   return "green";
+}
+
+function attributeValue(value: unknown, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const found = (value as Record<string, unknown>)[key];
+  return typeof found === "string" ? found : "";
 }
 
 const productTypes = [
@@ -165,9 +171,20 @@ export default async function CatalogPage({ searchParams }: Props) {
             </select>
             <Button variant="outline" className="w-full" disabled={!canWrite}>Create category</Button>
           </form>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 space-y-2">
             {categories.map((category) => (
-              <Badge key={category.id}>{category.name}</Badge>
+              <details key={category.id} className="rounded-[8px] border border-[#ded8cd] bg-white p-3">
+                <summary className="cursor-pointer text-sm font-semibold">{category.name} <span className="text-xs font-normal text-slate-500">— edit</span></summary>
+                <form action={updateCategoryAction} className="mt-3 space-y-2">
+                  <input type="hidden" name="categoryId" value={category.id} />
+                  <input className="field" name="name" defaultValue={category.name} disabled={!canWrite} required />
+                  <select className="field" name="attributeTemplateId" defaultValue={category.attributeTemplateId ?? ""} disabled={!canWrite}>
+                    <option value="">No template</option>
+                    {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                  </select>
+                  <Button variant="outline" className="w-full" disabled={!canWrite}>Save category</Button>
+                </form>
+              </details>
             ))}
           </div>
         </div>
@@ -246,6 +263,59 @@ export default async function CatalogPage({ searchParams }: Props) {
                     </div>
                   ))}
                 </div>
+                {canWrite && product.variants[0] ? (
+                  <details className="mt-4 rounded-[8px] border border-[#ded8cd] bg-[#f9f8f5] p-3">
+                    <summary className="cursor-pointer text-sm font-semibold">Edit product, price and stock</summary>
+                    <form action={updateProductAction} encType="multipart/form-data" className="mt-3 space-y-2">
+                      <input type="hidden" name="productId" value={product.id} />
+                      <input type="hidden" name="variantId" value={product.variants[0].id} />
+                      <input className="field" name="name" defaultValue={product.name} placeholder="Product name" required />
+                      <textarea className="field min-h-20" name="description" defaultValue={product.description ?? ""} placeholder="Description" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <select className="field" name="categoryId" defaultValue={product.categoryId} required>
+                          {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                        </select>
+                        <input className="field" name="brand" defaultValue={product.brand ?? ""} placeholder="Brand" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <select className="field" name="productType" defaultValue={product.productType ?? ""}>
+                          <option value="">Product type</option>
+                          {productTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                        <select className="field" name="sportType" defaultValue={product.sportType ?? ""}>
+                          <option value="">Sport</option>
+                          {sportTypes.map((sport) => <option key={sport} value={sport}>{sport}</option>)}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className="field" name="teamName" defaultValue={product.teamName ?? ""} placeholder="Team" />
+                        <select className="field" name="condition" defaultValue={product.condition}>{Object.values(ProductCondition).map((condition) => <option key={condition} value={condition}>{titleCase(condition)}</option>)}</select>
+                      </div>
+                      <input className="field" name="sizeGuide" defaultValue={Array.isArray(product.sizeGuide) ? product.sizeGuide.join(", ") : ""} placeholder="Sizes: S, M, L, XL" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className="field" name="size" defaultValue={attributeValue(product.variants[0].attributes, "size")} placeholder="Default size" />
+                        <input className="field" name="color" defaultValue={attributeValue(product.variants[0].attributes, "color")} placeholder="Color" />
+                      </div>
+                      <input className="field" name="equipmentGroup" defaultValue={attributeValue(product.variants[0].attributes, "equipmentGroup")} placeholder="Equipment group" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className="field" name="basePrice" type="number" min="0.01" step="0.01" defaultValue={product.basePrice.toString()} required />
+                        <input className="field" name="lowStockThreshold" type="number" min="0" defaultValue={product.lowStockThreshold} required />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className="field" name="sku" defaultValue={product.variants[0].sku} required />
+                        <input className="field" name="stockQty" type="number" min="0" defaultValue={product.isService ? 0 : product.variants[0].stockQty} required />
+                      </div>
+                      <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-2 text-xs"><span className="mb-1 block font-semibold">Replace photo (optional)</span><input name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif" /></label>
+                      <input className="field" name="imageUrl" type="url" placeholder="Or replace with image URL" />
+                      <div className="grid gap-1 text-xs">
+                        <label className="flex gap-2"><input name="isPersonalizable" type="checkbox" defaultChecked={product.isPersonalizable} /> Personalizable</label>
+                        <label className="flex gap-2"><input name="isService" type="checkbox" defaultChecked={product.isService} /> Service item</label>
+                        <label className="flex gap-2"><input name="isRentable" type="checkbox" defaultChecked={product.isRentable} /> Rental item</label>
+                      </div>
+                      <Button className="w-full">Save product changes</Button>
+                    </form>
+                  </details>
+                ) : null}
               </article>
             );
           })}

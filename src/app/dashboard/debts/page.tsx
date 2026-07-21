@@ -7,8 +7,19 @@ import { createDebtAction, recordDebtPaymentAction, sendDebtReminderAction } fro
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { CustomerSearchSelect } from "@/components/customers/customer-search-select";
 
-export default async function DebtsPage() {
+type Props = { searchParams?: Promise<{ error?: string }> };
+
+const debtErrors: Record<string, string> = {
+  invalid: "Choose a customer and enter a valid debt amount and due date.",
+  customer: "That customer could not be found in this shop.",
+  payment: "Enter a valid payment amount and choose cash, card, or mobile money.",
+  "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",
+};
+
+export default async function DebtsPage({ searchParams }: Props) {
+  const params = (await searchParams) ?? {};
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
@@ -16,7 +27,7 @@ export default async function DebtsPage() {
     prisma.customer.findMany({ where: { shopId: shop.id }, orderBy: { name: "asc" } }),
     prisma.debt.findMany({
       where: { shopId: shop.id },
-      include: { customer: true, installments: { orderBy: { dueDate: "asc" } } },
+      include: { customer: true, installments: { orderBy: { dueDate: "asc" } }, payments: { orderBy: { receivedAt: "desc" }, take: 3 } },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }],
       take: 80,
     }),
@@ -29,6 +40,7 @@ export default async function DebtsPage() {
 
   return (
     <div className="space-y-5">
+      {params.error && debtErrors[params.error] ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{debtErrors[params.error]}</div> : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Debts and installments</h1>
@@ -50,12 +62,7 @@ export default async function DebtsPage() {
             <h2 className="text-lg font-semibold">Create debt plan</h2>
           </div>
           <form action={createDebtAction} className="space-y-3">
-            <select className="field" name="customerId" required>
-              <option value="">Select customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>{customer.name}</option>
-              ))}
-            </select>
+            <CustomerSearchSelect customers={customers.map(({ id, name, phone, email }) => ({ id, name, phone, email }))} />
             <div className="grid grid-cols-2 gap-3">
               <input className="field" name="principalAmount" type="number" min="1" step="0.01" placeholder="Amount owed" required />
               <input className="field" name="installments" type="number" min="1" max="12" defaultValue="1" placeholder="Installments" />
@@ -94,12 +101,22 @@ export default async function DebtsPage() {
                       ))}
                     </div>
                     {debt.notes ? <p className="mt-3 text-sm text-slate-600">{debt.notes}</p> : null}
+                    {debt.payments.length ? <div className="mt-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent collections</p><div className="mt-2 flex flex-wrap gap-2">{debt.payments.map((payment) => <span key={payment.id} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{titleCase(payment.method)} · {currency(payment.amount.toString(), shop.currency)}</span>)}</div></div> : null}
                   </div>
                   <div className="space-y-2">
-                    <form action={recordDebtPaymentAction} className="flex gap-2">
+                    <form action={recordDebtPaymentAction} className="rounded-[8px] border border-[#ded8cd] bg-[#f9f8f5] p-3">
                       <input type="hidden" name="debtId" value={debt.id} />
-                      <input className="field min-w-0" name="amount" type="number" min="1" step="0.01" placeholder="Payment" />
-                      <Button variant="outline">Record</Button>
+                      <p className="mb-2 text-sm font-semibold">Receive debt payment</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className="field min-w-0" name="amount" type="number" min="0.01" max={balance} step="0.01" placeholder="Amount received" required />
+                        <select className="field" name="method" defaultValue="CASH" required>
+                          <option value="CASH">Cash</option>
+                          <option value="CARD">Card</option>
+                          <option value="MOMO">Mobile money</option>
+                        </select>
+                      </div>
+                      <input className="field mt-2" name="reference" placeholder="Reference (optional)" />
+                      <Button className="mt-2 w-full" variant="outline">Post collection</Button>
                     </form>
                     <div className="grid grid-cols-2 gap-2">
                       {[NotificationChannel.SMS, NotificationChannel.WHATSAPP].map((channel) => (

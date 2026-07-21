@@ -1,6 +1,6 @@
 import { Palette, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { ProductionStudio } from "@/components/design/production-studio";
+import { DesignStudio } from "@/components/design/production-studio";
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
 import { shortDate, titleCase } from "@/lib/format";
@@ -20,13 +20,13 @@ export default async function DesignsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Transfer production studio</h1>
-          <p className="mt-2 text-sm text-slate-500">Prepare artwork on the material, send it through the correct output workflow, then apply it with the heat press.</p>
+          <h1 className="text-2xl font-semibold">Design Studio</h1>
+          <p className="mt-2 text-sm text-slate-500">Create layered artwork directly on the production material, prepare cut controls, and send it through the correct output workflow before heat application.</p>
         </div>
         <Badge tone="blue"><ShieldCheck size={14} /> Production-safe workflow</Badge>
       </div>
 
-      <ProductionStudio />
+      <DesignStudio />
 
       <section className="panel overflow-hidden">
         <div className="border-b border-[#ded8cd] p-5">

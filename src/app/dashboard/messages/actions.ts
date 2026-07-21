@@ -21,7 +21,7 @@ const messageSchema = z.object({
 
 export async function sendMessageAction(formData: FormData) {
   const session = await requireRole(permissions.messages);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = messageSchema.safeParse({
     customerId: formData.get("customerId") || undefined,

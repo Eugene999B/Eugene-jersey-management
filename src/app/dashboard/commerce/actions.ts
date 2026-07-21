@@ -34,7 +34,7 @@ const returnSchema = z.object({
 
 export async function createDeliveryZoneAction(formData: FormData) {
   const session = await requireRole(permissions.commerce);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = zoneSchema.safeParse({
     name: formData.get("name"),
@@ -77,7 +77,7 @@ export async function createDeliveryZoneAction(formData: FormData) {
 
 export async function createCouponAction(formData: FormData) {
   const session = await requireRole(permissions.commerce);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = couponSchema.safeParse({
     code: String(formData.get("code") ?? "").toUpperCase(),
@@ -124,7 +124,7 @@ export async function createCouponAction(formData: FormData) {
 
 export async function updateReturnRequestAction(formData: FormData) {
   const session = await requireRole(permissions.commerce);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = returnSchema.safeParse({
     requestId: formData.get("requestId"),

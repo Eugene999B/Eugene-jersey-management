@@ -29,7 +29,7 @@ function purchaseOrderNumber() {
 
 export async function createSupplierAction(formData: FormData) {
   const session = await requireRole(permissions.suppliers);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = supplierSchema.safeParse({
     name: formData.get("name"),
@@ -108,7 +108,7 @@ const supplierOrderSchema = z.object({
 
 export async function createSupplierOrderAction(formData: FormData) {
   const session = await requireRole(permissions.suppliers);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = supplierOrderSchema.safeParse({
     supplierId: formData.get("supplierId"),
@@ -160,7 +160,7 @@ export async function createSupplierOrderAction(formData: FormData) {
 
 export async function receiveSupplierOrderAction(formData: FormData) {
   const session = await requireRole(permissions.suppliers);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const orderId = String(formData.get("orderId") ?? "");
   const order = await prisma.supplierOrder.findFirstOrThrow({

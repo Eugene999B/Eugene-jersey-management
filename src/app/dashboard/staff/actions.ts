@@ -25,7 +25,7 @@ const staffSchema = z.object({
 
 export async function createStaffAccountAction(formData: FormData) {
   const session = await requireRole(permissions.staff);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = staffSchema.safeParse({
     name: formData.get("name"),
@@ -74,7 +74,7 @@ export async function createStaffAccountAction(formData: FormData) {
 
 export async function toggleStaffAccessAction(formData: FormData) {
   const session = await requireRole(permissions.staff);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const userId = String(formData.get("userId") ?? "");
   const user = await prisma.user.findFirstOrThrow({ where: { id: userId, shopId: session.shopId } });
@@ -98,7 +98,7 @@ export async function toggleStaffAccessAction(formData: FormData) {
 
 export async function createInviteAction(formData: FormData) {
   const session = await requireRole(permissions.staff);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = schema.safeParse({
     email: formData.get("email"),

@@ -275,7 +275,8 @@ model Shop {
   designJobs            DesignJob[]
   suppliers             Supplier[]
   supplierOrders        SupplierOrder[]
-  dailyClosings         DailyClosing[]
+    dailyClosings         DailyClosing[]
+    debtPayments          DebtPayment[]
   networkLinksSent      ShopNetworkLink[]   @relation("NetworkRequester")
   networkLinksReceived  ShopNetworkLink[]   @relation("NetworkPartner")
   networkOrdersSent     ShopNetworkOrder[]  @relation("NetworkOrderRequester")
@@ -325,7 +326,8 @@ model User {
   notifications          Notification[]
   supplierPortal         Supplier?               @relation("SupplierPortalUser")
   supplierOrdersCreated  SupplierOrder[]         @relation("SupplierOrderCreatedBy")
-  dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
+    dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
+    debtPaymentsReceived   DebtPayment[]            @relation("DebtPaymentReceivedBy")
   shopsVerified          Shop[]                  @relation("ShopVerifiedBy")
   phoneVerificationCodes PhoneVerificationCode[]
   uploadedMedia          MediaAsset[]
@@ -839,7 +841,8 @@ model Debt {
   shop         Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customer     Customer          @relation(fields: [customerId], references: [id])
   order        Order?            @relation(fields: [orderId], references: [id])
-  installments DebtInstallment[]
+    installments DebtInstallment[]
+    payments     DebtPayment[]
 
   @@index([shopId, status])
   @@index([customerId, dueDate])
@@ -862,6 +865,27 @@ model DebtInstallment {
   @@index([debtId, dueDate])
 }
 
+model DebtPayment {
+  id           String        @id @default(cuid())
+  shopId       String
+  debtId       String
+  receivedById String
+  amount       Decimal       @db.Decimal(12, 2)
+  method       PaymentMethod
+  reference    String?
+  notes        String?
+  receivedAt   DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+
+  shop       Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  debt       Debt @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  receivedBy User @relation("DebtPaymentReceivedBy", fields: [receivedById], references: [id])
+
+  @@index([shopId, receivedAt])
+  @@index([debtId, receivedAt])
+  @@index([receivedById, receivedAt])
+}
+
 model DailyClosing {
   id             String        @id @default(cuid())
   shopId         String
@@ -876,7 +900,11 @@ model DailyClosing {
   creditSales    Decimal       @default(0) @db.Decimal(12, 2)
   totalSales     Decimal       @default(0) @db.Decimal(12, 2)
   expenses       Decimal       @default(0) @db.Decimal(12, 2)
-  refunds        Decimal       @default(0) @db.Decimal(12, 2)
+    refunds        Decimal       @default(0) @db.Decimal(12, 2)
+    debtCollections Decimal      @default(0) @db.Decimal(12, 2)
+    debtCash        Decimal      @default(0) @db.Decimal(12, 2)
+    debtCard        Decimal      @default(0) @db.Decimal(12, 2)
+    debtMomo        Decimal      @default(0) @db.Decimal(12, 2)
   orderCount     Int           @default(0)
   status         ClosingStatus @default(DRAFT)
   notes          String?

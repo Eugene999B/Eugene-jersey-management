@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { DebtStatus, InstallmentStatus, NotificationChannel } from "@prisma/client";
+import { DebtStatus, InstallmentStatus, NotificationChannel, PaymentMethod } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -28,7 +28,7 @@ function installmentDates(firstDueDate: Date, count: number) {
 
 export async function createDebtAction(formData: FormData) {
   const session = await requireRole(permissions.debts);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = debtSchema.safeParse({
     customerId: formData.get("customerId"),
@@ -79,15 +79,21 @@ export async function createDebtAction(formData: FormData) {
 const paymentSchema = z.object({
   debtId: z.string().min(1),
   amount: z.coerce.number().positive(),
+  method: z.enum([PaymentMethod.CASH, PaymentMethod.CARD, PaymentMethod.MOMO]),
+  reference: z.string().trim().max(120).optional(),
+  notes: z.string().trim().max(300).optional(),
 });
 
 export async function recordDebtPaymentAction(formData: FormData) {
   const session = await requireRole(permissions.debts);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = paymentSchema.safeParse({
     debtId: formData.get("debtId"),
     amount: formData.get("amount"),
+    method: formData.get("method"),
+    reference: formData.get("reference") || undefined,
+    notes: formData.get("notes") || undefined,
   });
   if (!parsed.success) redirect("/dashboard/debts?error=payment");
 
@@ -96,10 +102,25 @@ export async function recordDebtPaymentAction(formData: FormData) {
     include: { installments: { orderBy: { dueDate: "asc" } } },
   });
 
-  const paidAmount = Number(debt.paidAmount) + parsed.data.amount;
+  const balance = Number(debt.principalAmount) - Number(debt.paidAmount);
+  if (balance <= 0 || parsed.data.amount > balance) redirect("/dashboard/debts?error=amount-exceeds-balance");
+
+  const paidAmount = Number((Number(debt.paidAmount) + parsed.data.amount).toFixed(2));
   const fullyPaid = paidAmount >= Number(debt.principalAmount);
 
   await prisma.$transaction(async (tx) => {
+    await tx.debtPayment.create({
+      data: {
+        shopId: session.shopId!,
+        debtId: debt.id,
+        receivedById: session.id,
+        amount: parsed.data.amount,
+        method: parsed.data.method,
+        reference: parsed.data.reference,
+        notes: parsed.data.notes,
+      },
+    });
+
     await tx.debt.update({
       where: { id: debt.id },
       data: {
@@ -108,15 +129,15 @@ export async function recordDebtPaymentAction(formData: FormData) {
       },
     });
 
-    let remaining = parsed.data.amount;
+    let remaining = paidAmount;
     for (const installment of debt.installments) {
-      if (remaining <= 0 || installment.status === InstallmentStatus.PAID) continue;
-      remaining -= Number(installment.amount);
+      const installmentPaid = remaining >= Number(installment.amount);
+      remaining = Math.max(0, remaining - Number(installment.amount));
       await tx.debtInstallment.update({
         where: { id: installment.id },
         data: {
-          status: remaining >= 0 ? InstallmentStatus.PAID : installment.status,
-          paidAt: remaining >= 0 ? new Date() : null,
+          status: installmentPaid ? InstallmentStatus.PAID : installment.dueDate < new Date() ? InstallmentStatus.LATE : InstallmentStatus.SCHEDULED,
+          paidAt: installmentPaid ? installment.paidAt ?? new Date() : null,
         },
       });
     }
@@ -128,10 +149,11 @@ export async function recordDebtPaymentAction(formData: FormData) {
     action: "debt.payment_recorded",
     entityType: "Debt",
     entityId: debt.id,
-    metadata: { amount: parsed.data.amount },
+    metadata: { amount: parsed.data.amount, method: parsed.data.method, reference: parsed.data.reference },
   });
 
   revalidatePath("/dashboard/debts");
+  revalidatePath("/dashboard/closing");
 }
 
 const reminderSchema = z.object({
@@ -141,7 +163,7 @@ const reminderSchema = z.object({
 
 export async function sendDebtReminderAction(formData: FormData) {
   const session = await requireRole(permissions.debts);
-  if (!session.shopId) redirect("/login");
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = reminderSchema.safeParse({
     debtId: formData.get("debtId"),
