@@ -1,6 +1,6 @@
-import { Palette, WandSparkles } from "lucide-react";
+import { Palette, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { DesignStudio } from "@/components/design/design-studio";
+import { ProductionStudio } from "@/components/design/production-studio";
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
 import { shortDate, titleCase } from "@/lib/format";
@@ -20,13 +20,13 @@ export default async function DesignsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Design studio</h1>
-          <p className="mt-2 text-sm text-slate-500">Create jersey mockups, prepare heat press jobs, and export cutter-ready artwork.</p>
+          <h1 className="text-2xl font-semibold">Transfer production studio</h1>
+          <p className="mt-2 text-sm text-slate-500">Prepare artwork on the material, send it through the correct output workflow, then apply it with the heat press.</p>
         </div>
-        <Badge tone="blue"><WandSparkles size={14} /> Plotter-ready studio</Badge>
+        <Badge tone="blue"><ShieldCheck size={14} /> Production-safe workflow</Badge>
       </div>
 
-      <DesignStudio />
+      <ProductionStudio />
 
       <section className="panel overflow-hidden">
         <div className="border-b border-[#ded8cd] p-5">

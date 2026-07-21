@@ -163,6 +163,7 @@ export async function checkoutCartAction(formData: FormData) {
   ]);
 
   if (!shop || !shop.isActive || !shop.publicOrderingEnabled) redirect("/cart?error=closed");
+  if (parsed.data.paymentChoice === "PAYSTACK" && (!process.env.PAYSTACK_SECRET_KEY || !shop.paymentConfig?.allowCard)) redirect("/cart?error=payment");
   if (!cartItems.length) redirect("/cart?error=empty");
 
   let subtotal = 0;

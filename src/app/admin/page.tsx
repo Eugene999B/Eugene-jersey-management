@@ -11,7 +11,7 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
 type AdminPageProps = {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; q?: string; shopStatus?: string }>;
 };
 
 const adminPermissionOptions = [
@@ -91,6 +91,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const atRiskShops = shops
     .filter((shop) => !shop.isActive || shop.subscriptionStatus === "PAST_DUE" || !shop.publicOrderingEnabled || !shop.orders.length)
     .slice(0, 8);
+  const shopQuery = params.q?.trim().toLocaleLowerCase() ?? "";
+  const shopStatus = params.shopStatus ?? "all";
+  const visibleShops = shops.filter((shop) => {
+    const matchesQuery = !shopQuery || `${shop.name} ${shop.slug} ${shop.networkCode ?? ""}`.toLocaleLowerCase().includes(shopQuery);
+    const matchesStatus = shopStatus === "all"
+      || (shopStatus === "active" && shop.isActive)
+      || (shopStatus === "suspended" && !shop.isActive)
+      || (shopStatus === "past-due" && shop.subscriptionStatus === "PAST_DUE");
+    return matchesQuery && matchesStatus;
+  });
+  const paymentConfigured = Boolean(process.env.PAYSTACK_SECRET_KEY);
+  const smsProvider = (process.env.SMS_PROVIDER ?? "console").toLowerCase();
+  const smsConfigured = smsProvider === "arkesel"
+    ? Boolean(process.env.ARKESEL_API_KEY && process.env.ARKESEL_SENDER_ID)
+    : Boolean(process.env.SMS_API_URL && process.env.SMS_API_TOKEN);
 
   return (
     <div className="space-y-5">
@@ -290,7 +305,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       <section id="shops" className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-5">
-            <h2 className="text-xl font-semibold">Tenant shops</h2>
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">Tenant shops</h2><p className="mt-1 text-sm text-slate-500">Find a shop before changing access or billing.</p></div><span className="text-sm font-semibold text-slate-500">{visibleShops.length} of {shops.length}</span></div>
+            <form className="mt-4 grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+              <input className="field" name="q" defaultValue={params.q ?? ""} placeholder="Search shop, slug or network code" />
+              <select className="field" name="shopStatus" defaultValue={shopStatus}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="past-due">Past due</option></select>
+              <button className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>
+            </form>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-left text-sm">
@@ -298,7 +318,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <tr><th className="p-4">Shop</th><th className="p-4">Plan</th><th className="p-4">Billing</th><th className="p-4">Usage</th><th className="p-4">Storefront</th><th className="p-4">Created</th><th className="p-4">Action</th></tr>
               </thead>
               <tbody className="divide-y divide-[#ded8cd] bg-white">
-                {shops.map((shop) => (
+                {visibleShops.map((shop) => (
                   <tr key={shop.id}>
                     <td className="p-4">
                       <Link className="font-semibold text-slate-950 hover:underline" href={`/admin/shops/${shop.id}`}>{shop.name}</Link>
@@ -336,6 +356,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     </td>
                   </tr>
                 ))}
+                {!visibleShops.length ? <tr><td className="p-8 text-center text-slate-500" colSpan={7}>No shops match this search and status.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -435,6 +456,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <p>Shop login: <span className="font-semibold text-slate-950">Login ID detection</span></p>
             <p>Admin login: <span className="font-semibold text-slate-950">hidden role detection</span></p>
             <p>Buyer login: <span className="font-semibold text-slate-950">phone password + SMS recovery</span></p>
+            <p>Paystack: <span className={`font-semibold ${paymentConfigured ? "text-emerald-700" : "text-amber-700"}`}>{paymentConfigured ? "server key configured — test required" : "not configured"}</span></p>
+            <p>SMS: <span className={`font-semibold ${smsConfigured ? "text-emerald-700" : "text-amber-700"}`}>{smsConfigured ? `${smsProvider} configured — test required` : "console only; messages are not delivered"}</span></p>
           </div>
         </div>
         <div className="panel p-5">

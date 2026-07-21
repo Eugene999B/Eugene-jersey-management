@@ -143,24 +143,24 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <span className="rounded-[8px] bg-white/10 p-3"><ShieldCheck size={24} /></span>
               <div>
                 <p className="text-sm text-white/55">Eugene Jersey Management</p>
-                <h1 className="text-xl font-semibold">Secure access gateway</h1>
+                <h1 className="text-xl font-semibold">Shop operations platform</h1>
               </div>
             </Link>
-            <Badge tone="green">ID detect</Badge>
+            <Badge tone="green">Secure staff access</Badge>
           </div>
 
           <div className="py-10">
             <p className="mb-4 inline-flex items-center gap-2 rounded-[8px] bg-white/8 px-3 py-1 text-sm text-white/70">
-              <UserRoundCheck size={15} className="text-[#f97316]" /> One gateway, different roles
+              <UserRoundCheck size={15} className="text-[#f97316]" /> Built for jersey and sports shops
             </p>
             <h2 className="max-w-2xl text-4xl font-semibold leading-[1.02] sm:text-6xl">
-              Staff enter an ID. Buyers browse shops separately.
+              Sell, produce, track and grow from one workspace.
             </h2>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               {[
-                ["Admins", "Platform workers use assigned Login IDs"],
-                ["Stores", "Shop staff use their shop workspace ID"],
-                ["Buyers", "Customers browse first, then sign in to buy or chat"],
+                ["Sell", "POS, online orders, payments, receipts and customer accounts"],
+                ["Produce", "Transfer artwork, job flow, materials and production handoff"],
+                ["Control", "Stock, staff, suppliers, reporting and daily closing"],
               ].map(([title, body]) => (
                 <div key={title} className="rounded-[8px] border border-white/10 bg-white/[0.06] p-4">
                   <ShieldCheck className="mb-3 text-[#f97316]" size={20} />
@@ -172,9 +172,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
 
           <div className="grid gap-3 border-t border-white/10 pt-4 text-sm text-white/60 sm:grid-cols-3">
-            <span>Hidden admin checks</span>
-            <span>Activity logging</span>
-            <span>Buyer marketplace path</span>
+            <span>Role-based access</span>
+            <span>Audited operations</span>
+            <span>Multi-shop ready</span>
           </div>
         </div>
 

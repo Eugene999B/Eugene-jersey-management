@@ -1,10 +1,12 @@
-import { AlertTriangle, Boxes, ClipboardList, CreditCard, ShoppingBag, Users } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ArrowRight, BarChart3, Boxes, ClipboardList, CreditCard, Palette, ShoppingBag, Users } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { SalesChart } from "@/components/reports/sales-chart";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getDashboardMetrics, getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/db";
+import { canSeeNav } from "@/lib/rbac";
 
 function lastSevenDays() {
   return Array.from({ length: 7 }).map((_, index) => {
@@ -15,11 +17,21 @@ function lastSevenDays() {
   });
 }
 
-export default async function DashboardPage() {
-  const { shop } = await getTenantContext();
+type DashboardPageProps = { searchParams?: Promise<{ error?: string; from?: string }> };
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = (await searchParams) ?? {};
+  const { session, shop } = await getTenantContext();
   if (!shop) return null;
 
   const metrics = await getDashboardMetrics(shop.id);
+  const visibleNavigation = canSeeNav(session.role);
+  const quickActions = [
+    { visible: visibleNavigation.pos, href: "/dashboard/pos", label: "Start a sale", note: "Open POS", icon: ShoppingBag },
+    { visible: visibleNavigation.orders, href: "/dashboard/orders", label: "Manage production", note: `${metrics.pendingOrders} pending`, icon: ClipboardList },
+    { visible: visibleNavigation.designs, href: "/dashboard/designs", label: "Prepare transfer", note: "Artwork and output", icon: Palette },
+    { visible: visibleNavigation.reports, href: "/dashboard/reports", label: "Review performance", note: "Sales and stock", icon: BarChart3 },
+  ].filter((action) => action.visible);
   const days = lastSevenDays();
   const salesData = await Promise.all(
     days.map(async (day) => {
@@ -38,6 +50,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      {params.error === "permission" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Access restricted.</strong> Your {titleCase(session.role)} role cannot open {params.from ?? "that page"}. Choose an available area below or ask the owner to update your role.</div> : null}
+      <section className="rounded-xl bg-slate-950 p-5 text-white shadow-xl">
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Owner operations</p><h1 className="mt-2 text-2xl font-semibold">What needs attention at {shop.name}?</h1><p className="mt-2 text-sm text-slate-300">Start the common work immediately. Detailed controls remain in the navigation.</p></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{titleCase(session.role)}</span></div>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {quickActions.map((action) => { const Icon = action.icon; return <Link key={action.href} href={action.href} className="group rounded-lg bg-white/10 p-4 transition hover:bg-white/15"><div className="flex items-center justify-between"><Icon size={20} className="text-emerald-300" /><ArrowRight size={16} className="text-white/40 transition group-hover:translate-x-1" /></div><p className="mt-4 font-semibold">{action.label}</p><p className="mt-1 text-xs text-white/55">{action.note}</p></Link>; })}
+        </div>
+      </section>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Today's sales"

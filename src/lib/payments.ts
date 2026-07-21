@@ -30,6 +30,10 @@ function secretKey() {
   return process.env.PAYSTACK_SECRET_KEY;
 }
 
+export function isPaystackCheckoutReady(config?: { allowCard?: boolean | null } | null) {
+  return Boolean(secretKey() && (config?.allowCard ?? true));
+}
+
 export async function initializePaystackTransaction(input: PaystackInitInput): Promise<PaystackInitResult> {
   const key = secretKey();
   if (!key) {

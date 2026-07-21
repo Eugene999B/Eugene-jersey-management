@@ -1,3 +1,6 @@
+import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
+import ExcelJS from "exceljs";
+
 export type TableExport = {
   title: string;
   subtitle?: string;
@@ -61,6 +64,73 @@ export function buildTableWordHtml(exportData: TableExport) {
       </table>
     </body>
   </html>`;
+}
+
+export async function buildTableDocx(exportData: TableExport) {
+  const metricParagraphs = (exportData.metrics ?? []).map((metric) => new Paragraph({
+    children: [new TextRun({ text: `${metric.label}: `, bold: true }), new TextRun(String(metric.value))],
+    spacing: { after: 80 },
+  }));
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: exportData.columns.map((column) => new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: column, bold: true, color: "FFFFFF" })] })],
+          shading: { fill: "0F766E" },
+        })),
+      }),
+      ...exportData.rows.map((row) => new TableRow({
+        children: row.map((cell) => new TableCell({ children: [new Paragraph(String(cell ?? ""))] })),
+      })),
+    ],
+  });
+  const document = new Document({
+    creator: "Eugene Jersey Management",
+    title: exportData.title,
+    description: exportData.subtitle,
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({ text: exportData.title, heading: HeadingLevel.TITLE, alignment: AlignmentType.LEFT }),
+        ...(exportData.subtitle ? [new Paragraph({ text: exportData.subtitle, spacing: { after: 240 } })] : []),
+        ...metricParagraphs,
+        new Paragraph({ text: "", spacing: { after: 120 } }),
+        table,
+      ],
+    }],
+  });
+  return Packer.toBuffer(document);
+}
+
+export async function buildTableXlsx(exportData: TableExport) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Eugene Jersey Management";
+  workbook.created = new Date();
+  const worksheet = workbook.addWorksheet("Report");
+  worksheet.addRow([exportData.title]);
+  worksheet.mergeCells(1, 1, 1, Math.max(1, exportData.columns.length));
+  worksheet.getCell(1, 1).font = { size: 18, bold: true, color: { argb: "FF0F766E" } };
+  if (exportData.subtitle) {
+    worksheet.addRow([exportData.subtitle]);
+    worksheet.mergeCells(2, 1, 2, Math.max(1, exportData.columns.length));
+    worksheet.getCell(2, 1).font = { italic: true, color: { argb: "FF64748B" } };
+  }
+  for (const metric of exportData.metrics ?? []) worksheet.addRow([metric.label, metric.value]);
+  worksheet.addRow([]);
+  const header = worksheet.addRow(exportData.columns);
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+  header.alignment = { vertical: "middle" };
+  worksheet.views = [{ state: "frozen", ySplit: header.number }];
+  for (const row of exportData.rows) worksheet.addRow(row);
+  worksheet.autoFilter = { from: { row: header.number, column: 1 }, to: { row: header.number, column: Math.max(1, exportData.columns.length) } };
+  worksheet.columns.forEach((column, index) => {
+    const values = [exportData.columns[index] ?? "", ...exportData.rows.map((row) => String(row[index] ?? ""))];
+    column.width = Math.min(48, Math.max(12, ...values.map((value) => value.length + 2)));
+  });
+  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 function pdfEscape(text: string) {

@@ -9,24 +9,26 @@ import type { Role } from "@prisma/client";
 import { canSeeNav, roleLabels } from "@/lib/rbac";
 
 const navItems = [
-  { key: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "catalog", href: "/dashboard/catalog", label: "Catalog", icon: Boxes },
-  { key: "orders", href: "/dashboard/orders", label: "Orders", icon: ClipboardList },
-  { key: "pos", href: "/dashboard/pos", label: "POS", icon: ShoppingCart },
-  { key: "customers", href: "/dashboard/customers", label: "Customers", icon: Users },
-  { key: "debts", href: "/dashboard/debts", label: "Debts", icon: CreditCard },
-  { key: "messages", href: "/dashboard/messages", label: "Messages", icon: MessageCircle },
-  { key: "designs", href: "/dashboard/designs", label: "Designs", icon: Palette },
-  { key: "closing", href: "/dashboard/closing", label: "Daily Closing", icon: ClipboardCheck },
-  { key: "suppliers", href: "/dashboard/suppliers", label: "Suppliers", icon: Truck },
-  { key: "network", href: "/dashboard/network", label: "Shop Network", icon: Link2 },
-  { key: "commerce", href: "/dashboard/commerce", label: "Commerce", icon: Tags },
-  { key: "reports", href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-  { key: "exports", href: "/dashboard/exports", label: "Exports", icon: FileDown },
-  { key: "activity", href: "/dashboard/activity", label: "Activity", icon: Activity },
-  { key: "staff", href: "/dashboard/staff", label: "Staff", icon: Users },
-  { key: "settings", href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { section: "Run shop", key: "dashboard", href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { section: "Run shop", key: "pos", href: "/dashboard/pos", label: "Sales & POS", icon: ShoppingCart },
+  { section: "Run shop", key: "orders", href: "/dashboard/orders", label: "Orders & production", icon: ClipboardList },
+  { section: "Run shop", key: "designs", href: "/dashboard/designs", label: "Transfer studio", icon: Palette },
+  { section: "Customers", key: "customers", href: "/dashboard/customers", label: "Customer records", icon: Users },
+  { section: "Customers", key: "debts", href: "/dashboard/debts", label: "Credit & debts", icon: CreditCard },
+  { section: "Customers", key: "messages", href: "/dashboard/messages", label: "Messages", icon: MessageCircle },
+  { section: "Stock & supply", key: "catalog", href: "/dashboard/catalog", label: "Products & stock", icon: Boxes },
+  { section: "Stock & supply", key: "suppliers", href: "/dashboard/suppliers", label: "Suppliers", icon: Truck },
+  { section: "Stock & supply", key: "network", href: "/dashboard/network", label: "Partner shops", icon: Link2 },
+  { section: "Controls", key: "closing", href: "/dashboard/closing", label: "Daily closing", icon: ClipboardCheck },
+  { section: "Controls", key: "commerce", href: "/dashboard/commerce", label: "Online selling", icon: Tags },
+  { section: "Controls", key: "reports", href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+  { section: "Controls", key: "exports", href: "/dashboard/exports", label: "Reports & exports", icon: FileDown },
+  { section: "Team & setup", key: "staff", href: "/dashboard/staff", label: "Staff & permissions", icon: Users },
+  { section: "Team & setup", key: "activity", href: "/dashboard/activity", label: "Activity & security", icon: Activity },
+  { section: "Team & setup", key: "settings", href: "/dashboard/settings", label: "Shop settings", icon: Settings },
 ] as const;
+
+const navSections = ["Run shop", "Customers", "Stock & supply", "Controls", "Team & setup"] as const;
 
 type SidebarProps = {
   role: Role;
@@ -99,8 +101,13 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
-        {items.map((item) => {
+      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+        {navSections.map((section) => {
+          const sectionItems = items.filter((item) => item.section === section);
+          if (!sectionItems.length) return null;
+          return <div key={section}>
+            <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{section}</p>
+            <div className="space-y-1">{sectionItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
             return (
@@ -117,7 +124,9 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
                 {item.label}
               </Link>
             );
-          })}
+          })}</div>
+          </div>;
+        })}
       </nav>
 
       <div className="border-t border-[#ded8cd] p-3">

@@ -19,6 +19,7 @@ const errors: Record<string, string> = {
   closed: "This shop is not accepting online cart checkout now.",
   empty: "Your cart is empty.",
   stock: "One or more items no longer has enough stock.",
+  payment: "Online payment is not configured for this shop. Choose cash pickup or contact the shop.",
 };
 
 export default async function CartPage({ searchParams }: Props) {
@@ -42,7 +43,7 @@ export default async function CartPage({ searchParams }: Props) {
   const items = await prisma.buyerCartItem.findMany({
     where: { buyerId: buyer.id, shopId: params.shop || undefined },
     include: {
-      shop: true,
+      shop: { include: { paymentConfig: true } },
       productVariant: { include: { product: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -93,6 +94,7 @@ export default async function CartPage({ searchParams }: Props) {
             const shop = group[0].shop;
             const zones = deliveryZones.filter((zone) => zone.shopId === shop.id);
             const subtotal = group.reduce((sum, item) => sum + Number(item.productVariant.priceOverride ?? item.productVariant.product.basePrice) * item.quantity, 0);
+            const onlinePaymentReady = Boolean(process.env.PAYSTACK_SECRET_KEY && shop.paymentConfig?.allowCard);
             return (
               <article key={shop.id} className="overflow-hidden rounded-[8px] border border-[#ded8cd] bg-white">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded8cd] bg-[#111827] p-4 text-white">
@@ -170,15 +172,16 @@ export default async function CartPage({ searchParams }: Props) {
                       <input className="min-h-11 flex-1 bg-transparent text-sm outline-none uppercase" name="couponCode" placeholder="Coupon code" />
                     </label>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
+                      {onlinePaymentReady ? <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
                         <input type="radio" name="paymentChoice" value="PAYSTACK" defaultChecked />
                         <CreditCard size={16} /> Card/MoMo
-                      </label>
+                      </label> : null}
                       <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
-                        <input type="radio" name="paymentChoice" value="CASH" />
+                        <input type="radio" name="paymentChoice" value="CASH" defaultChecked={!onlinePaymentReady} />
                         <Wallet size={16} /> Cash pickup
                       </label>
                     </div>
+                    {!onlinePaymentReady ? <p className="mt-2 text-xs font-medium text-amber-700">Online payment is not configured for this shop. No card payment will be collected.</p> : null}
                     <Button className="mt-4 w-full"><ShoppingBag size={16} /> Checkout cart</Button>
                     <p className="mt-3 text-xs text-slate-500">Online cart checkout does not support credit. Credit remains POS-only.</p>
                   </form>

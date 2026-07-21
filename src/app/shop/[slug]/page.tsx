@@ -39,6 +39,7 @@ const errorCopy: Record<string, string> = {
   delivery: "Delivery orders need a delivery address.",
   closed: "This shop is not accepting public orders right now.",
   stock: "That item does not have enough stock right now.",
+  payment: "Online payment is not configured for this shop. Choose cash pickup or contact the shop.",
   review: "The review could not be saved.",
 };
 
@@ -65,6 +66,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
   const shop = await prisma.shop.findUnique({
     where: { slug },
     include: {
+      paymentConfig: true,
       products: {
         where: {
           OR: query
@@ -93,6 +95,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
   });
 
   if (!shop || !shop.isActive || !shop.storefrontEnabled || shop.verificationStatus !== ShopVerificationStatus.VERIFIED) notFound();
+  const onlinePaymentReady = Boolean(process.env.PAYSTACK_SECRET_KEY && shop.paymentConfig?.allowCard);
 
   const style = {
     "--shop-primary": shop.primaryColor,
@@ -275,15 +278,16 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                         <input className="field" name="deliveryNotes" placeholder="Delivery note" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
+                        {onlinePaymentReady ? <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
                           <input type="radio" name="paymentChoice" value="PAYSTACK" defaultChecked />
                           <CreditCard size={16} /> Card/MoMo
-                        </label>
+                        </label> : null}
                         <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
-                          <input type="radio" name="paymentChoice" value="CASH" />
+                          <input type="radio" name="paymentChoice" value="CASH" defaultChecked={!onlinePaymentReady} />
                           <Wallet size={16} /> Cash pickup
                         </label>
                       </div>
+                      {!onlinePaymentReady ? <p className="text-xs font-medium text-amber-700">Online payment is not configured for this shop. No card payment will be collected.</p> : null}
                       <div className="grid gap-2 sm:grid-cols-2">
                         <Button><ShoppingBag size={16} /> Place order</Button>
                         <Button variant="outline" formAction={addCartItemAction}>Add to cart</Button>

@@ -3,9 +3,22 @@ import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
 import { hasRole, permissions } from "@/lib/rbac";
 import { currency, shortDate, titleCase } from "@/lib/format";
-import { buildTableCsv, buildTablePdf, buildTableWordHtml, type TableExport } from "@/lib/table-export";
+import { buildTableCsv, buildTableDocx, buildTablePdf, buildTableXlsx, type TableExport } from "@/lib/table-export";
 
 type ExportModule = "debts" | "pos" | "payments" | "suppliers" | "closing" | "catalog" | "messages" | "activity" | "network" | "designs";
+type ExportFilters = { from: Date | null; to: Date | null; query: string };
+
+function dateRange(filters: ExportFilters) {
+  if (!filters.from && !filters.to) return undefined;
+  return { gte: filters.from ?? undefined, lte: filters.to ?? undefined };
+}
+
+function applySearch(data: TableExport, query: string): TableExport {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return data;
+  const rows = data.rows.filter((row) => row.some((cell) => String(cell).toLocaleLowerCase().includes(needle)));
+  return { ...data, rows, subtitle: `${data.subtitle ?? ""} Search: “${query.trim()}”. ${rows.length} matching row(s).`.trim() };
+}
 
 function canExport(module: ExportModule, role: Parameters<typeof hasRole>[0]) {
   if (hasRole(role, permissions.exports)) return true;
@@ -18,11 +31,12 @@ function canExport(module: ExportModule, role: Parameters<typeof hasRole>[0]) {
   return false;
 }
 
-async function exportData(module: ExportModule, shopId: string): Promise<TableExport> {
+async function exportData(module: ExportModule, shopId: string, filters: ExportFilters): Promise<TableExport> {
   const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
+  const createdAt = dateRange(filters);
 
   if (module === "debts") {
-    const debts = await prisma.debt.findMany({ where: { shopId }, include: { customer: true }, orderBy: { dueDate: "asc" } });
+    const debts = await prisma.debt.findMany({ where: { shopId, createdAt }, include: { customer: true }, orderBy: { dueDate: "asc" } });
     const openBalance = debts.reduce((sum, debt) => sum + Number(debt.principalAmount) - Number(debt.paidAmount), 0);
     return {
       title: `${shop.name} Debt Report`,
@@ -42,7 +56,7 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
   }
 
   if (module === "pos") {
-    const orders = await prisma.order.findMany({ where: { shopId, channel: "POS" }, include: { customer: true, payments: true }, orderBy: { createdAt: "desc" }, take: 200 });
+    const orders = await prisma.order.findMany({ where: { shopId, channel: "POS", createdAt }, include: { customer: true, payments: true }, orderBy: { createdAt: "desc" }, take: 1000 });
     return {
       title: `${shop.name} POS Sales`,
       subtitle: "In-store sales with payment status and customer record.",
@@ -61,10 +75,10 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
 
   if (module === "payments") {
     const payments = await prisma.payment.findMany({
-      where: { order: { shopId } },
+      where: { order: { shopId }, createdAt },
       include: { order: { include: { customer: true } } },
       orderBy: { createdAt: "desc" },
-      take: 300,
+      take: 1000,
     });
     const successful = payments.filter((payment) => payment.status === "SUCCESS");
     return {
@@ -88,7 +102,7 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
   }
 
   if (module === "suppliers") {
-    const suppliers = await prisma.supplier.findMany({ where: { shopId }, include: { supplierOrders: true }, orderBy: { name: "asc" } });
+    const suppliers = await prisma.supplier.findMany({ where: { shopId, createdAt }, include: { supplierOrders: true }, orderBy: { name: "asc" } });
     return {
       title: `${shop.name} Supplier Report`,
       subtitle: "Suppliers, portal accounts, lead times, terms, and order volume.",
@@ -107,7 +121,7 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
   }
 
   if (module === "closing") {
-    const closings = await prisma.dailyClosing.findMany({ where: { shopId }, include: { closedBy: true }, orderBy: { businessDate: "desc" }, take: 120 });
+    const closings = await prisma.dailyClosing.findMany({ where: { shopId, businessDate: createdAt }, include: { closedBy: true }, orderBy: { businessDate: "desc" }, take: 1000 });
     return {
       title: `${shop.name} Daily Closing Report`,
       subtitle: "Manual cash counts compared with system expectation.",
@@ -126,7 +140,7 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
   }
 
   if (module === "catalog") {
-    const products = await prisma.product.findMany({ where: { shopId }, include: { category: true, variants: true }, orderBy: { name: "asc" } });
+    const products = await prisma.product.findMany({ where: { shopId, createdAt }, include: { category: true, variants: true }, orderBy: { name: "asc" } });
     return {
       title: `${shop.name} Catalog Report`,
       subtitle: "Product pricing, category, SKU count, stock, and low-stock thresholds.",
@@ -144,7 +158,7 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
   }
 
   if (module === "messages") {
-    const messages = await prisma.customerMessage.findMany({ where: { shopId }, include: { customer: true }, orderBy: { createdAt: "desc" }, take: 200 });
+    const messages = await prisma.customerMessage.findMany({ where: { shopId, createdAt }, include: { customer: true }, orderBy: { createdAt: "desc" }, take: 1000 });
     return {
       title: `${shop.name} Messaging Report`,
       subtitle: "SMS, WhatsApp, email, debt reminders, receipts, and provider state.",
@@ -164,21 +178,21 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
   if (module === "network") {
     const [links, outgoing, incoming] = await Promise.all([
       prisma.shopNetworkLink.findMany({
-        where: { OR: [{ requesterShopId: shopId }, { partnerShopId: shopId }] },
+        where: { OR: [{ requesterShopId: shopId }, { partnerShopId: shopId }], createdAt },
         include: { requesterShop: true, partnerShop: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.shopNetworkOrder.findMany({
-        where: { requesterShopId: shopId },
+        where: { requesterShopId: shopId, createdAt },
         include: { partnerShop: true, items: true },
         orderBy: { createdAt: "desc" },
-        take: 120,
+        take: 1000,
       }),
       prisma.shopNetworkOrder.findMany({
-        where: { partnerShopId: shopId },
+        where: { partnerShopId: shopId, createdAt },
         include: { requesterShop: true, items: true },
         orderBy: { createdAt: "desc" },
-        take: 120,
+        take: 1000,
       }),
     ]);
     const rows = [
@@ -216,10 +230,10 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
 
   if (module === "designs") {
     const jobs = await prisma.designJob.findMany({
-      where: { shopId },
+      where: { shopId, updatedAt: createdAt },
       include: { customer: true, order: true },
       orderBy: { updatedAt: "desc" },
-      take: 200,
+      take: 1000,
     });
     return {
       title: `${shop.name} Design Jobs`,
@@ -241,7 +255,7 @@ async function exportData(module: ExportModule, shopId: string): Promise<TableEx
     };
   }
 
-  const logs = await prisma.auditLog.findMany({ where: { shopId }, include: { user: true }, orderBy: { createdAt: "desc" }, take: 200 });
+  const logs = await prisma.auditLog.findMany({ where: { shopId, createdAt }, include: { user: true }, orderBy: { createdAt: "desc" }, take: 1000 });
   return {
     title: `${shop.name} Activity Report`,
     subtitle: "Audit log of staff and system actions.",
@@ -263,18 +277,26 @@ export async function GET(request: NextRequest) {
 
   const exportModule = (request.nextUrl.searchParams.get("module") ?? "pos") as ExportModule;
   const format = request.nextUrl.searchParams.get("format") ?? "pdf";
+  const fromValue = request.nextUrl.searchParams.get("from");
+  const toValue = request.nextUrl.searchParams.get("to");
+  const from = fromValue ? new Date(`${fromValue}T00:00:00.000Z`) : null;
+  const to = toValue ? new Date(`${toValue}T23:59:59.999Z`) : null;
+  if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime())) || (from && to && from > to)) {
+    return NextResponse.json({ error: "Invalid export date range." }, { status: 400 });
+  }
   const allowedModules: ExportModule[] = ["debts", "pos", "payments", "suppliers", "closing", "catalog", "messages", "activity", "network", "designs"];
   if (!allowedModules.includes(exportModule)) return NextResponse.json({ error: "Unsupported export module." }, { status: 400 });
   if (!canExport(exportModule, session)) return NextResponse.json({ error: "Permission denied." }, { status: 403 });
 
-  const data = await exportData(exportModule, session.shopId);
-  const filename = `${exportModule}-export`;
+  const query = request.nextUrl.searchParams.get("q")?.slice(0, 120) ?? "";
+  const data = applySearch(await exportData(exportModule, session.shopId, { from, to, query }), query);
+  const filename = `${exportModule}-${fromValue ?? "all"}-to-${toValue ?? "present"}`;
 
   if (format === "word") {
-    return new NextResponse(buildTableWordHtml(data), {
+    return new NextResponse(Uint8Array.from(await buildTableDocx(data)), {
       headers: {
-        "Content-Type": "application/msword; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}.doc"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="${filename}.docx"`,
       },
     });
   }
@@ -288,10 +310,19 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  if (format === "excel") {
+    return new NextResponse(Uint8Array.from(await buildTableXlsx(data)), {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
+      },
+    });
+  }
+
   const csv = buildTableCsv(data);
   return new NextResponse(csv, {
     headers: {
-      "Content-Type": format === "excel" ? "application/vnd.ms-excel; charset=utf-8" : "text/csv; charset=utf-8",
+      "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}.${format === "excel" ? "xls" : "csv"}"`,
     },
   });

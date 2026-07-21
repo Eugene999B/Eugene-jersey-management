@@ -9,7 +9,7 @@ export async function proxy(request: NextRequest) {
 
   if ((pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/supplier")) && !session) {
     const url = new URL("/login", request.url);
-    url.searchParams.set("next", pathname);
+    url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     const response = NextResponse.redirect(url);
     if (token) {
       response.cookies.delete(SESSION_COOKIE);
@@ -30,7 +30,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/dashboard") && !canAccessDashboardPath(pathname, session?.role)) {
-    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
+    const url = new URL("/dashboard", request.url);
+    url.searchParams.set("error", "permission");
+    url.searchParams.set("from", pathname);
+    return NextResponse.redirect(url);
   }
 
   if (pathname.startsWith("/supplier") && session?.role !== "SUPPLIER") {

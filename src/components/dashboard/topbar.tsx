@@ -1,4 +1,5 @@
-import { Bell, Search, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { Bell, CircleUserRound, Search } from "lucide-react";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/rbac";
 
@@ -34,10 +35,10 @@ export async function DashboardTopbar({ session, shopId }: TopbarProps) {
           <h1 className="text-xl font-semibold text-slate-950">{session.name}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="hidden min-w-[280px] items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm text-slate-500 md:flex">
-            <Search size={16} />
-            Search orders, SKUs, customers
-          </div>
+          <form action="/dashboard/orders" className="hidden min-w-[300px] items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 md:flex">
+            <Search size={16} className="text-slate-400" />
+            <input name="q" aria-label="Search orders" className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Receipt, customer, item or SKU" />
+          </form>
           <div className="relative rounded-[8px] border border-[#ded8cd] bg-white p-2 text-slate-700" title="Notifications">
             <Bell size={19} />
             {unreadNotifications > 0 ? (
@@ -46,9 +47,7 @@ export async function DashboardTopbar({ session, shopId }: TopbarProps) {
               </span>
             ) : null}
           </div>
-          <div className="rounded-[8px] border border-[#ded8cd] bg-white p-2 text-[var(--shop-primary)]" title="RBAC protected">
-            <ShieldCheck size={19} />
-          </div>
+          <Link href="/dashboard/settings" className="rounded-[8px] border border-[#ded8cd] bg-white p-2 text-[var(--shop-primary)]" title="Shop settings"><CircleUserRound size={19} /></Link>
         </div>
       </div>
     </header>

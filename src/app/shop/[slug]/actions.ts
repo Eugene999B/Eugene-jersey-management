@@ -49,6 +49,9 @@ export async function createPublicOrderAction(formData: FormData) {
   if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled) {
     redirect(`/shop/${parsed.data.shopSlug}?error=closed`);
   }
+  if (parsed.data.paymentChoice === "PAYSTACK" && (!process.env.PAYSTACK_SECRET_KEY || !shop.paymentConfig?.allowCard)) {
+    redirect(`/shop/${parsed.data.shopSlug}?error=payment`);
+  }
 
   const variant = await prisma.productVariant.findFirst({
     where: { id: parsed.data.variantId, product: { shopId: shop.id } },
