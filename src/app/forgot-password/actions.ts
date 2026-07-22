@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { PhoneVerificationPurpose } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { createPlainToken, hashToken, minutesFromNow } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
 import { createPhoneCode } from "@/lib/phone-codes";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -41,17 +40,7 @@ export async function requestPasswordResetAction(formData: FormData) {
         name: user.name,
         purpose: PhoneVerificationPurpose.STAFF_PASSWORD_RESET,
         minutes: 10,
-      });
-    } else {
-      const token = createPlainToken();
-      await prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash: hashToken(token),
-          expiresAt: minutesFromNow(30),
-        },
-      });
-      console.log(`Password reset link: ${process.env.APP_URL ?? "http://localhost:3000"}/reset-password?token=${token}`);
+      }).catch(() => undefined);
     }
 
     await audit({

@@ -6,8 +6,11 @@ import { createSupplierAction, createSupplierOrderAction, receiveSupplierOrderAc
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function SuppliersPage() {
+  await requireRole(permissions.suppliers);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
@@ -57,7 +60,7 @@ export default async function SuppliersPage() {
               <div className="rounded-[8px] bg-white p-3">
                 <p className="mb-2 text-sm font-semibold">Supplier portal login</p>
                 <input className="field" name="portalEmail" type="email" placeholder="supplier-login@example.com" />
-                <input className="field mt-2" name="portalPassword" type="text" placeholder="Temporary password" defaultValue="Ghana123" />
+                <input className="field mt-2" name="portalPassword" type="password" minLength={8} autoComplete="new-password" placeholder="Temporary password (8+ characters)" />
               </div>
               <Button className="w-full">Save supplier</Button>
             </form>

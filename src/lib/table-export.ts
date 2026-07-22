@@ -10,7 +10,8 @@ export type TableExport = {
 };
 
 function escapeCsv(value: string | number) {
-  const text = String(value);
+  const raw = String(value);
+  const text = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
@@ -144,28 +145,33 @@ export function buildTablePdf(exportData: TableExport) {
     ...(exportData.metrics?.map((metric) => `${metric.label}: ${metric.value}`) ?? []),
     "",
     exportData.columns.join(" | "),
-    ...exportData.rows.slice(0, 36).map((row) => row.map(String).join(" | ")),
+    ...exportData.rows.map((row) => row.map(String).join(" | ")),
   ];
-
-  const content = [
-    "BT",
-    "/F1 16 Tf",
-    "42 780 Td",
-    ...lines.flatMap((line, index) => [
-      index === 0 ? "/F1 16 Tf" : "/F1 9 Tf",
-      `(${pdfEscape(line.slice(0, 118))}) Tj`,
-      "0 -16 Td",
-    ]),
-    "ET",
-  ].join("\n");
-
+  const pageLines = Array.from({ length: Math.max(1, Math.ceil(lines.length / 43)) }, (_, index) => lines.slice(index * 43, (index + 1) * 43));
+  const pageObjectNumbers = pageLines.map((_, index) => 4 + index * 2);
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    `<< /Type /Pages /Kids [${pageObjectNumbers.map((number) => `${number} 0 R`).join(" ")}] /Count ${pageLines.length} >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
   ];
+  for (const [pageIndex, page] of pageLines.entries()) {
+    const pageObjectNumber = 4 + pageIndex * 2;
+    const contentObjectNumber = pageObjectNumber + 1;
+    const content = [
+      "BT",
+      "42 780 Td",
+      ...page.flatMap((line, lineIndex) => [
+        pageIndex === 0 && lineIndex === 0 ? "/F1 16 Tf" : "/F1 9 Tf",
+        `(${pdfEscape(line.slice(0, 118))}) Tj`,
+        "0 -16 Td",
+      ]),
+      "ET",
+    ].join("\n");
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`,
+      `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+    );
+  }
 
   let pdf = "%PDF-1.4\n";
   const offsets = [0];

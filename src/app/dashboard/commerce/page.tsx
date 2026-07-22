@@ -6,8 +6,11 @@ import { createCouponAction, createDeliveryZoneAction, updateReturnRequestAction
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
 import { currency, shortDate, titleCase } from "@/lib/format";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function CommercePage() {
+  await requireRole(permissions.commerce);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 

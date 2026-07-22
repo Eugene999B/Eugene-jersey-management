@@ -275,8 +275,8 @@ model Shop {
   designJobs            DesignJob[]
   suppliers             Supplier[]
   supplierOrders        SupplierOrder[]
-    dailyClosings         DailyClosing[]
-    debtPayments          DebtPayment[]
+  dailyClosings         DailyClosing[]
+  debtPayments          DebtPayment[]
   networkLinksSent      ShopNetworkLink[]   @relation("NetworkRequester")
   networkLinksReceived  ShopNetworkLink[]   @relation("NetworkPartner")
   networkOrdersSent     ShopNetworkOrder[]  @relation("NetworkOrderRequester")
@@ -311,6 +311,7 @@ model User {
   role             Role
   adminPermissions Json      @default("[]")
   isActive         Boolean   @default(true)
+  sessionVersion   Int       @default(0)
   failedLoginCount Int       @default(0)
   lockUntil        DateTime?
   lastLoginAt      DateTime?
@@ -326,8 +327,8 @@ model User {
   notifications          Notification[]
   supplierPortal         Supplier?               @relation("SupplierPortalUser")
   supplierOrdersCreated  SupplierOrder[]         @relation("SupplierOrderCreatedBy")
-    dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
-    debtPaymentsReceived   DebtPayment[]            @relation("DebtPaymentReceivedBy")
+  dailyClosings          DailyClosing[]          @relation("ClosingClosedBy")
+  debtPaymentsReceived   DebtPayment[]           @relation("DebtPaymentReceivedBy")
   shopsVerified          Shop[]                  @relation("ShopVerifiedBy")
   phoneVerificationCodes PhoneVerificationCode[]
   uploadedMedia          MediaAsset[]
@@ -507,7 +508,8 @@ model Order {
   debts              Debt[]
   designJobs         DesignJob[]
   cashHoldExpiresAt  DateTime?
-  publicAccessToken  String?         @unique
+  publicAccessToken  String          @unique
+  idempotencyKey     String?         @unique
   paystackReference  String?
   fulfillmentType    FulfillmentType @default(PICKUP)
   deliveryStatus     DeliveryStatus  @default(NOT_REQUIRED)
@@ -727,16 +729,19 @@ model PasswordResetToken {
 }
 
 model PhoneVerificationCode {
-  id        String                   @id @default(cuid())
-  userId    String?
-  buyerId   String?
-  phone     String
-  purpose   PhoneVerificationPurpose
-  codeHash  String
-  expiresAt DateTime
-  usedAt    DateTime?
-  attempts  Int                      @default(0)
-  createdAt DateTime                 @default(now())
+  id                  String                   @id @default(cuid())
+  userId              String?
+  buyerId             String?
+  phone               String
+  purpose             PhoneVerificationPurpose
+  codeHash            String
+  expiresAt           DateTime
+  usedAt              DateTime?
+  attempts            Int                      @default(0)
+  pendingName         String?
+  pendingEmail        String?
+  pendingPasswordHash String?
+  createdAt           DateTime                 @default(now())
 
   user  User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   buyer BuyerAccount? @relation(fields: [buyerId], references: [id], onDelete: Cascade)
@@ -841,8 +846,8 @@ model Debt {
   shop         Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customer     Customer          @relation(fields: [customerId], references: [id])
   order        Order?            @relation(fields: [orderId], references: [id])
-    installments DebtInstallment[]
-    payments     DebtPayment[]
+  installments DebtInstallment[]
+  payments     DebtPayment[]
 
   @@index([shopId, status])
   @@index([customerId, dueDate])
@@ -887,29 +892,29 @@ model DebtPayment {
 }
 
 model DailyClosing {
-  id             String        @id @default(cuid())
-  shopId         String
-  closedById     String
-  businessDate   DateTime      @db.Date
-  openingFloat   Decimal       @default(0) @db.Decimal(12, 2)
-  expectedCash   Decimal       @default(0) @db.Decimal(12, 2)
-  manualCash     Decimal       @default(0) @db.Decimal(12, 2)
-  cashDifference Decimal       @default(0) @db.Decimal(12, 2)
-  expectedCard   Decimal       @default(0) @db.Decimal(12, 2)
-  expectedMomo   Decimal       @default(0) @db.Decimal(12, 2)
-  creditSales    Decimal       @default(0) @db.Decimal(12, 2)
-  totalSales     Decimal       @default(0) @db.Decimal(12, 2)
-  expenses       Decimal       @default(0) @db.Decimal(12, 2)
-    refunds        Decimal       @default(0) @db.Decimal(12, 2)
-    debtCollections Decimal      @default(0) @db.Decimal(12, 2)
-    debtCash        Decimal      @default(0) @db.Decimal(12, 2)
-    debtCard        Decimal      @default(0) @db.Decimal(12, 2)
-    debtMomo        Decimal      @default(0) @db.Decimal(12, 2)
-  orderCount     Int           @default(0)
-  status         ClosingStatus @default(DRAFT)
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  shopId          String
+  closedById      String
+  businessDate    DateTime      @db.Date
+  openingFloat    Decimal       @default(0) @db.Decimal(12, 2)
+  expectedCash    Decimal       @default(0) @db.Decimal(12, 2)
+  manualCash      Decimal       @default(0) @db.Decimal(12, 2)
+  cashDifference  Decimal       @default(0) @db.Decimal(12, 2)
+  expectedCard    Decimal       @default(0) @db.Decimal(12, 2)
+  expectedMomo    Decimal       @default(0) @db.Decimal(12, 2)
+  creditSales     Decimal       @default(0) @db.Decimal(12, 2)
+  totalSales      Decimal       @default(0) @db.Decimal(12, 2)
+  expenses        Decimal       @default(0) @db.Decimal(12, 2)
+  refunds         Decimal       @default(0) @db.Decimal(12, 2)
+  debtCollections Decimal       @default(0) @db.Decimal(12, 2)
+  debtCash        Decimal       @default(0) @db.Decimal(12, 2)
+  debtCard        Decimal       @default(0) @db.Decimal(12, 2)
+  debtMomo        Decimal       @default(0) @db.Decimal(12, 2)
+  orderCount      Int           @default(0)
+  status          ClosingStatus @default(DRAFT)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   shop     Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
   closedBy User @relation("ClosingClosedBy", fields: [closedById], references: [id])

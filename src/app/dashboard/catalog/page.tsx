@@ -8,6 +8,7 @@ import { currency, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
 import { hasRole, permissions } from "@/lib/rbac";
 import { firstProductImage } from "@/lib/product-images";
+import { requireRole } from "@/lib/auth";
 
 type Props = {
   searchParams?: Promise<{ q?: string; category?: string; stock?: string }>;
@@ -45,6 +46,7 @@ const sportTypes = ["Football", "Basketball", "Volleyball", "Tennis", "Running",
 const commonSizes = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "Kids", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "One size"];
 
 export default async function CatalogPage({ searchParams }: Props) {
+  await requireRole(permissions.catalogRead);
   const params = (await searchParams) ?? {};
   const { session, shop } = await getTenantContext();
   if (!shop) return null;

@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import { NotificationChannel, PhoneVerificationPurpose } from "@prisma/client";
+import { NotificationChannel, NotificationStatus, PhoneVerificationPurpose } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashToken, minutesFromNow } from "@/lib/tokens";
 import { sendCustomerMessage, sendDirectSms } from "@/lib/messaging";
@@ -17,10 +17,13 @@ export async function createPhoneCode(input: {
   buyerId?: string | null;
   name?: string | null;
   minutes?: number;
+  pendingName?: string | null;
+  pendingEmail?: string | null;
+  pendingPasswordHash?: string | null;
 }) {
   const code = createNumericCode();
   const phone = normalizePhone(input.phone);
-  await prisma.phoneVerificationCode.create({
+  const record = await prisma.phoneVerificationCode.create({
     data: {
       userId: input.userId ?? null,
       buyerId: input.buyerId ?? null,
@@ -28,11 +31,14 @@ export async function createPhoneCode(input: {
       purpose: input.purpose,
       codeHash: hashToken(code),
       expiresAt: minutesFromNow(input.minutes ?? 10),
+      pendingName: input.pendingName ?? null,
+      pendingEmail: input.pendingEmail ?? null,
+      pendingPasswordHash: input.pendingPasswordHash ?? null,
     },
   });
 
-  if (input.shopId) {
-    await sendCustomerMessage({
+  try {
+    const delivery = input.shopId ? await sendCustomerMessage({
       shopId: input.shopId,
       channel: NotificationChannel.SMS,
       recipientName: input.name,
@@ -40,15 +46,17 @@ export async function createPhoneCode(input: {
       subject: "Verification code",
       body: `Your verification code is ${code}. It expires in ${input.minutes ?? 10} minutes.`,
       metadata: { purpose: input.purpose },
-    });
-  } else {
-    await sendDirectSms({
+    }) : await sendDirectSms({
       recipientName: input.name,
       recipientPhone: phone,
       subject: "Verification code",
       body: `Your verification code is ${code}. It expires in ${input.minutes ?? 10} minutes.`,
       metadata: { purpose: input.purpose },
     });
+    if (delivery.status !== NotificationStatus.SENT) throw new Error("SMS_DELIVERY_UNAVAILABLE");
+  } catch (error) {
+    await prisma.phoneVerificationCode.delete({ where: { id: record.id } }).catch(() => undefined);
+    throw error;
   }
 
   return code;
@@ -76,15 +84,17 @@ export async function consumePhoneCode(input: {
   if (!record || record.attempts >= 5) return null;
 
   if (record.codeHash !== hashToken(input.code)) {
-    await prisma.phoneVerificationCode.update({
-      where: { id: record.id },
+    await prisma.phoneVerificationCode.updateMany({
+      where: { id: record.id, usedAt: null },
       data: { attempts: { increment: 1 } },
     });
     return null;
   }
 
-  return prisma.phoneVerificationCode.update({
-    where: { id: record.id },
-    data: { usedAt: new Date() },
+  const usedAt = new Date();
+  const claimed = await prisma.phoneVerificationCode.updateMany({
+    where: { id: record.id, usedAt: null },
+    data: { usedAt },
   });
+  return claimed.count === 1 ? { ...record, usedAt } : null;
 }

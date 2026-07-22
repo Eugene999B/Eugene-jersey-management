@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
+import { tmpdir } from "os";
 import path from "path";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { MediaKind, StorageProvider, type Prisma } from "@prisma/client";
@@ -34,8 +35,9 @@ function storageProvider() {
 }
 
 function localMediaRoot() {
-  if (process.env.LOCAL_MEDIA_DIR) return path.resolve(process.env.LOCAL_MEDIA_DIR);
-  return path.join(/* turbopackIgnore: true */ process.cwd(), ".data", "media");
+  const configured = process.env.LOCAL_MEDIA_DIR?.trim();
+  if (configured && path.isAbsolute(configured)) return path.normalize(configured);
+  return path.join(tmpdir(), "eugene-jersey-media");
 }
 
 function publicMediaUrl(key: string) {
@@ -78,6 +80,7 @@ async function storeObject(key: string, body: Buffer, contentType: string): Prom
 
   const bucket = process.env.S3_BUCKET ?? process.env.R2_BUCKET;
   if (!bucket) throw new Error("S3/R2 bucket is missing.");
+  if (!process.env.MEDIA_PUBLIC_URL) throw new Error("MEDIA_PUBLIC_URL is required for S3/R2 uploads.");
 
   await s3Client().send(new PutObjectCommand({
     Bucket: bucket,

@@ -33,6 +33,15 @@ export async function createProductReviewAction(formData: FormData) {
   });
   if (!product) redirect(`/shop/${parsed.data.shopSlug}?error=review`);
 
+  const purchased = await prisma.orderItem.findFirst({
+    where: {
+      productVariant: { productId: product.id },
+      order: { buyerId: buyer.id, status: { not: "CANCELLED" } },
+    },
+    select: { id: true },
+  });
+  if (!purchased) redirect(`/shop/${parsed.data.shopSlug}?error=review-purchase`);
+
   const review = await prisma.productReview.upsert({
     where: { productId_buyerId: { productId: product.id, buyerId: buyer.id } },
     update: {

@@ -3,8 +3,11 @@ import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
 import { shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function ActivityPage() {
+  await requireRole(permissions.activity);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 

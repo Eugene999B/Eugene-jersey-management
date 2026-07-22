@@ -22,7 +22,7 @@ const navItems = [
   { section: "Controls", key: "closing", href: "/dashboard/closing", label: "Daily closing", icon: ClipboardCheck },
   { section: "Controls", key: "commerce", href: "/dashboard/commerce", label: "Online selling", icon: Tags },
   { section: "Controls", key: "reports", href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-  { section: "Controls", key: "exports", href: "/dashboard/exports", label: "Reports & exports", icon: FileDown },
+  { section: "Controls", key: "exports", href: "/dashboard/exports", label: "Export center", icon: FileDown },
   { section: "Team & setup", key: "staff", href: "/dashboard/staff", label: "Staff & permissions", icon: Users },
   { section: "Team & setup", key: "activity", href: "/dashboard/activity", label: "Activity & security", icon: Activity },
   { section: "Team & setup", key: "settings", href: "/dashboard/settings", label: "Shop settings", icon: Settings },

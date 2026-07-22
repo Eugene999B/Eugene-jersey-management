@@ -8,6 +8,8 @@ import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
 import { CustomerSearchSelect } from "@/components/customers/customer-search-select";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 type Props = { searchParams?: Promise<{ error?: string }> };
 
@@ -19,6 +21,7 @@ const debtErrors: Record<string, string> = {
 };
 
 export default async function DebtsPage({ searchParams }: Props) {
+  await requireRole(permissions.debts);
   const params = (await searchParams) ?? {};
   const { shop } = await getTenantContext();
   if (!shop) return null;

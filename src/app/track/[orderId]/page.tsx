@@ -10,11 +10,11 @@ import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { currency, shortDate, titleCase } from "@/lib/format";
-import { settlePaystackTransaction, verifyPaystackTransaction } from "@/lib/payments";
+import { getBuyerSession } from "@/lib/buyer-session";
 
 type Props = {
   params: Promise<{ orderId: string }>;
-  searchParams?: Promise<{ verify?: string; reference?: string; return?: string }>;
+  searchParams?: Promise<{ verify?: string; access?: string; return?: string; payment?: string }>;
 };
 
 const steps = ["PENDING", "IN_PRODUCTION", "READY", "COMPLETED"] as const;
@@ -23,10 +23,7 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
   const { orderId } = await params;
   const query = (await searchParams) ?? {};
   const verifyStatus = query.verify;
-  if (query.reference) {
-    const verified = await verifyPaystackTransaction(query.reference);
-    if (verified) await settlePaystackTransaction(verified);
-  }
+  const buyerSession = await getBuyerSession();
   const order = await prisma.order.findFirst({
     where: {
       OR: [{ id: orderId }, { receiptNumber: orderId }],
@@ -36,17 +33,25 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
       buyer: true,
       customer: true,
       payments: true,
+      returnRequests: { orderBy: { requestedAt: "desc" }, take: 3 },
       items: { include: { productVariant: { include: { product: true } } } },
     },
   });
 
   if (!order) notFound();
+  const tokenAuthorized = Boolean(query.access && query.access === order.publicAccessToken);
+  const buyerAuthorized = Boolean(buyerSession && order.buyerId === buyerSession.id);
+  if (!tokenAuthorized && !buyerAuthorized) notFound();
+
 
   const activeIndex = steps.indexOf(order.status as (typeof steps)[number]);
   const paid = order.payments.some((payment) => payment.status === "SUCCESS");
   const pendingPayment = order.payments.find((payment) => payment.status === "PENDING");
   const isDelivery = order.fulfillmentType === FulfillmentType.DELIVERY;
   const verified = Boolean(order.customerVerifiedAt);
+  const returnDeadline = new Date((order.customerVerifiedAt ?? order.updatedAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+  const openReturn = order.returnRequests.find((request) => ["REQUESTED", "APPROVED", "RECEIVED"].includes(request.status));
+  const returnEligible = order.status === "COMPLETED" && returnDeadline >= new Date() && !openReturn;
   const style = {
     "--shop-primary": order.shop.primaryColor,
     "--shop-secondary": order.shop.secondaryColor,
@@ -108,6 +113,27 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
               The phone number or code did not match this order.
             </div>
           ) : null}
+          {verifyStatus === "rate" ? (
+            <div className="mb-6 rounded-[8px] border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+              Too many verification attempts. Wait 15 minutes before trying again.
+            </div>
+          ) : null}
+          {verifyStatus === "payment" ? (
+            <div className="mb-6 rounded-[8px] border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+              Payment must be confirmed before delivery can be completed.
+            </div>
+          ) : null}
+          {query.payment === "failed" ? (
+            <div className="mb-6 rounded-[8px] border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              <p className="font-semibold">Payment could not be opened.</p>
+              <p className="mt-1">Your order was saved, but it is still unpaid. Contact the shop before making another payment attempt.</p>
+            </div>
+          ) : null}
+          {query.payment === "success" ? (
+            <div className="mb-6 rounded-[8px] border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+              Payment confirmed successfully.
+            </div>
+          ) : null}
           {query.return === "success" ? (
             <div className="mb-6 rounded-[8px] border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
               Return request sent to the shop.
@@ -158,16 +184,17 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
             ))}
           </div>
 
-          {!verified && order.pickupCodeHash ? (
+          {!verified && order.pickupCodeHash && isDelivery ? (
             <form action={verifyFulfillmentAction} className="mt-6 rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] p-4">
               <div className="mb-3 flex items-center gap-2">
                 {isDelivery ? <Bike size={18} className="text-[var(--shop-primary)]" /> : <PackageCheck size={18} className="text-[var(--shop-primary)]" />}
                 <h2 className="font-semibold">{isDelivery ? "Verify delivery" : "Verify pickup"}</h2>
               </div>
               <p className="mb-3 text-sm text-slate-600">
-                Code ending in {order.pickupCodeLast4 ?? "----"} was sent by SMS. Use the same phone number used for the order.
+                Enter the complete 6-digit code sent to the order phone. The code is never displayed on this page.
               </p>
               <input type="hidden" name="receiptNumber" value={order.receiptNumber} />
+              <input type="hidden" name="accessToken" value={order.publicAccessToken} />
               <div className="grid gap-3 sm:grid-cols-[1fr_160px_auto]">
                 <label className="flex items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3">
                   <Phone size={16} className="text-slate-400" />
@@ -179,17 +206,25 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
             </form>
           ) : null}
 
-          {order.status === "COMPLETED" ? (
+          {returnEligible ? (
             <form action={requestReturnAction} className="mt-6 rounded-[8px] border border-[#ded8cd] bg-white p-4">
               <h2 className="font-semibold">Request return, refund, or exchange</h2>
               <p className="mt-1 text-sm text-slate-600">Use the same phone number on the order. The shop will review it in Commerce.</p>
               <input type="hidden" name="receiptNumber" value={order.receiptNumber} />
+              <input type="hidden" name="accessToken" value={order.publicAccessToken} />
               <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
                 <input className="field" name="phone" placeholder="+233..." required />
                 <input className="field" name="reason" placeholder="Reason for return or exchange" required />
                 <Button variant="outline">Send request</Button>
               </div>
             </form>
+          ) : null}
+          {openReturn ? <p className="mt-6 rounded-[8px] border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">A return request is already open for this order. Current status: <strong>{titleCase(openReturn.status)}</strong>.</p> : null}
+          {!verified && order.pickupCodeHash && !isDelivery ? (
+            <div className="mt-6 rounded-[8px] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <p className="font-semibold">Pickup release happens at the shop.</p>
+              <p className="mt-1">Show the complete 6-digit code and the order phone number to staff. Staff will confirm payment, verify the code, and release the order.</p>
+            </div>
           ) : null}
         </div>
       </section>

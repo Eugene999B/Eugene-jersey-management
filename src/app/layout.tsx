@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sports Shop Platform",
-  description: "Multi-tenant sports retail, POS, catalog, orders, and reporting platform.",
+  title: { default: "Eugene Jersey Management", template: "%s | Eugene Jersey Management" },
+  description: "Multi-tenant jersey production, sports retail, POS, customer, credit, and design operations.",
 };
 
 export default function RootLayout({

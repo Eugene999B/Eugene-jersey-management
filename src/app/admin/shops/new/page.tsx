@@ -2,7 +2,10 @@ import { BillingCycle, PlanTier } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { createShopAction } from "@/app/admin/actions";
 
-export default function NewShopPage() {
+type Props = { searchParams?: Promise<{ error?: string }> };
+
+export default async function NewShopPage({ searchParams }: Props) {
+  const params = (await searchParams) ?? {};
   return (
     <div className="mx-auto max-w-4xl panel p-6">
       <p className="text-sm font-semibold uppercase text-slate-500">New tenant</p>
@@ -10,6 +13,7 @@ export default function NewShopPage() {
       <p className="mt-3 text-sm text-slate-600">
         The shop receives a staff login ID and starts pending until credentials are verified by super admin.
       </p>
+      {params.error === "email-exists" ? <div className="mt-4 rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">That owner email already belongs to an account. Existing users cannot be transferred between shops.</div> : null}
       <form action={createShopAction} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <input className="field" name="name" placeholder="Shop name" required />

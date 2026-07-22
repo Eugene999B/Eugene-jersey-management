@@ -24,10 +24,15 @@ export const permissions = {
     Role.VIEWER,
   ],
   catalogWrite: [Role.OWNER, Role.MANAGER, Role.INVENTORY_CLERK],
+  catalogRead: [Role.OWNER, Role.MANAGER, Role.INVENTORY_CLERK, Role.VIEWER],
   pos: [Role.OWNER, Role.MANAGER, Role.CASHIER],
   orders: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER],
+  ordersRead: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.VIEWER],
   orderFinance: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT],
+  customersWrite: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT],
+  customersRead: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT, Role.VIEWER],
   reports: [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT],
+  reportsRead: [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT, Role.VIEWER],
   debts: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT],
   messages: [Role.OWNER, Role.MANAGER, Role.CASHIER],
   designs: [Role.OWNER, Role.MANAGER, Role.DESIGNER],
@@ -47,6 +52,7 @@ export type SessionUser = {
   email: string;
   name: string;
   role: Role;
+  sessionVersion: number;
 };
 
 export function hasRole(user: Pick<SessionUser, "role"> | null | undefined, allowedRoles: Role[]) {
@@ -63,11 +69,11 @@ export function assertRole(user: Pick<SessionUser, "role"> | null | undefined, a
 export function canSeeNav(role: Role) {
   return {
     dashboard: true,
-    catalog: hasRole({ role }, [Role.OWNER, Role.MANAGER, Role.INVENTORY_CLERK, Role.VIEWER]),
-    orders: hasRole({ role }, [...permissions.orders, Role.VIEWER]),
+    catalog: hasRole({ role }, permissions.catalogRead),
+    orders: hasRole({ role }, permissions.ordersRead),
     pos: hasRole({ role }, permissions.pos),
-    customers: hasRole({ role }, [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT, Role.VIEWER]),
-    reports: hasRole({ role }, [...permissions.reports, Role.VIEWER]),
+    customers: hasRole({ role }, permissions.customersRead),
+    reports: hasRole({ role }, permissions.reportsRead),
     debts: hasRole({ role }, permissions.debts),
     messages: hasRole({ role }, permissions.messages),
     designs: hasRole({ role }, permissions.designs),

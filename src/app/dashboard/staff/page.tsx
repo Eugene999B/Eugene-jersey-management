@@ -3,11 +3,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createInviteAction, createStaffAccountAction, toggleStaffAccessAction } from "@/app/dashboard/staff/actions";
 import { prisma } from "@/lib/db";
-import { roleLabels } from "@/lib/rbac";
+import { permissions, roleLabels } from "@/lib/rbac";
+import { requireRole } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
 
-export default async function StaffPage() {
+type Props = { searchParams?: Promise<{ error?: string; invite?: string }> };
+
+const staffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER];
+
+export default async function StaffPage({ searchParams }: Props) {
+  await requireRole(permissions.staff);
+  const params = (await searchParams) ?? {};
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
@@ -19,15 +26,17 @@ export default async function StaffPage() {
   return (
     <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
       <section className="panel p-5">
+        {params.error === "email-exists" ? <div className="mb-4 rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">That email already belongs to an existing account and cannot be moved into this shop.</div> : null}
+        {params.invite ? <div className="mb-4 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><p className="font-semibold">Invite created</p><p className="mt-1 break-all">{`${process.env.APP_URL ?? "http://localhost:3000"}/invite/${params.invite}`}</p><p className="mt-1 text-xs">Copy this link now and send it through a trusted channel. The secret is shown only in this response.</p></div> : null}
         <h1 className="text-xl font-semibold">Create staff login</h1>
         <p className="mt-2 text-sm text-slate-500">Create a working account immediately and choose the role that controls access.</p>
         <form action={createStaffAccountAction} className="mt-5 space-y-3">
           <input className="field" name="name" placeholder="Staff name" required />
           <input className="field" name="email" type="email" placeholder="staff@example.com" required />
           <input className="field" name="phone" placeholder="+233..." />
-          <input className="field" name="password" type="text" placeholder="Temporary password" defaultValue="Ghana123" required />
+          <input className="field" name="password" type="password" minLength={8} autoComplete="new-password" placeholder="Temporary password (8+ characters)" required />
           <select className="field" name="role" defaultValue={Role.CASHIER}>
-            {[Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER].map((role) => (
+            {staffRoles.map((role) => (
               <option key={role} value={role}>{roleLabels[role]}</option>
             ))}
           </select>
@@ -38,7 +47,7 @@ export default async function StaffPage() {
         <form action={createInviteAction} className="mt-3 space-y-3">
           <input className="field" name="email" type="email" placeholder="staff@example.com" required />
           <select className="field" name="role" defaultValue={Role.CASHIER}>
-            {[Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER].map((role) => (
+            {staffRoles.map((role) => (
               <option key={role} value={role}>{roleLabels[role]}</option>
             ))}
           </select>

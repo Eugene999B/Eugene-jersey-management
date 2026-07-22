@@ -30,18 +30,13 @@ export async function acceptInviteAction(formData: FormData) {
     redirect("/login?error=invalid-invite");
   }
 
+  const existing = await prisma.user.findUnique({ where: { email: invite.email }, select: { id: true } });
+  if (existing) redirect("/login?error=invalid-invite");
+
   const passwordHash = await hashPassword(parsed.data.password);
   const user = await prisma.$transaction(async (tx) => {
-    const createdUser = await tx.user.upsert({
-      where: { email: invite.email },
-      update: {
-        shopId: invite.shopId,
-        name: parsed.data.name,
-        role: invite.role,
-        passwordHash,
-        isActive: true,
-      },
-      create: {
+    const createdUser = await tx.user.create({
+      data: {
         shopId: invite.shopId,
         email: invite.email,
         name: parsed.data.name,

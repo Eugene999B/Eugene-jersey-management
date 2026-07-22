@@ -5,8 +5,11 @@ import { createNetworkOrderAction, fulfillNetworkOrderAction, linkShopByCodeActi
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function NetworkPage() {
+  await requireRole(permissions.network);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 

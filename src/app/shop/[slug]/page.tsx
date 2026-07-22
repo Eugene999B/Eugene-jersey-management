@@ -20,6 +20,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { ShopVerificationStatus } from "@prisma/client";
+import { nanoid } from "nanoid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { addCartItemAction } from "@/app/cart/actions";
@@ -28,6 +29,7 @@ import { prisma } from "@/lib/db";
 import { currency, titleCase } from "@/lib/format";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { firstProductImage } from "@/lib/product-images";
+import { isPaystackCheckoutReady } from "@/lib/payments";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -40,7 +42,10 @@ const errorCopy: Record<string, string> = {
   closed: "This shop is not accepting public orders right now.",
   stock: "That item does not have enough stock right now.",
   payment: "Online payment is not configured for this shop. Choose cash pickup or contact the shop.",
+  "delivery-zone": "Choose an active delivery zone before requesting delivery.",
+  "delivery-payment": "Delivery orders require online payment. Choose pickup to pay cash.",
   review: "The review could not be saved.",
+  "review-purchase": "Only buyers who purchased this product can review it.",
 };
 
 function variantLabel(variant: { sku: string; stockQty: number; attributes: unknown }) {
@@ -67,6 +72,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
     where: { slug },
     include: {
       paymentConfig: true,
+      deliveryZones: { where: { isActive: true }, orderBy: { fee: "asc" } },
       products: {
         where: {
           OR: query
@@ -95,7 +101,8 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
   });
 
   if (!shop || !shop.isActive || !shop.storefrontEnabled || shop.verificationStatus !== ShopVerificationStatus.VERIFIED) notFound();
-  const onlinePaymentReady = Boolean(process.env.PAYSTACK_SECRET_KEY && shop.paymentConfig?.allowCard);
+  const onlinePaymentReady = isPaystackCheckoutReady(shop.paymentConfig);
+  const cashReady = Boolean(shop.paymentConfig?.allowCash);
 
   const style = {
     "--shop-primary": shop.primaryColor,
@@ -250,6 +257,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                   {shop.publicOrderingEnabled && variants.length && buyer ? (
                     <form action="/api/public-order" method="post" className="space-y-3 rounded-[8px] bg-[#f8fafc] p-3">
                       <input type="hidden" name="shopSlug" value={shop.slug} />
+                      <input type="hidden" name="idempotencyKey" value={nanoid(20)} />
                       <select className="field" name="variantId" required>
                         {variants.map((variant) => (
                           <option key={variant.id} value={variant.id}>{variantLabel(variant)}</option>
@@ -266,12 +274,16 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                           <input type="radio" name="fulfillmentType" value="PICKUP" defaultChecked />
                           <Store size={16} /> Pickup
                         </label>
-                        <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
-                          <input type="radio" name="fulfillmentType" value="DELIVERY" />
+                        <label className={`flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold ${!shop.deliveryZones.length ? "cursor-not-allowed opacity-50" : ""}`}>
+                          <input type="radio" name="fulfillmentType" value="DELIVERY" disabled={!shop.deliveryZones.length} />
                           <Bike size={16} /> Delivery
                         </label>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
+                        <select className="field sm:col-span-2" name="deliveryZoneId" defaultValue="">
+                          <option value="">Select delivery zone when using delivery</option>
+                          {shop.deliveryZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name} - {currency(zone.fee.toString(), shop.currency)}</option>)}
+                        </select>
                         <input className="field" name="deliveryAddress" placeholder="Delivery address" />
                         <input className="field" name="deliveryCity" placeholder="City" />
                         <input className="field" name="deliveryArea" placeholder="Area" />
@@ -282,14 +294,16 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                           <input type="radio" name="paymentChoice" value="PAYSTACK" defaultChecked />
                           <CreditCard size={16} /> Card/MoMo
                         </label> : null}
-                        <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
+                        {cashReady ? <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
                           <input type="radio" name="paymentChoice" value="CASH" defaultChecked={!onlinePaymentReady} />
-                          <Wallet size={16} /> Cash pickup
-                        </label>
+                          <Wallet size={16} /> Cash (pickup only)
+                        </label> : null}
                       </div>
-                      {!onlinePaymentReady ? <p className="text-xs font-medium text-amber-700">Online payment is not configured for this shop. No card payment will be collected.</p> : null}
+                      {!shop.deliveryZones.length ? <p className="text-xs font-medium text-amber-700">Delivery is unavailable until this shop adds a delivery zone.</p> : null}
+                      {!onlinePaymentReady && cashReady ? <p className="text-xs font-medium text-amber-700">Online payment is unavailable. This order will be paid at pickup.</p> : null}
+                      {!onlinePaymentReady && !cashReady ? <p className="text-xs font-semibold text-red-700">This shop has no live checkout payment method. Contact the shop before ordering.</p> : null}
                       <div className="grid gap-2 sm:grid-cols-2">
-                        <Button><ShoppingBag size={16} /> Place order</Button>
+                        <Button disabled={!onlinePaymentReady && !cashReady}><ShoppingBag size={16} /> Place order</Button>
                         <Button variant="outline" formAction={addCartItemAction}>Add to cart</Button>
                       </div>
                       <p className="flex items-center gap-1 text-xs text-slate-500">

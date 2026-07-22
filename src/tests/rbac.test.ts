@@ -34,4 +34,13 @@ describe("RBAC helpers", () => {
     expect(canAccessDashboardPath("/dashboard/settings", Role.OWNER)).toBe(true);
     expect(canAccessDashboardPath("/dashboard/reports", Role.ACCOUNTANT)).toBe(true);
   });
+
+  it("keeps viewer permissions read-only", () => {
+    expect(hasRole({ role: Role.VIEWER }, permissions.ordersRead)).toBe(true);
+    expect(hasRole({ role: Role.VIEWER }, permissions.orders)).toBe(false);
+    expect(hasRole({ role: Role.VIEWER }, permissions.customersRead)).toBe(true);
+    expect(hasRole({ role: Role.VIEWER }, permissions.customersWrite)).toBe(false);
+    expect(hasRole({ role: Role.VIEWER }, permissions.reportsRead)).toBe(true);
+    expect(hasRole({ role: Role.VIEWER }, permissions.exports)).toBe(false);
+  });
 });

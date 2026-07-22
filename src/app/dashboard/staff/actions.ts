@@ -10,17 +10,19 @@ import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createPlainToken, hashToken, minutesFromNow } from "@/lib/tokens";
 
+const allowedStaffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER] as const;
+
 const schema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
-  role: z.nativeEnum(Role).refine((role) => role !== Role.SUPER_ADMIN),
+  role: z.nativeEnum(Role).refine((role) => allowedStaffRoles.includes(role as (typeof allowedStaffRoles)[number])),
 });
 
 const staffSchema = z.object({
   name: z.string().min(2),
   email: z.string().email().transform((value) => value.toLowerCase()),
   phone: z.string().optional(),
-  password: z.string().min(6),
-  role: z.nativeEnum(Role).refine((role) => role !== Role.SUPER_ADMIN),
+  password: z.string().min(8).max(100),
+  role: z.nativeEnum(Role).refine((role) => allowedStaffRoles.includes(role as (typeof allowedStaffRoles)[number])),
 });
 
 export async function createStaffAccountAction(formData: FormData) {
@@ -36,26 +38,17 @@ export async function createStaffAccountAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/staff?error=staff");
 
-  const passwordHash = await hashPassword(parsed.data.password);
-  const user = await prisma.user.upsert({
-    where: { email: parsed.data.email },
-    update: {
-      shopId: session.shopId,
-      name: parsed.data.name,
-      phone: parsed.data.phone,
-      role: parsed.data.role,
-      passwordHash,
-      isActive: true,
-      failedLoginCount: 0,
-      lockUntil: null,
-    },
-    create: {
+  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
+  if (existing) redirect("/dashboard/staff?error=email-exists");
+
+  const user = await prisma.user.create({
+    data: {
       shopId: session.shopId,
       name: parsed.data.name,
       email: parsed.data.email,
       phone: parsed.data.phone,
       role: parsed.data.role,
-      passwordHash,
+      passwordHash: await hashPassword(parsed.data.password),
       isActive: true,
     },
   });
@@ -82,7 +75,7 @@ export async function toggleStaffAccessAction(formData: FormData) {
 
   const updated = await prisma.user.update({
     where: { id: user.id },
-    data: { isActive: !user.isActive },
+    data: { isActive: !user.isActive, sessionVersion: { increment: 1 } },
   });
 
   await audit({
@@ -106,6 +99,9 @@ export async function createInviteAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/staff?error=invite");
 
+  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
+  if (existing) redirect("/dashboard/staff?error=email-exists");
+
   const token = createPlainToken();
   const invite = await prisma.inviteToken.create({
     data: {
@@ -127,6 +123,6 @@ export async function createInviteAction(formData: FormData) {
     metadata: { email: parsed.data.email, role: parsed.data.role },
   });
 
-  console.log(`Invite link: ${process.env.APP_URL ?? "http://localhost:3000"}/invite/${token}`);
   revalidatePath("/dashboard/staff");
+  redirect(`/dashboard/staff?invite=${encodeURIComponent(token)}`);
 }

@@ -20,22 +20,18 @@ export async function enforceRateLimit(input: {
   const resetAt = new Date(now.getTime() + input.windowSeconds * 1000);
   const key = input.key.toLowerCase();
 
-  const bucket = await prisma.rateLimitBucket.findUnique({ where: { key } });
-  if (!bucket || bucket.resetAt <= now) {
-    await prisma.rateLimitBucket.upsert({
-      where: { key },
-      create: { key, count: 1, resetAt },
-      update: { count: 1, resetAt },
-    });
-    return;
+  const rows = await prisma.$queryRaw<Array<{ count: number; resetAt: Date }>>`
+    INSERT INTO "RateLimitBucket" ("key", "count", "resetAt", "updatedAt")
+    VALUES (${key}, 1, ${resetAt}, ${now})
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = CASE WHEN "RateLimitBucket"."resetAt" <= ${now} THEN 1 ELSE "RateLimitBucket"."count" + 1 END,
+      "resetAt" = CASE WHEN "RateLimitBucket"."resetAt" <= ${now} THEN ${resetAt} ELSE "RateLimitBucket"."resetAt" END,
+      "updatedAt" = ${now}
+    RETURNING "count", "resetAt"
+  `;
+  const bucket = rows[0];
+  if (bucket && bucket.count > input.limit) {
+    const bucketReset = new Date(bucket.resetAt);
+    throw new RateLimitError(Math.max(1, Math.ceil((bucketReset.getTime() - now.getTime()) / 1000)));
   }
-
-  if (bucket.count >= input.limit) {
-    throw new RateLimitError(Math.max(1, Math.ceil((bucket.resetAt.getTime() - now.getTime()) / 1000)));
-  }
-
-  await prisma.rateLimitBucket.update({
-    where: { key },
-    data: { count: { increment: 1 } },
-  });
 }

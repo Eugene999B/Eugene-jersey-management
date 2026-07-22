@@ -323,7 +323,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const csv = buildTableCsv(data);
+  const csv = `\uFEFF${buildTableCsv(data)}`;
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

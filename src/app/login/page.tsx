@@ -1,299 +1,123 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Building2, LockKeyhole, Mail, Search, ShieldCheck, ShoppingBag, UserRoundCheck } from "lucide-react";
-import { Role, ShopVerificationStatus } from "@prisma/client";
-import { Badge } from "@/components/ui/badge";
-import { prisma } from "@/lib/db";
+import {
+  ArrowRight,
+  Boxes,
+  CreditCard,
+  LockKeyhole,
+  Palette,
+  ScanLine,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+} from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Open your workspace",
+};
 
 const errorCopy: Record<string, string> = {
-  invalid: "The login details are not correct. Check the ID, email, and password.",
-  "shop-id": "This account does not belong to the selected shop workspace.",
-  locked: "Too many wrong attempts. Wait a few minutes, then try again.",
+  invalid: "The Login ID or password is not correct.",
+  rate: "Too many sign-in attempts. Wait a few minutes before trying again.",
   "shop-not-found": "The shop connected to this account could not be found.",
-  "missing-shop": "This staff account is missing shop access.",
-  permission: "That account does not have permission for the requested area.",
+  "missing-shop": "This account is missing its shop assignment.",
+  permission: "That account does not have access to the requested workspace.",
+  "invalid-invite": "That staff invitation is invalid, expired, or already belongs to an account.",
 };
 
 type LoginPageProps = {
-  searchParams?: Promise<{ error?: string; next?: string; loginId?: string }>;
+  searchParams?: Promise<{ error?: string; next?: string; loginId?: string; reset?: string }>;
 };
 
-type LoginTarget =
-  | {
-      kind: "platform" | "supplier" | "staff";
-      title: string;
-      detail: string;
-      email: string;
-      shopLoginId?: string | null;
-      loginId: string;
-      role: Role;
-      active: boolean;
-    }
-  | {
-      kind: "shop";
-      title: string;
-      detail: string;
-      shopLoginId: string;
-      loginId: string;
-      active: boolean;
-    }
-  | {
-      kind: "unknown";
-      title: string;
-      detail: string;
-      loginId: string;
-      active: false;
-    };
-
-function cleanLoginId(value: string | undefined) {
-  return value?.trim() ?? "";
-}
-
-async function resolveLoginTarget(rawLoginId: string): Promise<LoginTarget | null> {
-  const loginId = cleanLoginId(rawLoginId);
-  if (!loginId) return null;
-
-  const upperLoginId = loginId.toUpperCase();
-  const lowerLoginId = loginId.toLowerCase();
-
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { adminLoginId: upperLoginId },
-        { email: lowerLoginId },
-        { phone: loginId },
-      ],
-    },
-    include: {
-      shop: { select: { name: true, slug: true, staffLoginId: true, networkCode: true, isActive: true } },
-    },
-  });
-
-  if (user) {
-    const isPlatform = user.role === Role.SUPER_ADMIN && !user.shopId;
-    const isSupplier = user.role === Role.SUPPLIER;
-    const kind = isPlatform ? "platform" : isSupplier ? "supplier" : "staff";
-    const title = isPlatform ? "Platform admin account" : isSupplier ? "Supplier portal account" : `${user.shop?.name ?? "Shop"} staff account`;
-    const detail = isPlatform
-      ? "Enter the password for this admin worker profile."
-      : isSupplier
-        ? "Enter the supplier portal password."
-        : "Enter the password for this shop staff profile.";
-
-    return {
-      kind,
-      title,
-      detail,
-      email: user.email,
-      shopLoginId: user.shop?.staffLoginId ?? user.shop?.networkCode ?? user.shop?.slug,
-      loginId,
-      role: user.role,
-      active: user.isActive && (isPlatform || isSupplier || Boolean(user.shop?.isActive)),
-    };
-  }
-
-  const shop = await prisma.shop.findFirst({
-    where: {
-      OR: [
-        { staffLoginId: upperLoginId },
-        { networkCode: upperLoginId },
-        { slug: lowerLoginId },
-      ],
-    },
-    select: { name: true, slug: true, staffLoginId: true, networkCode: true, isActive: true, city: true, country: true },
-  });
-
-  if (shop) {
-    return {
-      kind: "shop",
-      title: `${shop.name} workspace`,
-      detail: `${shop.city ?? "Online"}${shop.country ? `, ${shop.country}` : ""}. Enter your staff email and password for this shop.`,
-      shopLoginId: shop.staffLoginId ?? shop.networkCode ?? shop.slug,
-      loginId,
-      active: shop.isActive,
-    };
-  }
-
-  return {
-    kind: "unknown",
-    title: "No workspace found",
-    detail: "Check the Login ID from the admin, shop owner, or supplier record.",
-    loginId,
-    active: false,
-  };
-}
+const workflow = [
+  { icon: ShoppingBag, label: "Sell", detail: "POS, receipts and verified tenders" },
+  { icon: Palette, label: "Design", detail: "Artwork prepared on production material" },
+  { icon: ScanLine, label: "Produce", detail: "Orders, cutters and print handoff" },
+  { icon: Boxes, label: "Control", detail: "Stock, debts, closing and reports" },
+];
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = (await searchParams) ?? {};
-  const loginId = cleanLoginId(params.loginId);
-  const target = await resolveLoginTarget(loginId);
-  const error = params.error ? errorCopy[params.error] : null;
-  const shops = await prisma.shop.findMany({
-    where: { isActive: true, storefrontEnabled: true, verificationStatus: ShopVerificationStatus.VERIFIED },
-    select: { name: true, slug: true, city: true, country: true, verificationStatus: true, credentialPhone: true },
-    orderBy: { name: "asc" },
-    take: 6,
-  });
+  const error = params.error ? errorCopy[params.error] ?? errorCopy.invalid : null;
 
   return (
-    <main className="min-h-screen bg-[#10151f] text-white">
-      <section className="mx-auto grid min-h-screen max-w-7xl gap-4 px-3 py-3 sm:px-5 sm:py-5 lg:grid-cols-[0.95fr_1.05fr] lg:px-8">
-        <div className="flex min-h-[560px] flex-col justify-between rounded-[8px] border border-white/10 bg-[#141b29] p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <Link href="/" className="flex items-center gap-3">
-              <span className="rounded-[8px] bg-white/10 p-3"><ShieldCheck size={24} /></span>
-              <div>
-                <p className="text-sm text-white/55">Eugene Jersey Management</p>
-                <h1 className="text-xl font-semibold">Shop operations platform</h1>
-              </div>
+    <main className="min-h-screen bg-[#07111f] text-white">
+      <section className="mx-auto grid min-h-screen max-w-[1500px] lg:grid-cols-[1.12fr_0.88fr]">
+        <div className="relative hidden overflow-hidden border-r border-white/10 p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
+          <div className="absolute inset-0 opacity-60 [background:radial-gradient(circle_at_18%_18%,rgba(16,185,129,0.24),transparent_30%),radial-gradient(circle_at_82%_72%,rgba(249,115,22,0.2),transparent_34%)]" />
+          <div className="absolute inset-x-10 top-1/2 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+          <div className="relative">
+            <Link href="/" className="inline-flex items-center gap-3">
+              <span className="rounded-2xl border border-white/15 bg-white/10 p-3"><ShieldCheck size={25} /></span>
+              <span>
+                <span className="block text-sm text-white/55">Eugene Jersey Management</span>
+                <span className="block text-lg font-semibold">Sports shop operating system</span>
+              </span>
             </Link>
-            <Badge tone="green">Secure staff access</Badge>
           </div>
 
-          <div className="py-10">
-            <p className="mb-4 inline-flex items-center gap-2 rounded-[8px] bg-white/8 px-3 py-1 text-sm text-white/70">
-              <UserRoundCheck size={15} className="text-[#f97316]" /> Built for jersey and sports shops
+          <div className="relative max-w-3xl py-14">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm font-semibold text-emerald-200">
+              <Sparkles size={16} /> Opening shift
+            </div>
+            <h1 className="text-5xl font-semibold leading-[0.98] xl:text-7xl">Open the shop.<br /><span className="text-emerald-300">Run the whole workflow.</span></h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 xl:text-lg">
+              Start with today&apos;s priorities, move sales into production, prepare artwork on the material, reconcile every payment and close with numbers you can trust.
             </p>
-            <h2 className="max-w-2xl text-4xl font-semibold leading-[1.02] sm:text-6xl">
-              Sell, produce, track and grow from one workspace.
-            </h2>
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {[
-                ["Sell", "POS, online orders, payments, receipts and customer accounts"],
-                ["Produce", "Transfer artwork, job flow, materials and production handoff"],
-                ["Control", "Stock, staff, suppliers, reporting and daily closing"],
-              ].map(([title, body]) => (
-                <div key={title} className="rounded-[8px] border border-white/10 bg-white/[0.06] p-4">
-                  <ShieldCheck className="mb-3 text-[#f97316]" size={20} />
-                  <p className="font-semibold">{title}</p>
-                  <p className="mt-2 text-sm leading-5 text-white/55">{body}</p>
+            <div className="mt-10 grid gap-3 sm:grid-cols-2">
+              {workflow.map(({ icon: Icon, label, detail }, index) => (
+                <div key={label} className="group rounded-2xl border border-white/10 bg-white/[0.055] p-4 backdrop-blur transition hover:border-emerald-300/30 hover:bg-white/[0.08]">
+                  <div className="flex items-start gap-4">
+                    <span className="rounded-xl bg-white/8 p-3 text-emerald-300"><Icon size={21} /></span>
+                    <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">0{index + 1}</p><p className="mt-1 font-semibold">{label}</p><p className="mt-1 text-sm text-white/55">{detail}</p></div>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-white/10 pt-4 text-sm text-white/60 sm:grid-cols-3">
-            <span>Role-based access</span>
-            <span>Audited operations</span>
-            <span>Multi-shop ready</span>
+          <div className="relative flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-5 text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
+            <span>Tenant isolated</span><span>Role controlled</span><span>Audit recorded</span><span>Production focused</span>
           </div>
         </div>
 
-        <div className="grid content-center gap-4 rounded-[8px] bg-[#f6f4ef] p-4 text-slate-950 sm:p-5">
-          <div className="w-full">
-            <div className="mb-6 flex items-center gap-3">
-              <div className="rounded-[8px] bg-[#111827] p-3 text-white">
-                <LockKeyhole size={24} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold uppercase text-[#0f766e]">Staff, admin, shop, supplier</p>
-                <h2 className="text-3xl font-semibold">Enter Login ID</h2>
-              </div>
+        <div className="flex min-h-screen items-center bg-[#f4f2ec] px-4 py-8 text-slate-950 sm:px-8 lg:px-12 xl:px-20">
+          <div className="mx-auto w-full max-w-xl">
+            <Link href="/" className="mb-10 inline-flex items-center gap-3 lg:hidden">
+              <span className="rounded-xl bg-slate-950 p-3 text-white"><ShieldCheck size={22} /></span>
+              <span className="font-semibold">Eugene Jersey Management</span>
+            </Link>
+
+            <div className="mb-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Secure workspace access</p>
+              <h2 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Welcome to your shift.</h2>
+              <p className="mt-4 max-w-lg leading-6 text-slate-600">Use your personal Login ID or work email. Account details are never exposed before authentication.</p>
             </div>
 
-            {error ? (
-              <div className="mb-4 rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </div>
-            ) : null}
+            {error ? <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800" role="alert">{error}</div> : null}
+            {params.reset ? <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">Password updated. Sign in with the new password.</div> : null}
 
-            <form action="/login" method="get" className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
+            <form action="/api/auth/login" method="post" className="rounded-2xl border border-[#d9d3c8] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.09)] sm:p-7">
               <input type="hidden" name="next" value={params.next ?? ""} />
               <label className="block">
-                <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Building2 size={16} /> Login ID
-                </span>
-                <input className="field uppercase" name="loginId" autoComplete="username" placeholder="Shop ID, admin ID, email, or phone" defaultValue={loginId} required />
+                <span className="mb-2 block text-sm font-semibold">Login ID or work email</span>
+                <input className="field min-h-12" name="loginId" autoComplete="username" defaultValue={params.loginId ?? ""} placeholder="Your personal Login ID" required autoFocus />
               </label>
-              <button className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
-                Detect account <ArrowRight size={16} />
+              <label className="mt-4 block">
+                <span className="mb-2 flex items-center justify-between gap-3 text-sm font-semibold"><span>Password</span><Link href="/forgot-password" className="text-[#0f766e] hover:underline">Forgot password?</Link></span>
+                <div className="relative"><LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input className="field min-h-12 pl-10" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required /></div>
+              </label>
+              <button className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-5 text-sm font-semibold text-white transition hover:bg-[#0b5f59] focus:outline-none focus:ring-4 focus:ring-emerald-200">
+                Open workspace <ArrowRight size={17} />
               </button>
+              <p className="mt-4 text-center text-xs leading-5 text-slate-500">Protected by account and network rate limits. Repeated attempts are recorded without revealing whether an account exists.</p>
             </form>
 
-            {target && target.kind !== "unknown" ? (
-              <form action="/api/auth/login" method="post" className="mt-4 space-y-4 rounded-[8px] border border-[#ded8cd] bg-white p-4">
-                <input type="hidden" name="next" value={params.next ?? ""} />
-                <input type="hidden" name="loginId" value={target.loginId} />
-                {"shopLoginId" in target ? <input type="hidden" name="shopLoginId" value={target.shopLoginId ?? ""} /> : null}
-                {"email" in target ? <input type="hidden" name="email" value={target.email} /> : null}
-
-                <div className="rounded-[8px] bg-[#f6f4ef] p-3 text-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{target.title}</p>
-                      <p className="mt-1 text-slate-600">{target.detail}</p>
-                    </div>
-                    <Badge tone={target.active ? "green" : "red"}>{target.active ? "Active" : "Blocked"}</Badge>
-                  </div>
-                </div>
-
-                {target.kind === "shop" ? (
-                  <label className="block">
-                    <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <Mail size={16} /> Staff email
-                    </span>
-                    <input className="field" name="email" type="email" autoComplete="email" required />
-                  </label>
-                ) : null}
-
-                <label className="block">
-                  <span className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <LockKeyhole size={16} /> Password
-                  </span>
-                  <input className="field" name="password" type="password" autoComplete="current-password" required />
-                </label>
-                <button disabled={!target.active} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#0f766e] px-4 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
-                  Sign in <ArrowRight size={16} />
-                </button>
-              </form>
-            ) : target?.kind === "unknown" ? (
-              <div className="mt-4 rounded-[8px] border border-orange-200 bg-orange-50 p-4 text-sm text-orange-700">
-                <p className="font-semibold">{target.title}</p>
-                <p className="mt-1">{target.detail}</p>
-              </div>
-            ) : null}
-
-            <div className="mt-5 grid gap-3 rounded-[8px] border border-[#ded8cd] bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div>
-                <p className="font-semibold">Buyer or customer?</p>
-                <p className="mt-1 text-sm text-slate-600">Buyers do not need a staff ID. Browse stores, then sign in with phone or email when buying, chatting, rating, or tracking.</p>
-              </div>
-              <Link href="/shops" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 text-sm font-semibold text-white">
-                Browse shops <ShoppingBag size={16} />
-              </Link>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between text-sm">
-              <Link href="/forgot-password" className="font-semibold text-[#0f766e] hover:underline">
-                Staff password recovery
-              </Link>
-              <Link href="/buyer/login" className="font-semibold text-[#0f766e] hover:underline">
-                Buyer sign in
-              </Link>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Link href="/buyer/login" className="flex min-h-14 items-center justify-between rounded-xl border border-[#d9d3c8] bg-white px-4 text-sm font-semibold transition hover:border-[#0f766e]"><span className="flex items-center gap-2"><ShoppingBag size={17} /> Buyer sign in</span><ArrowRight size={16} /></Link>
+              <Link href="/shops" className="flex min-h-14 items-center justify-between rounded-xl border border-[#d9d3c8] bg-white px-4 text-sm font-semibold transition hover:border-[#0f766e]"><span className="flex items-center gap-2"><CreditCard size={17} /> Browse shops</span><ArrowRight size={16} /></Link>
             </div>
           </div>
-
-          <section className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
-            <div className="flex items-center gap-2">
-              <Search size={17} className="text-[#0f766e]" />
-              <h3 className="font-semibold">Verified shops</h3>
-            </div>
-            <form action="/shops" className="mt-3 flex gap-2">
-              <input className="field" name="q" placeholder="Search shops or sports items" />
-              <button className="rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white">Search</button>
-            </form>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {shops.map((shop) => (
-                <Link key={shop.slug} href={`/shop/${shop.slug}`} className="rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] p-3 text-sm transition hover:border-[#0f766e]">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">{shop.name}</p>
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{shop.verificationStatus}</span>
-                  </div>
-                  <p className="mt-1 text-slate-500">{shop.city ?? "Online"} {shop.country ? `- ${shop.country}` : ""}</p>
-                  {shop.credentialPhone ? <p className="mt-1 text-xs font-semibold text-slate-600">{shop.credentialPhone}</p> : null}
-                </Link>
-              ))}
-            </div>
-          </section>
         </div>
       </section>
     </main>

@@ -9,10 +9,12 @@ import { currency, shortDate, titleCase } from "@/lib/format";
 
 type Props = {
   params: Promise<{ shopId: string }>;
+  searchParams?: Promise<{ credential?: string }>;
 };
 
-export default async function AdminShopDetailPage({ params }: Props) {
+export default async function AdminShopDetailPage({ params, searchParams }: Props) {
   const { shopId } = await params;
+  const query = (await searchParams) ?? {};
   const shop = await prisma.shop.findUnique({
     where: { id: shopId },
     include: {
@@ -34,6 +36,7 @@ export default async function AdminShopDetailPage({ params }: Props) {
 
   return (
     <div className="space-y-5">
+      {query.credential ? <div className="rounded-[8px] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><p className="font-semibold">One-time owner credential</p><p className="mt-2 break-all font-mono text-base">{query.credential}</p><p className="mt-2 text-xs">Copy this password now and send it through a trusted channel. It is not written to application logs.</p><Link className="mt-3 inline-flex font-semibold underline" href={`/admin/shops/${shop.id}`}>I have copied it</Link></div> : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link className="text-sm font-semibold text-slate-500 hover:text-slate-950" href="/admin">Back to shops</Link>

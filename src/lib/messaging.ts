@@ -1,3 +1,5 @@
+import "server-only";
+
 import { NotificationChannel, NotificationStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
@@ -40,6 +42,12 @@ function providerConfig(channel: NotificationChannel) {
   return { provider: "console", url: undefined, token: undefined, sender: undefined };
 }
 
+export function isSmsDeliveryConfigured() {
+  const config = providerConfig(NotificationChannel.SMS);
+  if (config.provider.toLowerCase() === "arkesel") return Boolean(config.token && config.sender);
+  return Boolean(config.url && config.token);
+}
+
 async function sendViaArkesel(input: ProviderMessageInput, token: string, sender: string) {
   const response = await fetch("https://sms.arkesel.com/api/v2/sms/send", {
     method: "POST",
@@ -72,7 +80,7 @@ async function sendViaGenericProvider(input: ProviderMessageInput) {
   }
 
   if (!config.url || !config.token) {
-    console.log(`[${input.channel}] ${input.recipientPhone ?? input.recipientEmail ?? "unknown"}: ${input.body}`);
+    console.warn(`[messaging] ${input.channel} provider is not configured; message queued without exposing recipient or content.`);
     return { status: NotificationStatus.QUEUED, providerReference: "CONSOLE-QUEUE" };
   }
 

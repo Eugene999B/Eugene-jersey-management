@@ -6,8 +6,11 @@ import { sendMessageAction } from "@/app/dashboard/messages/actions";
 import { prisma } from "@/lib/db";
 import { shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function MessagesPage() {
+  await requireRole(permissions.messages);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 

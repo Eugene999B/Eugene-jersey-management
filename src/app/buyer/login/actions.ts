@@ -9,6 +9,7 @@ import { setBuyerSessionCookie } from "@/lib/buyer-session";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { normalizePhone, phoneRateKey } from "@/lib/phone";
 import { hashPassword, verifyPassword } from "@/lib/auth";
+import { isSmsDeliveryConfigured } from "@/lib/messaging";
 
 const nextPath = (value: FormDataEntryValue | null) => {
   const raw = String(value ?? "").trim();
@@ -19,7 +20,7 @@ const nextPath = (value: FormDataEntryValue | null) => {
 const requestSchema = z.object({
   name: z.string().min(2).max(80),
   phone: z.string().min(8).max(24),
-  password: z.string().min(6).max(80),
+  password: z.string().min(8).max(80),
   email: z.string().email().optional(),
   next: z.string().optional(),
 });
@@ -47,6 +48,7 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
   });
 
   if (!parsed.success) redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(nextPath(formData.get("next")))}`);
+  if (!isSmsDeliveryConfigured()) redirect(`/buyer/login?error=sms&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 
   try {
     await enforceRateLimit({
@@ -59,31 +61,27 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
-  const buyer = await prisma.buyerAccount.upsert({
-    where: { phone: parsed.data.phone },
-    update: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash,
-      isActive: true,
-    },
-    create: {
-      name: parsed.data.name,
+  const buyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
+  if (buyer && !buyer.isActive) {
+    redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  }
+
+  try {
+    await createPhoneCode({
+      buyerId: buyer?.id,
       phone: parsed.data.phone,
-      email: parsed.data.email,
-      passwordHash,
-    },
-  });
+      name: parsed.data.name,
+      purpose: PhoneVerificationPurpose.BUYER_LOGIN,
+      minutes: 10,
+      pendingName: parsed.data.name,
+      pendingEmail: parsed.data.email,
+      pendingPasswordHash: passwordHash,
+    });
+  } catch {
+    redirect(`/buyer/login?error=sms&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  }
 
-  await createPhoneCode({
-    buyerId: buyer.id,
-    phone: buyer.phone,
-    name: buyer.name,
-    purpose: PhoneVerificationPurpose.BUYER_LOGIN,
-    minutes: 10,
-  });
-
-  redirect(`/buyer/login?sent=1&phone=${encodeURIComponent(buyer.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  redirect(`/buyer/login?sent=1&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 }
 
 export async function buyerPasswordLoginAction(formData: FormData) {
@@ -147,22 +145,46 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
     redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
-  const buyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
-  if (!buyer || !buyer.isActive) redirect(`/buyer/login?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}`);
+  const existingBuyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
+  if (existingBuyer && !existingBuyer.isActive) redirect(`/buyer/login?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}`);
 
   const consumed = await consumePhoneCode({
-    buyerId: buyer.id,
-    phone: buyer.phone,
+    buyerId: existingBuyer?.id,
+    phone: parsed.data.phone,
     purpose: PhoneVerificationPurpose.BUYER_LOGIN,
     code: parsed.data.code,
   });
 
-  if (!consumed) redirect(`/buyer/login?error=code&phone=${encodeURIComponent(buyer.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  if (!consumed?.pendingPasswordHash || !consumed.pendingName) redirect(`/buyer/login?error=code&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 
-  const updated = await prisma.buyerAccount.update({
-    where: { id: buyer.id },
-    data: { phoneVerifiedAt: new Date(), lastLoginAt: new Date() },
-  });
+  const emailOwner = consumed.pendingEmail
+    ? await prisma.buyerAccount.findUnique({ where: { email: consumed.pendingEmail } })
+    : null;
+  if (emailOwner && emailOwner.id !== existingBuyer?.id) {
+    redirect(`/buyer/login?error=email&phone=${encodeURIComponent(parsed.data.phone)}`);
+  }
+
+  const updated = existingBuyer
+    ? await prisma.buyerAccount.update({
+        where: { id: existingBuyer.id },
+        data: {
+          name: consumed.pendingName,
+          email: consumed.pendingEmail,
+          passwordHash: consumed.pendingPasswordHash,
+          phoneVerifiedAt: new Date(),
+          lastLoginAt: new Date(),
+        },
+      })
+    : await prisma.buyerAccount.create({
+        data: {
+          name: consumed.pendingName,
+          phone: parsed.data.phone,
+          email: consumed.pendingEmail,
+          passwordHash: consumed.pendingPasswordHash,
+          phoneVerifiedAt: new Date(),
+          lastLoginAt: new Date(),
+        },
+      });
 
   await setBuyerSessionCookie({
     id: updated.id,

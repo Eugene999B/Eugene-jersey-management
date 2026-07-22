@@ -109,6 +109,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   return (
     <div className="space-y-5">
+      {params.error === "worker-exists" ? <div className="rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">That email already belongs to an existing account. Platform workers must use a unique email.</div> : null}
       <div id="overview" className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold">Platform command center</h1>
@@ -165,9 +166,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <h2 className="text-xl font-semibold">Login policy</h2>
           </div>
           <div className="mt-4 space-y-2 text-sm text-slate-600">
-            <p>Public login shows only Login ID first. Super Admin access code is not exposed on the page.</p>
-            <p>Wrong passwords are logged and temporarily locked after repeated attempts.</p>
-            <p>Buyers use a separate marketplace path and never need staff IDs.</p>
+            <p>Staff use one private Login ID or work email and password form; account discovery is never exposed.</p>
+            <p>Repeated guesses are rate-limited without letting an attacker lock another person&apos;s account.</p>
+            <p>Suspending staff or a tenant revokes active sessions immediately.</p>
           </div>
         </div>
       </section>
@@ -243,7 +244,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <input className="field" name="staffTitle" placeholder="Role/title" />
               <input className="field" name="department" placeholder="Department" />
               <input className="field" name="emergencyContact" placeholder="Emergency contact" />
-              <input className="field" name="password" type="text" placeholder="Temporary password" defaultValue="Ghana123" required />
+              <input className="field" name="password" type="password" minLength={12} autoComplete="new-password" placeholder="Temporary password (12+ characters)" required />
             </div>
             <textarea className="field min-h-20" name="staffNotes" placeholder="Internal notes, assigned queues, training status, or restrictions" />
             <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-white p-3 text-sm">

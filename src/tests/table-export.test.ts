@@ -22,4 +22,18 @@ describe("report exports", () => {
     expect(buildTablePdf(report).startsWith("%PDF-1.4")).toBe(true);
     expect(buildTableCsv(report)).toContain("R-001,Sample Customer,100");
   });
+
+  it("neutralizes spreadsheet formulas in CSV output", () => {
+    const csv = buildTableCsv({ ...report, rows: [["=HYPERLINK(\"https://example.test\")", "+cmd", "@unsafe"]] });
+    expect(csv).toContain("'=HYPERLINK");
+    expect(csv).toContain("'+cmd");
+    expect(csv).toContain("'@unsafe");
+  });
+
+  it("paginates PDF output without dropping later rows", () => {
+    const rows = Array.from({ length: 100 }, (_, index) => [`R-${String(index).padStart(3, "0")}`, `Customer ${index}`, index]);
+    const pdf = buildTablePdf({ ...report, rows });
+    expect(pdf).toContain("R-099");
+    expect(pdf).toMatch(/\/Count [3-9]/);
+  });
 });

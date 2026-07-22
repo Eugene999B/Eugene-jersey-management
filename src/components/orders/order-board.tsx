@@ -13,6 +13,10 @@ type BoardOrder = {
   customerName: string;
   status: OrderStatus;
   rush: boolean;
+  fulfillmentType: "PICKUP" | "DELIVERY";
+  fulfillmentVerified: boolean;
+  hasPendingCash: boolean;
+  hasPendingOnlinePayment: boolean;
   totalAmount: number;
   items: {
     name: string;
@@ -31,12 +35,18 @@ function nextStatuses(status: OrderStatus, role: Role) {
     return [];
   }
 
-  return columns.filter((column) => column !== status);
+  if (!(["OWNER", "MANAGER", "CASHIER"] as Role[]).includes(role)) return [];
+
+  if (status === "PENDING") return ["IN_PRODUCTION", "CANCELLED"] as OrderStatus[];
+  if (status === "IN_PRODUCTION") return ["READY", "CANCELLED"] as OrderStatus[];
+  if (status === "READY") return ["COMPLETED", "CANCELLED"] as OrderStatus[];
+  return [];
 }
 
 export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[]; role: Role; currencyCode: string }) {
   const [localOrders, setLocalOrders] = useState(orders);
   const [message, setMessage] = useState<string | null>(null);
+  const [pickupDetails, setPickupDetails] = useState<Record<string, { phone: string; code: string; cashCollected: boolean }>>({});
   const [isPending, startTransition] = useTransition();
 
   function updateOrder(orderId: string, status: OrderStatus) {
@@ -53,6 +63,33 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
         return;
       }
       setLocalOrders((current) => current.map((order) => order.id === orderId ? { ...order, status } : order));
+    });
+  }
+
+  function updatePickup(orderId: string, changes: Partial<{ phone: string; code: string; cashCollected: boolean }>) {
+    setPickupDetails((current) => {
+      const existing = current[orderId] ?? { phone: "", code: "", cashCollected: false };
+      return { ...current, [orderId]: { ...existing, ...changes } };
+    });
+  }
+
+  function verifyPickup(order: BoardOrder) {
+    const details = pickupDetails[order.id] ?? { phone: "", code: "", cashCollected: false };
+    setMessage(null);
+    startTransition(async () => {
+      const response = await fetch(`/api/orders/${order.id}/verify-pickup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(details),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setMessage(payload.error ?? "Could not release this pickup.");
+        return;
+      }
+      setLocalOrders((current) => current.map((item) => item.id === order.id ? { ...item, status: "COMPLETED", fulfillmentVerified: true, hasPendingCash: false } : item));
+      setPickupDetails((current) => { const next = { ...current }; delete next[order.id]; return next; });
+      setMessage(`Pickup ${order.receiptNumber} verified and released.`);
     });
   }
 
@@ -97,13 +134,25 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
                     </div>
                     <p className="mt-3 text-sm font-semibold">{currency(order.totalAmount, currencyCode)}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {nextStatuses(order.status, role).slice(0, 3).map((status) => (
+                      {nextStatuses(order.status, role).map((status) => (
                         <Button key={status} variant={status === "CANCELLED" ? "danger" : "outline"} className="min-h-8 px-2 py-1 text-xs" disabled={isPending} onClick={() => updateOrder(order.id, status)}>
                           {status === "COMPLETED" ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
                           {titleCase(status)}
                         </Button>
                       ))}
                     </div>
+                    {order.status === "READY" && order.fulfillmentType === "PICKUP" && !order.fulfillmentVerified && (["OWNER", "MANAGER", "CASHIER"] as Role[]).includes(role) ? (
+                      <div className="mt-3 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3">
+                        <p className="text-xs font-semibold text-emerald-900">Verify customer before release</p>
+                        {order.hasPendingOnlinePayment ? <p className="mt-1 text-xs text-red-700">Online payment is still pending.</p> : null}
+                        <div className="mt-2 grid gap-2">
+                          <input className="field" aria-label="Customer phone" placeholder="Customer phone" value={pickupDetails[order.id]?.phone ?? ""} onChange={(event) => updatePickup(order.id, { phone: event.target.value })} />
+                          <input className="field tracking-[0.15em]" aria-label="Pickup code" inputMode="numeric" maxLength={6} placeholder="6-digit pickup code" value={pickupDetails[order.id]?.code ?? ""} onChange={(event) => updatePickup(order.id, { code: event.target.value.replace(/\D/g, "") })} />
+                          {order.hasPendingCash ? <label className="flex items-start gap-2 text-xs font-semibold text-emerald-900"><input className="mt-0.5" type="checkbox" checked={pickupDetails[order.id]?.cashCollected ?? false} onChange={(event) => updatePickup(order.id, { cashCollected: event.target.checked })} />Cash has been collected</label> : null}
+                          <Button className="w-full" disabled={isPending || order.hasPendingOnlinePayment} onClick={() => verifyPickup(order)}><CheckCircle2 size={14} /> Verify & release</Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>

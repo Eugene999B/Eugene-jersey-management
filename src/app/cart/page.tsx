@@ -5,9 +5,11 @@ import { checkoutCartAction, updateCartItemAction } from "@/app/cart/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
+import { nanoid } from "nanoid";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { currency } from "@/lib/format";
 import { firstProductImage } from "@/lib/product-images";
+import { isPaystackCheckoutReady } from "@/lib/payments";
 
 type Props = {
   searchParams?: Promise<{ shop?: string; error?: string }>;
@@ -20,6 +22,9 @@ const errors: Record<string, string> = {
   empty: "Your cart is empty.",
   stock: "One or more items no longer has enough stock.",
   payment: "Online payment is not configured for this shop. Choose cash pickup or contact the shop.",
+  "delivery-zone": "Choose an active delivery zone before requesting delivery.",
+  coupon: "That coupon is invalid, expired, or has reached its usage limit.",
+  "delivery-payment": "Delivery orders require online payment. Choose pickup to pay cash.",
 };
 
 export default async function CartPage({ searchParams }: Props) {
@@ -94,7 +99,9 @@ export default async function CartPage({ searchParams }: Props) {
             const shop = group[0].shop;
             const zones = deliveryZones.filter((zone) => zone.shopId === shop.id);
             const subtotal = group.reduce((sum, item) => sum + Number(item.productVariant.priceOverride ?? item.productVariant.product.basePrice) * item.quantity, 0);
-            const onlinePaymentReady = Boolean(process.env.PAYSTACK_SECRET_KEY && shop.paymentConfig?.allowCard);
+            const onlinePaymentReady = isPaystackCheckoutReady(shop.paymentConfig);
+            const cashPaymentReady = Boolean(shop.paymentConfig?.allowCash);
+            const canCheckout = onlinePaymentReady || cashPaymentReady;
             return (
               <article key={shop.id} className="overflow-hidden rounded-[8px] border border-[#ded8cd] bg-white">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded8cd] bg-[#111827] p-4 text-white">
@@ -139,6 +146,7 @@ export default async function CartPage({ searchParams }: Props) {
 
                   <form action={checkoutCartAction} className="h-fit rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] p-4">
                     <input type="hidden" name="shopId" value={shop.id} />
+                    <input type="hidden" name="idempotencyKey" value={nanoid(20)} />
                     <div className="mb-4 flex items-center gap-2">
                       <PackageCheck size={18} className="text-[#0f766e]" />
                       <h3 className="font-semibold">Checkout</h3>
@@ -148,13 +156,13 @@ export default async function CartPage({ searchParams }: Props) {
                         <input type="radio" name="fulfillmentType" value="PICKUP" defaultChecked />
                         <Store size={16} /> Pickup
                       </label>
-                      <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
-                        <input type="radio" name="fulfillmentType" value="DELIVERY" />
+                      <label className={`flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold ${!zones.length ? "cursor-not-allowed opacity-50" : ""}`}>
+                        <input type="radio" name="fulfillmentType" value="DELIVERY" disabled={!zones.length} />
                         <Bike size={16} /> Delivery
                       </label>
                     </div>
                     <select className="field mt-3" name="deliveryZoneId" defaultValue="">
-                      <option value="">Delivery zone optional</option>
+                      <option value="">Select a delivery zone for delivery</option>
                       {zones.map((zone) => (
                         <option key={zone.id} value={zone.id}>
                           {zone.name} - {currency(zone.fee.toString(), shop.currency)}
@@ -176,13 +184,15 @@ export default async function CartPage({ searchParams }: Props) {
                         <input type="radio" name="paymentChoice" value="PAYSTACK" defaultChecked />
                         <CreditCard size={16} /> Card/MoMo
                       </label> : null}
-                      <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
+                      {cashPaymentReady ? <label className="flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold">
                         <input type="radio" name="paymentChoice" value="CASH" defaultChecked={!onlinePaymentReady} />
-                        <Wallet size={16} /> Cash pickup
-                      </label>
+                        <Wallet size={16} /> Cash (pickup only)
+                      </label> : null}
                     </div>
-                    {!onlinePaymentReady ? <p className="mt-2 text-xs font-medium text-amber-700">Online payment is not configured for this shop. No card payment will be collected.</p> : null}
-                    <Button className="mt-4 w-full"><ShoppingBag size={16} /> Checkout cart</Button>
+                    {!zones.length ? <p className="mt-2 text-xs font-medium text-amber-700">Delivery is unavailable until this shop adds an active delivery zone.</p> : null}
+                    {!onlinePaymentReady && cashPaymentReady ? <p className="mt-2 text-xs font-medium text-amber-700">Online payment is unavailable. This order will be paid at pickup.</p> : null}
+                    {!canCheckout ? <p className="mt-2 text-xs font-medium text-red-700">This shop has not enabled a working checkout payment method. Contact the shop before ordering.</p> : null}
+                    <Button className="mt-4 w-full" disabled={!canCheckout}><ShoppingBag size={16} /> Checkout cart</Button>
                     <p className="mt-3 text-xs text-slate-500">Online cart checkout does not support credit. Credit remains POS-only.</p>
                   </form>
                 </div>

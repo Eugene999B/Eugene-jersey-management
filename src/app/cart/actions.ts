@@ -18,7 +18,7 @@ import { getBuyerSession } from "@/lib/buyer-session";
 import { audit } from "@/lib/audit";
 import { createNumericCode } from "@/lib/phone-codes";
 import { hashToken } from "@/lib/tokens";
-import { initializePaystackTransaction } from "@/lib/payments";
+import { initializePaystackTransaction, isPaystackCheckoutReady } from "@/lib/payments";
 import { sendCustomerMessage } from "@/lib/messaging";
 
 const addSchema = z.object({
@@ -45,10 +45,11 @@ const checkoutSchema = z.object({
   deliveryNotes: z.string().optional(),
   couponCode: z.string().optional(),
   paymentChoice: z.enum(["PAYSTACK", "CASH"]),
+  idempotencyKey: z.string().min(8).max(100),
 });
 
 function receiptNumber(shopSlug: string) {
-  return `${shopSlug.split("-").map((part) => part[0]).join("").slice(0, 4).toUpperCase() || "SHOP"}-${Date.now().toString().slice(-7)}`;
+  return `${shopSlug.split("-").map((part) => part[0]).join("").slice(0, 4).toUpperCase() || "SHOP"}-${Date.now().toString().slice(-7)}-${nanoid(4).toUpperCase()}`;
 }
 
 function couponDiscount(input: { type: "PERCENT" | "FIXED"; value: number; subtotal: number }) {
@@ -143,12 +144,17 @@ export async function checkoutCartAction(formData: FormData) {
     deliveryNotes: formData.get("deliveryNotes") || undefined,
     couponCode: formData.get("couponCode") || undefined,
     paymentChoice: formData.get("paymentChoice"),
+    idempotencyKey: formData.get("idempotencyKey"),
   });
   if (!parsed.success) redirect("/cart?error=invalid");
   if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && !parsed.data.deliveryAddress) redirect("/cart?error=delivery");
+  if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && parsed.data.paymentChoice === "CASH") redirect("/cart?error=delivery-payment");
 
   const buyer = await prisma.buyerAccount.findUnique({ where: { id: buyerSession.id } });
   if (!buyer || !buyer.isActive) redirect("/buyer/login?next=/cart");
+
+  const duplicateOrder = await prisma.order.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey } });
+  if (duplicateOrder?.buyerId === buyer.id) redirect(`/track/${duplicateOrder.receiptNumber}?access=${encodeURIComponent(duplicateOrder.publicAccessToken)}`);
 
   const [shop, cartItems, deliveryZone] = await Promise.all([
     prisma.shop.findUnique({ where: { id: parsed.data.shopId }, include: { paymentConfig: true } }),
@@ -163,8 +169,10 @@ export async function checkoutCartAction(formData: FormData) {
   ]);
 
   if (!shop || !shop.isActive || !shop.publicOrderingEnabled) redirect("/cart?error=closed");
-  if (parsed.data.paymentChoice === "PAYSTACK" && (!process.env.PAYSTACK_SECRET_KEY || !shop.paymentConfig?.allowCard)) redirect("/cart?error=payment");
+  if (parsed.data.paymentChoice === "PAYSTACK" && !isPaystackCheckoutReady(shop.paymentConfig)) redirect("/cart?error=payment");
+  if (parsed.data.paymentChoice === "CASH" && !shop.paymentConfig?.allowCash) redirect("/cart?error=payment");
   if (!cartItems.length) redirect("/cart?error=empty");
+  if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && !deliveryZone) redirect("/cart?error=delivery-zone");
 
   let subtotal = 0;
   for (const item of cartItems) {
@@ -203,15 +211,12 @@ export async function checkoutCartAction(formData: FormData) {
   let checkoutResult;
   try {
     checkoutResult = await prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.create({
-      data: {
-        shopId: shop.id,
-        name: buyer.name,
-        phone: buyer.phone,
-        email: buyer.email,
-        group: "Online",
-      },
+    const matchedCustomer = await tx.customer.findFirst({
+      where: { shopId: shop.id, OR: [{ phone: buyer.phone }, ...(buyer.email ? [{ email: buyer.email }] : [])] },
     });
+    const customer = matchedCustomer
+      ? await tx.customer.update({ where: { id: matchedCustomer.id }, data: { name: buyer.name, phone: buyer.phone, email: buyer.email } })
+      : await tx.customer.create({ data: { shopId: shop.id, name: buyer.name, phone: buyer.phone, email: buyer.email, group: "Online" } });
 
     for (const item of cartItems) {
       if (!item.productVariant.product.isService) {
@@ -224,10 +229,11 @@ export async function checkoutCartAction(formData: FormData) {
     }
 
     if (couponUsable) {
-      await tx.coupon.update({
-        where: { id: coupon.id },
+      const claimed = await tx.coupon.updateMany({
+        where: { id: coupon.id, ...(coupon.usageLimit ? { usedCount: { lt: coupon.usageLimit } } : {}) },
         data: { usedCount: { increment: 1 } },
       });
+      if (claimed.count !== 1) throw new Error("COUPON_EXHAUSTED");
     }
 
     const createdOrder = await tx.order.create({
@@ -244,6 +250,7 @@ export async function checkoutCartAction(formData: FormData) {
         couponId: couponUsable ? coupon.id : null,
         deliveryZoneId: deliveryZone?.id ?? null,
         publicAccessToken,
+        idempotencyKey: parsed.data.idempotencyKey,
         cashHoldExpiresAt,
         paystackReference: parsed.data.paymentChoice === "PAYSTACK" ? paystackReference : null,
         fulfillmentType: parsed.data.fulfillmentType,
@@ -280,10 +287,12 @@ export async function checkoutCartAction(formData: FormData) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
       redirect("/cart?error=stock");
     }
+    if (error instanceof Error && error.message === "COUPON_EXHAUSTED") redirect("/cart?error=coupon");
     throw error;
   }
 
   const { order, customer } = checkoutResult;
+  const trackUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}`;
 
   await audit({
     shopId: shop.id,
@@ -293,7 +302,7 @@ export async function checkoutCartAction(formData: FormData) {
     metadata: { receiptNumber: order.receiptNumber, itemCount: cartItems.length, couponCode: coupon?.code },
   });
 
-  const body = `${shop.name}: order ${order.receiptNumber} received. Verification code: ${verificationCode}. Track: ${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}`;
+  const body = `${shop.name}: order ${order.receiptNumber} received. Verification code: ${verificationCode}. Track: ${trackUrl}`;
   await sendCustomerMessage({
     shopId: shop.id,
     customerId: customer.id,
@@ -304,23 +313,27 @@ export async function checkoutCartAction(formData: FormData) {
     subject: `Order ${order.receiptNumber}`,
     body,
     metadata: { orderId: order.id, receiptNumber: order.receiptNumber },
-  });
+  }).catch(() => null);
 
   if (parsed.data.paymentChoice === "PAYSTACK") {
-    const callbackUrl = `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/track/${order.receiptNumber}`;
-    const initialized = await initializePaystackTransaction({
-      email: buyer.email ?? `${buyer.id}@buyer.local`,
-      amount: totalAmount,
-      currency: shop.currency,
-      reference: paystackReference,
-      callbackUrl,
-      subaccount: shop.paymentConfig?.paystackSubaccountCode,
-      transactionCharge: shop.paymentConfig?.paystackTransactionCharge,
-      bearer: shop.paymentConfig?.paystackChargeBearer as "account" | "subaccount" | "all-proportional" | "all" | null,
-      metadata: { orderId: order.id, shopId: shop.id, receiptNumber: order.receiptNumber },
-    });
-    if (initialized.authorizationUrl) redirect(initialized.authorizationUrl);
+    const callbackUrl = `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/api/paystack/callback`;
+    try {
+      const initialized = await initializePaystackTransaction({
+        email: buyer.email ?? `${buyer.id}@buyer.local`,
+        amount: totalAmount,
+        currency: shop.currency,
+        reference: paystackReference,
+        callbackUrl,
+        subaccount: shop.paymentConfig?.paystackSubaccountCode,
+        transactionCharge: shop.paymentConfig?.paystackTransactionCharge,
+        bearer: shop.paymentConfig?.paystackChargeBearer as "account" | "subaccount" | "all-proportional" | "all" | null,
+        metadata: { orderId: order.id, shopId: shop.id, receiptNumber: order.receiptNumber },
+      });
+      if (initialized.authorizationUrl) redirect(initialized.authorizationUrl);
+    } catch {
+      redirect(`/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}&payment=failed`);
+    }
   }
 
-  redirect(`/track/${order.receiptNumber}`);
+  redirect(`/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}`);
 }

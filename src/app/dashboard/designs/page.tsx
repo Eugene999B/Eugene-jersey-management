@@ -4,8 +4,11 @@ import { DesignStudio } from "@/components/design/production-studio";
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
 import { shortDate, titleCase } from "@/lib/format";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function DesignsPage() {
+  await requireRole(permissions.designs);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
@@ -26,7 +29,13 @@ export default async function DesignsPage() {
         <Badge tone="blue"><ShieldCheck size={14} /> Production-safe workflow</Badge>
       </div>
 
-      <DesignStudio />
+      <DesignStudio savedDesigns={recentJobs.map((job) => ({
+        id: job.id,
+        title: job.title,
+        canvas: job.canvasJson && typeof job.canvasJson === "object" && !Array.isArray(job.canvasJson)
+          ? job.canvasJson as Record<string, unknown>
+          : {},
+      }))} />
 
       <section className="panel overflow-hidden">
         <div className="border-b border-[#ded8cd] p-5">

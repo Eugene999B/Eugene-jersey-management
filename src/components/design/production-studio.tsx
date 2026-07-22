@@ -28,6 +28,7 @@ import {
   Usb,
 } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -35,6 +36,8 @@ type Material = "htv" | "printable-htv" | "sublimation" | "dtf" | "flock";
 type Sheet = "a4" | "a3" | "12x20" | "15x20" | "custom";
 type DeviceState = "not-configured" | "unsupported" | "selecting" | "connected" | "error";
 type LayerKind = "image" | "text" | "rectangle" | "circle";
+type MachineProfile = "Generic SVG" | "SignMaster" | "VinylMaster" | "Print/RIP";
+type SavedDesign = { id: string; title: string; canvas: Record<string, unknown> };
 type DesignLayer = {
   id: string;
   kind: LayerKind;
@@ -85,6 +88,41 @@ function safeName(value: string) {
 function escapeXml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+function finiteNumber(value: unknown, fallback: number, min = -100_000, max = 100_000) {
+  const number = typeof value === "number" ? value : Number.NaN;
+  return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+}
+function normalizedLayers(value: unknown[]): DesignLayer[] {
+  const kinds: LayerKind[] = ["image", "text", "rectangle", "circle"];
+  const fonts = ["Arial", "Impact", "Georgia", "Courier New", "Times New Roman"];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const layer = entry as Record<string, unknown>;
+    if (!kinds.includes(layer.kind as LayerKind)) return [];
+    const kind = layer.kind as LayerKind;
+    const rawUrl = typeof layer.url === "string" ? layer.url.slice(0, 1_500_000) : undefined;
+    const url = rawUrl && (/^data:image\/(?:png|jpeg|webp|avif|svg\+xml);base64,/i.test(rawUrl) || rawUrl.startsWith("/api/media/local/") || /^https:\/\//i.test(rawUrl)) ? rawUrl : undefined;
+    return [{
+      id: typeof layer.id === "string" ? layer.id.slice(0, 100) : id(),
+      kind,
+      name: typeof layer.name === "string" ? layer.name.slice(0, 120) : "Layer",
+      visible: layer.visible !== false,
+      locked: layer.locked === true,
+      x: finiteNumber(layer.x, 0),
+      y: finiteNumber(layer.y, 0),
+      width: finiteNumber(layer.width, 20, 0.1),
+      height: finiteNumber(layer.height, 20, 0.1),
+      rotation: finiteNumber(layer.rotation, 0, -3600, 3600),
+      color: typeof layer.color === "string" && /^#[0-9a-f]{6}$/i.test(layer.color) ? layer.color : "#111827",
+      content: typeof layer.content === "string" ? layer.content.slice(0, 500) : undefined,
+      url,
+      sourceWidth: finiteNumber(layer.sourceWidth, 1, 1),
+      sourceHeight: finiteNumber(layer.sourceHeight, 1, 1),
+      fontFamily: typeof layer.fontFamily === "string" && fonts.includes(layer.fontFamily) ? layer.fontFamily : "Arial",
+      fontWeight: finiteNumber(layer.fontWeight, 700, 100, 900),
+    }];
+  });
+}
 function download(name: string, content: string, type: string) {
   const anchor = document.createElement("a");
   anchor.href = URL.createObjectURL(new Blob([content], { type }));
@@ -93,7 +131,12 @@ function download(name: string, content: string, type: string) {
   URL.revokeObjectURL(anchor.href);
 }
 
-export function DesignStudio() {
+export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign[] }) {
+  const router = useRouter();
+  const [designJobId, setDesignJobId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveMessage, setSaveMessage] = useState("Not saved yet");
+  const [uploadMessage, setUploadMessage] = useState("");
   const [jobName, setJobName] = useState("New design job");
   const [customer, setCustomer] = useState("");
   const [material, setMaterial] = useState<Material>("htv");
@@ -107,6 +150,7 @@ export function DesignStudio() {
   const [weedBox, setWeedBox] = useState(true);
   const [registrationMarks, setRegistrationMarks] = useState(false);
   const [contourOffset, setContourOffset] = useState(0);
+  const [machineProfile, setMachineProfile] = useState<MachineProfile>("Generic SVG");
   const [newText, setNewText] = useState("");
   const [layers, setLayers] = useState<DesignLayer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -114,7 +158,7 @@ export function DesignStudio() {
   const [future, setFuture] = useState<DesignLayer[][]>([]);
   const [device, setDevice] = useState<DeviceState>("not-configured");
   const [deviceName, setDeviceName] = useState("No output device selected");
-  const [deviceMessage, setDeviceMessage] = useState("SVG export and system printing are ready. Direct device output needs an open USB/serial connection and a verified machine profile.");
+  const [deviceMessage, setDeviceMessage] = useState("SVG export and system printing are ready. The optional USB/serial check only confirms that the browser can see a port.");
   const [baudRate, setBaudRate] = useState(9600);
   const portRef = useRef<SerialPortLike | null>(null);
   const projectInputRef = useRef<HTMLInputElement | null>(null);
@@ -161,22 +205,47 @@ export function DesignStudio() {
 
   async function uploadArtwork(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
-    for (const file of files) {
-      if (!file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".svg")) continue;
-      const url = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error ?? new Error("Could not read artwork."));
-        reader.readAsDataURL(file);
-      });
-      const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-        const image = new window.Image();
-        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-        image.onerror = () => resolve({ width: 1, height: 1 });
-        image.src = url;
-      });
-      const width = Math.min(120, size.width * 0.55);
-      addLayer({ id: id(), kind: "image", name: file.name, visible: true, locked: false, x: size.width / 2, y: size.height / 2, width, height: width * dimensions.height / Math.max(1, dimensions.width), rotation: 0, color: "#111827", url, sourceWidth: dimensions.width, sourceHeight: dimensions.height });
+    const additions: DesignLayer[] = [];
+    setUploadMessage(files.length ? "Uploading artwork…" : "");
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".svg")) continue;
+        let url: string;
+        let dimensions: { width: number; height: number };
+        if (file.name.toLowerCase().endsWith(".svg") || file.type === "image/svg+xml") {
+          if (file.size > 1_000_000) throw new Error("SVG artwork must be smaller than 1MB.");
+          url = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error ?? new Error("Could not read SVG artwork."));
+            reader.readAsDataURL(file);
+          });
+          dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
+            const image = new window.Image();
+            image.onload = () => resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
+            image.onerror = () => resolve({ width: 1, height: 1 });
+            image.src = url;
+          });
+        } else {
+          const body = new FormData();
+          body.set("file", file);
+          body.set("kind", "DESIGN_ASSET");
+          const response = await fetch("/api/uploads", { method: "POST", body });
+          const result = await response.json() as { asset?: { url: string; width?: number | null; height?: number | null }; error?: string };
+          if (!response.ok || !result.asset) throw new Error(result.error ?? `Could not upload ${file.name}.`);
+          url = result.asset.url;
+          dimensions = { width: result.asset.width || 1, height: result.asset.height || 1 };
+        }
+        const width = Math.min(120, size.width * 0.55);
+        additions.push({ id: id(), kind: "image", name: file.name, visible: true, locked: false, x: size.width / 2, y: size.height / 2, width, height: width * dimensions.height / Math.max(1, dimensions.width), rotation: 0, color: "#111827", url, sourceWidth: dimensions.width, sourceHeight: dimensions.height });
+      }
+      if (additions.length) {
+        checkpoint([...layers, ...additions]);
+        setSelectedId(additions.at(-1)?.id ?? null);
+        setUploadMessage(`${additions.length} artwork file${additions.length === 1 ? "" : "s"} added`);
+      }
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : "Artwork upload failed.");
     }
     event.target.value = "";
   }
@@ -220,7 +289,7 @@ export function DesignStudio() {
     const elements = layers.filter((layer) => layer.visible).map((layer) => {
       const transform = `translate(${layer.x} ${layer.y}) rotate(${layer.rotation})`;
       const style = contourOffset > 0 ? `stroke="${layer.color}" stroke-width="${Math.max(0.3, contourOffset / 2)}" paint-order="stroke"` : "";
-      if (layer.kind === "image") return `<image href="${layer.url}" x="${-layer.width / 2}" y="${-layer.height / 2}" width="${layer.width}" height="${layer.height}" transform="${transform}" preserveAspectRatio="xMidYMid meet"/>`;
+      if (layer.kind === "image") return `<image href="${escapeXml(layer.url ?? "")}" x="${-layer.width / 2}" y="${-layer.height / 2}" width="${layer.width}" height="${layer.height}" transform="${transform}" preserveAspectRatio="xMidYMid meet"/>`;
       if (layer.kind === "text") return `<text x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-family="${escapeXml(layer.fontFamily ?? "Arial")}" font-size="${layer.height}" font-weight="${layer.fontWeight ?? 700}" fill="${layer.color}" ${style} transform="${transform}">${escapeXml(layer.content ?? "")}</text>`;
       if (layer.kind === "circle") return `<ellipse cx="0" cy="0" rx="${layer.width / 2}" ry="${layer.height / 2}" fill="${layer.color}" ${style} transform="${transform}"/>`;
       return `<rect x="${-layer.width / 2}" y="${-layer.height / 2}" width="${layer.width}" height="${layer.height}" fill="${layer.color}" ${style} transform="${transform}"/>`;
@@ -230,27 +299,67 @@ export function DesignStudio() {
     const artwork = mirror ? `<g transform="translate(${size.width} 0) scale(-1 1)">${elements}${box}${marks}</g>` : `${elements}${box}${marks}`;
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}mm" height="${size.height}mm" viewBox="0 0 ${size.width} ${size.height}"><title>${escapeXml(jobName)}</title>${artwork}</svg>`;
   }
-  function saveProject() {
-    download(`${safeName(jobName)}.design.json`, JSON.stringify({ version: 1, jobName, customer, material, sheet, customWidth, customHeight, copies, mirror, showGrid, snap, weedBox, registrationMarks, contourOffset, layers }, null, 2), "application/json");
+  function projectCanvas() {
+    return { version: 2, jobName, customer, material, sheet, customWidth, customHeight, copies, mirror, showGrid, snap, weedBox, registrationMarks, contourOffset, machineProfile, layers };
+  }
+  async function saveProject() {
+    setSaveStatus("saving");
+    setSaveMessage("Saving to this shop…");
+    try {
+      const response = await fetch("/api/designs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: designJobId ?? undefined, title: jobName, customer: customer || undefined, machineProfile, canvas: projectCanvas() }),
+      });
+      const result = await response.json() as { design?: { id: string }; error?: string };
+      if (!response.ok || !result.design) throw new Error(result.error ?? "Could not save this project.");
+      setDesignJobId(result.design.id);
+      setSaveStatus("saved");
+      setSaveMessage("Saved to this shop");
+      router.refresh();
+    } catch (error) {
+      setSaveStatus("error");
+      setSaveMessage(error instanceof Error ? error.message : "Could not save this project.");
+    }
+  }
+  function downloadBackup() {
+    download(`${safeName(jobName)}.design.json`, JSON.stringify(projectCanvas(), null, 2), "application/json");
+  }
+  function applyProject(project: Record<string, unknown>, projectId: string | null = null) {
+    if (!Array.isArray(project.layers)) throw new Error("This file has no design layers.");
+    checkpoint(normalizedLayers(project.layers));
+    if (typeof project.jobName === "string") setJobName(project.jobName);
+    if (typeof project.customer === "string") setCustomer(project.customer);
+    if (typeof project.material === "string" && project.material in materialDetails) setMaterial(project.material as Material);
+    if (typeof project.sheet === "string" && (project.sheet === "custom" || project.sheet in sheets)) setSheet(project.sheet as Sheet);
+    if (typeof project.customWidth === "number") setCustomWidth(project.customWidth);
+    if (typeof project.customHeight === "number") setCustomHeight(project.customHeight);
+    if (typeof project.copies === "number") setCopies(project.copies);
+    if (typeof project.mirror === "boolean") setMirror(project.mirror);
+    if (typeof project.showGrid === "boolean") setShowGrid(project.showGrid);
+    if (typeof project.snap === "boolean") setSnap(project.snap);
+    if (typeof project.weedBox === "boolean") setWeedBox(project.weedBox);
+    if (typeof project.registrationMarks === "boolean") setRegistrationMarks(project.registrationMarks);
+    if (typeof project.contourOffset === "number") setContourOffset(project.contourOffset);
+    if (typeof project.machineProfile === "string" && ["Generic SVG", "SignMaster", "VinylMaster", "Print/RIP"].includes(project.machineProfile)) setMachineProfile(project.machineProfile as MachineProfile);
+    setDesignJobId(projectId);
+    setSelectedId(null);
+    setSaveStatus(projectId ? "saved" : "idle");
+    setSaveMessage(projectId ? "Saved project opened" : "Backup opened; save it to this shop");
   }
   async function loadProject(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
       const project = JSON.parse(await file.text()) as Record<string, unknown>;
-      if (!Array.isArray(project.layers)) throw new Error("This file has no design layers.");
-      checkpoint(project.layers as DesignLayer[]);
-      if (typeof project.jobName === "string") setJobName(project.jobName);
-      if (typeof project.customer === "string") setCustomer(project.customer);
-      if (typeof project.material === "string" && project.material in materialDetails) setMaterial(project.material as Material);
-      setSelectedId(null);
+      applyProject(project);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not open this design project.");
     }
     event.target.value = "";
   }
   function exportManifest() {
-    download(`${safeName(jobName)}-production.json`, JSON.stringify({ jobName, customer: customer || null, createdAt: new Date().toISOString(), material, sheet: { preset: sheet, widthMm: size.width, heightMm: size.height }, output: { copies, mirror, weedBox, registrationMarks, contourOffsetMm: contourOffset }, layers: layers.map(({ url, ...layer }) => ({ ...layer, embeddedArtwork: Boolean(url) })), heatPressNote: materialDetails[material].instruction, device: { state: device, name: deviceName, baudRate } }, null, 2), "application/json");
+    download(`${safeName(jobName)}-production.json`, JSON.stringify({ jobName, customer: customer || null, createdAt: new Date().toISOString(), material, sheet: { preset: sheet, widthMm: size.width, heightMm: size.height }, output: { copies, mirror, weedBox, registrationMarks, contourOffsetMm: contourOffset }, layers: layers.map(({ url, ...layer }) => ({ ...layer, embeddedArtwork: Boolean(url) })), heatPressNote: materialDetails[material].instruction, machineProfile, device: { state: device, name: deviceName, baudRate } }, null, 2), "application/json");
   }
   function printDesign() {
     const printWindow = window.open("", "_blank", "width=900,height=700");
@@ -272,7 +381,7 @@ export function DesignStudio() {
       return;
     }
     setDevice("selecting");
-    setDeviceMessage("Choose the cutter or printer adapter. The app will open the port but send no production commands.");
+    setDeviceMessage("Choose the cutter or printer adapter. This checks that the browser can see the port; production commands remain in your machine software.");
     try {
       const port = await serial.requestPort();
       await port.open({ baudRate });
@@ -281,7 +390,7 @@ export function DesignStudio() {
       const parts = [info?.usbVendorId ? `VID ${info.usbVendorId.toString(16).toUpperCase()}` : "Serial device", info?.usbProductId ? `PID ${info.usbProductId.toString(16).toUpperCase()}` : ""].filter(Boolean);
       setDevice("connected");
       setDeviceName(parts.join(" · "));
-      setDeviceMessage(`Port is physically open at ${baudRate} baud. Select the verified machine profile before direct sending; SVG export is safe now.`);
+      setDeviceMessage(`Port detected at ${baudRate} baud. This is a connection check, not proof that a production job was sent. Export the prepared file to the selected machine software.`);
     } catch (error) {
       setDevice("error");
       setDeviceName("No device connected");
@@ -301,18 +410,19 @@ export function DesignStudio() {
     <div className="space-y-4">
       <section className="rounded-xl border border-slate-800 bg-slate-950 p-5 text-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300"><Scissors size={15} /> Professional production workspace</div><h2 className="mt-2 text-2xl font-semibold">Design on the transfer material—not on a jersey mockup.</h2><p className="mt-2 max-w-3xl text-sm text-slate-300">Layer artwork, text, and vector shapes; prepare cut marks and contour settings; then export or print through a verified output path.</p></div>
-          <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={undo} disabled={!past.length}><Undo2 size={16} /> Undo</Button><Button variant="outline" onClick={redo} disabled={!future.length}><Redo2 size={16} /> Redo</Button><Button variant="outline" onClick={saveProject}><Save size={16} /> Save project</Button><Button variant="outline" onClick={() => projectInputRef.current?.click()}><Upload size={16} /> Open project</Button><input ref={projectInputRef} className="hidden" type="file" accept="application/json,.json" onChange={loadProject} /></div>
+          <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300"><Scissors size={15} /> Professional production workspace</div><h2 className="mt-2 text-2xl font-semibold">Design on the transfer material—not on a jersey mockup.</h2><p className="mt-2 max-w-3xl text-sm text-slate-300">Layer artwork, text, and vector shapes; prepare cut marks and contour settings; then export or print through a verified output path.</p><p className={`mt-2 text-xs font-semibold ${saveStatus === "error" ? "text-red-300" : saveStatus === "saved" ? "text-emerald-300" : "text-slate-400"}`}>{saveMessage}</p></div>
+          <div className="flex max-w-2xl flex-wrap justify-end gap-2"><Button variant="outline" onClick={undo} disabled={!past.length}><Undo2 size={16} /> Undo</Button><Button variant="outline" onClick={redo} disabled={!future.length}><Redo2 size={16} /> Redo</Button><Button variant="outline" onClick={saveProject} disabled={saveStatus === "saving"}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : designJobId ? "Save changes" : "Save project"}</Button><Button variant="outline" onClick={downloadBackup}><Download size={16} /> Download backup</Button><Button variant="outline" onClick={() => projectInputRef.current?.click()}><Upload size={16} /> Open backup</Button><input ref={projectInputRef} className="hidden" type="file" accept="application/json,.json" onChange={loadProject} /></div>
         </div>
       </section>
 
       <div className="grid gap-4 2xl:grid-cols-[330px_minmax(500px,1fr)_350px]">
         <aside className="space-y-4">
-          <section className="panel p-4"><h3 className="font-semibold">Job details</h3><label className="mt-3 block text-xs font-semibold text-slate-600">Job name<input className="field mt-1" value={jobName} onChange={(event) => setJobName(event.target.value)} /></label><label className="mt-3 block text-xs font-semibold text-slate-600">Customer or team<input className="field mt-1" value={customer} onChange={(event) => setCustomer(event.target.value)} placeholder="Optional" /></label></section>
+          <section className="panel p-4"><h3 className="font-semibold">Job details</h3>{savedDesigns.length ? <label className="mt-3 block text-xs font-semibold text-slate-600">Open shop project<select className="field mt-1" value="" onChange={(event) => { const saved = savedDesigns.find((item) => item.id === event.target.value); if (saved) applyProject(saved.canvas, saved.id); }}><option value="">Select a saved project</option>{savedDesigns.map((design) => <option key={design.id} value={design.id}>{design.title}</option>)}</select></label> : null}<label className="mt-3 block text-xs font-semibold text-slate-600">Job name<input className="field mt-1" value={jobName} onChange={(event) => setJobName(event.target.value)} /></label><label className="mt-3 block text-xs font-semibold text-slate-600">Customer or team<input className="field mt-1" value={customer} onChange={(event) => setCustomer(event.target.value)} placeholder="Links automatically on one exact customer match" /></label></section>
 
           <section className="panel p-4">
             <div className="flex items-center gap-2"><ImagePlus size={18} /><h3 className="font-semibold">Insert artwork</h3></div>
             <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-4 py-5 text-sm font-semibold hover:border-[var(--shop-primary)]"><ImagePlus size={18} /> Add pictures or SVGs<input className="hidden" type="file" accept="image/*,.svg" multiple onChange={uploadArtwork} /></label>
+            {uploadMessage ? <p className="mt-2 text-xs font-medium text-slate-600">{uploadMessage}</p> : null}
             <div className="mt-3 flex gap-2"><input className="field min-w-0" value={newText} onChange={(event) => setNewText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addText(); }} placeholder="Name, number, text…" /><Button variant="outline" onClick={addText}><Type size={16} /></Button></div>
             <div className="mt-2 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => addShape("rectangle")}><Square size={16} /> Rectangle</Button><Button variant="outline" onClick={() => addShape("circle")}><Circle size={16} /> Circle</Button></div>
           </section>
@@ -353,9 +463,9 @@ export function DesignStudio() {
 
           <section className="panel p-4"><h3 className="font-semibold">Material and cut setup</h3><label className="mt-3 block text-xs font-semibold text-slate-600">Material<select className="field mt-1" value={material} onChange={(event) => { const value = event.target.value as Material; setMaterial(value); setMirror(materialDetails[value].defaultMirror); }}>{Object.entries(materialDetails).map(([value, detail]) => <option key={value} value={value}>{detail.label}</option>)}</select></label><label className="mt-3 block text-xs font-semibold text-slate-600">Sheet or roll area<select className="field mt-1" value={sheet} onChange={(event) => setSheet(event.target.value as Sheet)}>{Object.entries(sheets).map(([value, detail]) => <option key={value} value={value}>{detail.label} · {detail.width}×{detail.height} mm</option>)}<option value="custom">Custom dimensions</option></select></label>{sheet === "custom" ? <div className="mt-2 grid grid-cols-2 gap-2"><NumberField label="Width mm" value={customWidth} min={50} onChange={setCustomWidth} /><NumberField label="Height mm" value={customHeight} min={50} onChange={setCustomHeight} /></div> : null}<div className="mt-2 grid grid-cols-2 gap-2"><NumberField label="Copies" value={copies} min={1} onChange={setCopies} /><NumberField label="Contour (mm)" value={contourOffset} min={0} step={0.1} onChange={setContourOffset} /></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs"><Toggle label="Mirror output" checked={mirror} onChange={setMirror} /><Toggle label="Weed box" checked={weedBox} onChange={setWeedBox} /><Toggle label="Registration marks" checked={registrationMarks} onChange={setRegistrationMarks} /><Toggle label="Snap to grid" checked={snap} onChange={setSnap} /></div><div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-950">{materialDetails[material].instruction}</div></section>
 
-          <section className={`rounded-lg border p-4 ${deviceTone}`}><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Usb size={18} /><h3 className="font-semibold">Output device</h3></div>{device === "connected" ? <CheckCircle2 className="text-emerald-600" size={19} /> : <AlertTriangle className="text-amber-600" size={19} />}</div><p className="mt-2 text-sm font-semibold">{deviceName}</p><p className="mt-1 text-xs leading-5 text-slate-600">{deviceMessage}</p><label className="mt-3 block text-xs font-semibold text-slate-600">Serial speed<select className="field mt-1" value={baudRate} onChange={(event) => setBaudRate(Number(event.target.value))} disabled={device === "connected"}>{[9600, 19200, 38400, 57600, 115200].map((rate) => <option key={rate}>{rate}</option>)}</select></label>{device === "connected" ? <Button className="mt-3 w-full" variant="outline" onClick={disconnectDevice}>Disconnect device</Button> : <Button className="mt-3 w-full" variant="outline" onClick={connectDevice} disabled={device === "selecting"}><Usb size={16} /> {device === "selecting" ? "Opening port…" : "Connect USB / serial"}</Button>}</section>
+          <section className={`rounded-lg border p-4 ${deviceTone}`}><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Usb size={18} /><h3 className="font-semibold">Device readiness</h3></div>{device === "connected" ? <CheckCircle2 className="text-emerald-600" size={19} /> : <AlertTriangle className="text-amber-600" size={19} />}</div><p className="mt-2 text-sm font-semibold">{deviceName}</p><p className="mt-1 text-xs leading-5 text-slate-600">{deviceMessage}</p><label className="mt-3 block text-xs font-semibold text-slate-600">Serial speed<select className="field mt-1" value={baudRate} onChange={(event) => setBaudRate(Number(event.target.value))} disabled={device === "connected"}>{[9600, 19200, 38400, 57600, 115200].map((rate) => <option key={rate}>{rate}</option>)}</select></label>{device === "connected" ? <Button className="mt-3 w-full" variant="outline" onClick={disconnectDevice}>Close checked port</Button> : <Button className="mt-3 w-full" variant="outline" onClick={connectDevice} disabled={device === "selecting"}><Usb size={16} /> {device === "selecting" ? "Checking port…" : "Check USB / serial port"}</Button>}</section>
 
-          <section className="panel p-4"><div className="flex items-center gap-2"><Download size={18} /><h3 className="font-semibold">Production output</h3></div><div className="mt-3 grid gap-2"><Button onClick={() => download(`${safeName(jobName)}.svg`, svgDocument(), "image/svg+xml")}><Scissors size={16} /> Export production SVG</Button><Button variant="secondary" onClick={printDesign}><Printer size={16} /> Print through this computer</Button><Button variant="outline" onClick={exportManifest}><MonitorCog size={16} /> Export job manifest</Button></div><p className="mt-3 text-[11px] leading-4 text-slate-500">The print button opens only the production sheet at its real millimetre size, then uses the printer installed on this computer. SVG transfers the prepared design into SignMaster, VinylMaster, RIP, or cutter software.</p></section>
+          <section className="panel p-4"><div className="flex items-center gap-2"><Download size={18} /><h3 className="font-semibold">Production output</h3></div><label className="mt-3 block text-xs font-semibold text-slate-600">Machine workflow<select className="field mt-1" value={machineProfile} onChange={(event) => setMachineProfile(event.target.value as MachineProfile)}><option>Generic SVG</option><option>SignMaster</option><option>VinylMaster</option><option>Print/RIP</option></select></label><div className="mt-3 grid gap-2"><Button onClick={() => download(`${safeName(jobName)}.svg`, svgDocument(), "image/svg+xml")}><Scissors size={16} /> Export for {machineProfile}</Button><Button variant="secondary" onClick={printDesign}><Printer size={16} /> Print through this computer</Button><Button variant="outline" onClick={exportManifest}><MonitorCog size={16} /> Export job manifest</Button></div><p className="mt-3 text-[11px] leading-4 text-slate-500">Printing opens only the production sheet at its real millimetre size and uses the printer installed on this computer. SVG carries the prepared artwork into SignMaster, VinylMaster, RIP, or cutter software; the browser does not claim a job was sent directly.</p></section>
         </aside>
       </div>
     </div>

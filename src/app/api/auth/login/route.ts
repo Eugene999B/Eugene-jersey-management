@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from "@/lib/session-token";
+import { enforceRateLimit } from "@/lib/rate-limit";
+
+const DUMMY_PASSWORD_HASH = "$2b$12$94A4bgZTq1kkieE.ysBmou2Q7M1Q7es6ib1sj4arKxG9fsC2iDZ3W";
 
 const loginSchema = z.object({
   loginId: z.string().optional(),
@@ -57,6 +60,12 @@ function cleanLoginId(value: string | undefined) {
   return value?.trim() ?? "";
 }
 
+function requestIp(request: NextRequest) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || request.headers.get("x-real-ip")
+    || "unknown";
+}
+
 async function findLoginUser(input: { email?: string; loginId?: string; shopLoginId?: string }) {
   if (input.email) {
     return prisma.user.findUnique({
@@ -73,7 +82,6 @@ async function findLoginUser(input: { email?: string; loginId?: string; shopLogi
       OR: [
         { adminLoginId: loginId.toUpperCase() },
         { email: loginId.toLowerCase() },
-        { phone: loginId },
       ],
     },
     include: { shop: true },
@@ -94,26 +102,31 @@ export async function POST(request: NextRequest) {
     return redirectToLogin("invalid", String(formData.get("next") ?? ""), String(formData.get("loginId") ?? ""));
   }
 
+  const identifier = (parsed.data.loginId ?? parsed.data.email ?? "unknown").trim().toLowerCase();
+  try {
+    await Promise.all([
+      enforceRateLimit({ key: `staff-login-account:${identifier}`, limit: 10, windowSeconds: 15 * 60 }),
+      enforceRateLimit({ key: `staff-login-ip:${requestIp(request)}`, limit: 60, windowSeconds: 15 * 60 }),
+    ]);
+  } catch {
+    return redirectToLogin("rate", parsed.data.next, parsed.data.loginId);
+  }
+
   const user = await findLoginUser(parsed.data);
 
   if (!user || !user.isActive) {
+    await verifyPassword(parsed.data.password, DUMMY_PASSWORD_HASH);
     return redirectToLogin("invalid", parsed.data.next, parsed.data.loginId);
-  }
-
-  if (user.lockUntil && user.lockUntil > new Date()) {
-    return redirectToLogin("locked", parsed.data.next, parsed.data.loginId);
   }
 
   const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
 
   if (!validPassword) {
     const failedLoginCount = user.failedLoginCount + 1;
-    const shouldLock = failedLoginCount >= 6;
     await prisma.user.update({
       where: { id: user.id },
       data: {
         failedLoginCount,
-        lockUntil: shouldLock ? new Date(Date.now() + 10 * 60 * 1000) : null,
       },
     });
     await audit({
@@ -124,18 +137,7 @@ export async function POST(request: NextRequest) {
       entityId: user.id,
       metadata: { failedLoginCount, loginId: parsed.data.loginId ?? parsed.data.email ?? null },
     });
-    return redirectToLogin(shouldLock ? "locked" : "invalid", parsed.data.next, parsed.data.loginId);
-  }
-
-  const needsShopId = user.shopId && user.role !== Role.SUPPLIER;
-  if (needsShopId) {
-    const enteredShopId = (parsed.data.shopLoginId || parsed.data.loginId)?.trim().toUpperCase();
-    const validShopIds = [user.adminLoginId, user.shop?.staffLoginId, user.shop?.networkCode, user.shop?.slug]
-      .filter(Boolean)
-      .map((value) => String(value).toUpperCase());
-    if (!enteredShopId || !validShopIds.includes(enteredShopId)) {
-      return redirectToLogin("shop-id", parsed.data.next, parsed.data.loginId);
-    }
+    return redirectToLogin("invalid", parsed.data.next, parsed.data.loginId);
   }
 
   await prisma.user.update({
@@ -157,6 +159,7 @@ export async function POST(request: NextRequest) {
     email: user.email,
     name: user.name,
     role: user.role,
+    sessionVersion: user.sessionVersion,
   });
 
   const response = new NextResponse(null, {

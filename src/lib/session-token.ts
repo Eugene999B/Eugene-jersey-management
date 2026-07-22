@@ -3,8 +3,8 @@ import type { Role } from "@prisma/client";
 import type { SessionUser } from "@/lib/rbac";
 
 export const SESSION_COOKIE = "sports_shop_session";
-// Keep staff signed in across normal shop usage and refresh this window on every
-// authenticated dashboard request. Explicit logout still invalidates the cookie.
+// Keep staff signed in across a normal work week. Database-backed sessionVersion
+// checks revoke this token when a password, user, or tenant access state changes.
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getSecret() {
@@ -22,6 +22,7 @@ export async function signSession(user: SessionUser) {
     email: user.email,
     name: user.name,
     role: user.role,
+    sessionVersion: user.sessionVersion,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -32,7 +33,7 @@ export async function signSession(user: SessionUser) {
 export async function verifySessionToken(token: string): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
-    if (!payload.id || !payload.email || !payload.name || !payload.role) return null;
+    if (!payload.id || !payload.email || !payload.name || !payload.role || typeof payload.sessionVersion !== "number") return null;
 
     return {
       id: String(payload.id),
@@ -40,6 +41,7 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
       email: String(payload.email),
       name: String(payload.name),
       role: payload.role as Role,
+      sessionVersion: payload.sessionVersion,
     };
   } catch {
     return null;

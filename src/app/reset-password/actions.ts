@@ -39,17 +39,15 @@ export async function resetPasswordAction(formData: FormData) {
     } catch {
       redirect(`/reset-password?error=expired&phone=${encodeURIComponent(phone)}`);
     }
-    const user = await prisma.user.findFirst({ where: { phone } });
-    if (!user) redirect("/reset-password?error=expired");
-
     const consumed = await consumePhoneCode({
-      userId: user.id,
-      phone: user.phone ?? phone,
+      phone,
       purpose: PhoneVerificationPurpose.STAFF_PASSWORD_RESET,
       code: parsed.data.code,
     });
 
-    if (!consumed) redirect(`/reset-password?error=expired&phone=${encodeURIComponent(phone)}`);
+    if (!consumed?.userId) redirect(`/reset-password?error=expired&phone=${encodeURIComponent(phone)}`);
+    const user = await prisma.user.findUnique({ where: { id: consumed.userId } });
+    if (!user || user.phone !== phone) redirect(`/reset-password?error=expired&phone=${encodeURIComponent(phone)}`);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -57,6 +55,7 @@ export async function resetPasswordAction(formData: FormData) {
         passwordHash: await hashPassword(parsed.data.password),
         failedLoginCount: 0,
         lockUntil: null,
+        sessionVersion: { increment: 1 },
       },
     });
 
@@ -82,30 +81,22 @@ export async function resetPasswordAction(formData: FormData) {
     redirect("/reset-password?error=expired");
   }
 
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: reset.userId },
-      data: {
-        passwordHash: await hashPassword(parsed.data.password),
-        failedLoginCount: 0,
-        lockUntil: null,
-      },
-    }),
-    prisma.passwordResetToken.update({
-      where: { id: reset.id },
-      data: { usedAt: new Date() },
-    }),
-    prisma.auditLog.create({
-      data: {
-        shopId: reset.user.shopId,
-        userId: reset.userId,
-        action: "auth.password_reset_completed",
-        entityType: "User",
-        entityId: reset.userId,
-        metadata: {},
-      },
-    }),
-  ]);
+  const passwordHash = await hashPassword(parsed.data.password);
+  try {
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({ where: { id: reset.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+      if (claimed.count !== 1) throw new Error("RESET_ALREADY_USED");
+      await tx.user.update({
+        where: { id: reset.userId },
+        data: { passwordHash, failedLoginCount: 0, lockUntil: null, sessionVersion: { increment: 1 } },
+      });
+      await tx.auditLog.create({
+        data: { shopId: reset.user.shopId, userId: reset.userId, action: "auth.password_reset_completed", entityType: "User", entityId: reset.userId, metadata: {} },
+      });
+    });
+  } catch {
+    redirect("/reset-password?error=expired");
+  }
 
   await audit({
     shopId: reset.user.shopId,

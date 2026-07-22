@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { Clock3, CreditCard, Minus, Plus, Printer, Search, Smartphone, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,20 +41,28 @@ type CartLine = {
 
 type PosTerminalProps = {
   products: PosProduct[];
+  customers: Array<{ id: string; name: string; phone: string | null; email: string | null }>;
   currencyCode: string;
 };
 
-export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
+export function PosTerminal({ products, customers, currencyCode }: PosTerminalProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountReason, setDiscountReason] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "MOMO" | "STORE_CREDIT">("CASH");
   const [creditDueDate, setCreditDueDate] = useState("");
   const [creditInstallments, setCreditInstallments] = useState(1);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [lastReceiptUrl, setLastReceiptUrl] = useState<string | null>(null);
+  const checkoutKeyRef = useRef<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [personalizing, setPersonalizing] = useState<{ product: PosProduct; variant: PosVariant } | null>(null);
@@ -65,6 +73,11 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
     const matchesQuery = product.name.toLowerCase().includes(query.toLowerCase()) || product.variants.some((variant) => variant.sku.toLowerCase().includes(query.toLowerCase()));
     return matchesCategory && matchesQuery;
   });
+  const customerMatches = useMemo(() => {
+    const needle = customerQuery.trim().toLowerCase();
+    if (!needle) return customers.slice(0, 6);
+    return customers.filter((customer) => [customer.name, customer.phone, customer.email].some((value) => value?.toLowerCase().includes(needle))).slice(0, 6);
+  }, [customerQuery, customers]);
 
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   const total = Math.max(subtotal - discountAmount, 0);
@@ -91,18 +104,26 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
 
   function checkout() {
     setMessage(null);
+    setLastReceiptUrl(null);
+    const receiptWindow = window.open("", "_blank");
     startTransition(async () => {
+      checkoutKeyRef.current ??= crypto.randomUUID();
       const response = await fetch("/api/pos/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName: customerName || undefined,
+          customerId: selectedCustomerId || undefined,
           customerPhone: customerPhone || undefined,
           customerEmail: customerEmail || undefined,
           paymentMethod,
           creditDueDate: paymentMethod === "STORE_CREDIT" ? creditDueDate || undefined : undefined,
           creditInstallments: paymentMethod === "STORE_CREDIT" ? creditInstallments : undefined,
           discountAmount,
+          discountReason: discountReason || undefined,
+          paymentReference: paymentReference || undefined,
+          paymentConfirmed,
+          idempotencyKey: checkoutKeyRef.current,
           items: cart.map((line) => ({
             variantId: line.variantId,
             quantity: line.quantity,
@@ -115,18 +136,27 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
 
       const payload = await response.json();
       if (!response.ok) {
+        receiptWindow?.close();
         setMessage(payload.error ?? "Checkout failed.");
         return;
       }
 
       setCart([]);
       setDiscountAmount(0);
+      setDiscountReason("");
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
+      setCustomerQuery("");
+      setSelectedCustomerId("");
+      setPaymentReference("");
+      setPaymentConfirmed(false);
       setCreditDueDate("");
       setCreditInstallments(1);
-      setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}.`);
+      checkoutKeyRef.current = null;
+      setLastReceiptUrl(payload.receiptUrl);
+      if (receiptWindow && payload.receiptUrl) receiptWindow.location.href = payload.receiptUrl;
+      setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}${receiptWindow ? " opened for printing" : " is ready to reprint"}.`);
     });
   }
 
@@ -197,10 +227,17 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
       <aside className="panel flex max-h-[calc(100vh-120px)] flex-col overflow-hidden">
         <div className="border-b border-[#ded8cd] p-4">
           <h2 className="text-lg font-semibold">Cart</h2>
-          <input className="field mt-3" placeholder="Customer name (optional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+          <label className="mt-3 block text-xs font-semibold text-slate-600">Find existing customer
+            <input className="field mt-1" aria-label="Find existing customer" placeholder="Search name, phone or email" value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} />
+          </label>
+          {!selectedCustomerId && customerQuery ? <div className="mt-1 max-h-36 overflow-y-auto rounded-[8px] border border-[#ded8cd] bg-white p-1">{customerMatches.map((customer) => <button key={customer.id} type="button" className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#f6f4ef]" onClick={() => { setSelectedCustomerId(customer.id); setCustomerName(customer.name); setCustomerPhone(customer.phone ?? ""); setCustomerEmail(customer.email ?? ""); setCustomerQuery(customer.name); }}><strong className="block">{customer.name}</strong><span className="text-xs text-slate-500">{customer.phone ?? customer.email ?? "No contact"}</span></button>)}{!customerMatches.length ? <p className="p-3 text-xs text-slate-500">No match. Enter a new customer below.</p> : null}</div> : null}
+          {selectedCustomerId ? <button type="button" className="mt-2 w-full rounded-[8px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={() => { setSelectedCustomerId(""); setCustomerQuery(""); setCustomerName(""); setCustomerPhone(""); setCustomerEmail(""); }}>Existing customer selected · click to change</button> : null}
+          <label className="mt-3 block text-xs font-semibold text-slate-600">Customer name
+            <input className="field mt-1" placeholder="Walk-in or new customer (optional)" value={customerName} onChange={(event) => { setCustomerName(event.target.value); if (selectedCustomerId) setSelectedCustomerId(""); }} />
+          </label>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <input className="field" placeholder="Phone for receipt" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
-            <input className="field" type="email" placeholder="Email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} />
+            <label className="text-xs font-semibold text-slate-600">Phone<input className="field mt-1" placeholder="Phone for receipt" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} /></label>
+            <label className="text-xs font-semibold text-slate-600">Email<input className="field mt-1" type="email" placeholder="Email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} /></label>
           </div>
         </div>
         <div className="scrollbar-thin flex-1 space-y-3 overflow-y-auto p-4">
@@ -232,7 +269,8 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
           )}
         </div>
         <div className="space-y-3 border-t border-[#ded8cd] p-4">
-          <input className="field" type="number" min="0" step="0.01" placeholder="Discount amount" value={discountAmount || ""} onChange={(event) => setDiscountAmount(Number(event.target.value || 0))} />
+          <label className="block text-xs font-semibold text-slate-600">Discount amount<input className="field mt-1" type="number" min="0" step="0.01" placeholder="0.00" value={discountAmount || ""} onChange={(event) => setDiscountAmount(Number(event.target.value || 0))} /></label>
+          {discountAmount > 0 ? <label className="block text-xs font-semibold text-slate-600">Discount reason<input className="field mt-1" maxLength={180} placeholder="Promotion, manager approval, damaged item..." value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} required /></label> : null}
           <div className="grid grid-cols-4 gap-2">
             {[
               ["CASH", Wallet],
@@ -242,7 +280,7 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
             ].map(([method, Icon]) => (
               <button
                 key={String(method)}
-                onClick={() => setPaymentMethod(method as "CASH" | "CARD" | "MOMO" | "STORE_CREDIT")}
+                onClick={() => { setPaymentMethod(method as "CASH" | "CARD" | "MOMO" | "STORE_CREDIT"); setPaymentReference(""); setPaymentConfirmed(false); }}
                 className={`rounded-[8px] border px-2 py-3 text-sm font-semibold ${paymentMethod === method ? "border-[var(--shop-primary)] bg-[var(--shop-primary)] text-white" : "border-[#ded8cd] bg-white text-slate-700"}`}
               >
                 <Icon className="mx-auto mb-1" size={18} />
@@ -250,6 +288,7 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
               </button>
             ))}
           </div>
+          {paymentMethod === "CARD" || paymentMethod === "MOMO" ? <div className="space-y-2 rounded-[8px] border border-sky-200 bg-sky-50 p-3"><label className="block text-xs font-semibold text-sky-900">Terminal / network reference<input className="field mt-1" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Required reference" /></label><label className="flex items-start gap-2 text-xs font-semibold text-sky-900"><input className="mt-0.5 h-4 w-4" type="checkbox" checked={paymentConfirmed} onChange={(event) => setPaymentConfirmed(event.target.checked)} /><span>I confirmed that this payment was received on the card terminal or mobile-money network.</span></label></div> : null}
           {paymentMethod === "STORE_CREDIT" ? (
             <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-orange-200 bg-orange-50 p-3">
               <label className="block">
@@ -270,9 +309,10 @@ export function PosTerminal({ products, currencyCode }: PosTerminalProps) {
           </div>
           <Button className="w-full" onClick={checkout} disabled={!cart.length || isPending}>
             <Printer size={16} />
-            {isPending ? "Processing..." : "Complete sale"}
+            {isPending ? "Processing..." : "Complete sale & print"}
           </Button>
           {message ? <p className="rounded-[8px] bg-[#f6f4ef] p-3 text-sm text-slate-700">{message}</p> : null}
+          {lastReceiptUrl ? <a className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href={lastReceiptUrl} target="_blank" rel="noreferrer"><Printer size={16} /> Reprint receipt</a> : null}
         </div>
       </aside>
 

@@ -31,6 +31,10 @@ async function main() {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && (existing.role !== Role.SUPER_ADMIN || existing.shopId)) {
+    throw new Error("ADMIN_EMAIL already belongs to a tenant account and cannot be promoted by bootstrap.");
+  }
   const admin = await prisma.user.upsert({
     where: { email },
     update: {

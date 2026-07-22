@@ -105,7 +105,10 @@ export async function createShopAction(formData: FormData) {
 
   if (!parsed.success) redirect("/admin/shops/new?error=invalid");
 
-  const temporaryPassword = `Launch${Math.floor(100000 + Math.random() * 899999)}!`;
+  const existingOwner = await prisma.user.findUnique({ where: { email: parsed.data.ownerEmail }, select: { id: true } });
+  if (existingOwner) redirect("/admin/shops/new?error=email-exists");
+
+  const temporaryPassword = `Launch-${nanoid(14)}`;
   const passwordHash = await hashPassword(temporaryPassword);
 
   const shop = await prisma.$transaction(async (tx) => {
@@ -149,7 +152,6 @@ export async function createShopAction(formData: FormData) {
     return createdShop;
   });
 
-  console.log(`Initial owner password for ${parsed.data.ownerEmail}: ${temporaryPassword}`);
   await audit({
     shopId: shop.id,
     userId: session.id,
@@ -160,7 +162,7 @@ export async function createShopAction(formData: FormData) {
   });
 
   revalidatePath("/admin");
-  redirect(`/admin/shops/${shop.id}`);
+  redirect(`/admin/shops/${shop.id}?credential=${encodeURIComponent(temporaryPassword)}`);
 }
 
 export async function verifyShopCredentialsAction(formData: FormData) {
@@ -223,9 +225,16 @@ export async function toggleShopAction(formData: FormData) {
   const shopId = String(formData.get("shopId") ?? "");
   const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
 
-  const updated = await prisma.shop.update({
-    where: { id: shopId },
-    data: { isActive: !shop.isActive },
+  const updated = await prisma.$transaction(async (tx) => {
+    const next = await tx.shop.update({
+      where: { id: shopId },
+      data: { isActive: !shop.isActive },
+    });
+    await tx.user.updateMany({
+      where: { shopId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+    return next;
   });
 
   await audit({
@@ -332,7 +341,7 @@ const platformWorkerSchema = z.object({
   department: z.string().optional(),
   emergencyContact: z.string().optional(),
   staffNotes: z.string().optional(),
-  password: z.string().min(6),
+  password: z.string().min(12).max(100),
   adminPermissions: z.array(z.enum(platformPermissionValues)).min(1),
 });
 
@@ -368,29 +377,12 @@ export async function createPlatformWorkerAction(formData: FormData) {
   if (!parsed.success) redirect("/admin?error=worker");
 
   const existingWorker = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
-  if (existingWorker?.id === session.id) redirect("/admin?error=worker");
+  if (existingWorker) redirect("/admin?error=worker-exists");
 
   const passwordHash = await hashPassword(parsed.data.password);
   const adminLoginId = platformWorkerLoginId(parsed.data.name, parsed.data.adminLoginId);
-  const worker = await prisma.user.upsert({
-    where: { email: parsed.data.email },
-    update: {
-      name: parsed.data.name,
-      adminLoginId,
-      phone: parsed.data.phone,
-      staffTitle: parsed.data.staffTitle,
-      department: parsed.data.department,
-      emergencyContact: parsed.data.emergencyContact,
-      staffNotes: parsed.data.staffNotes,
-      passwordHash,
-      role: Role.SUPER_ADMIN,
-      shopId: null,
-      adminPermissions: parsed.data.adminPermissions,
-      isActive: true,
-      failedLoginCount: 0,
-      lockUntil: null,
-    },
-    create: {
+  const worker = await prisma.user.create({
+    data: {
       name: parsed.data.name,
       adminLoginId,
       email: parsed.data.email,
@@ -427,7 +419,7 @@ export async function togglePlatformWorkerAction(formData: FormData) {
 
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: { isActive: !worker.isActive },
+    data: { isActive: !worker.isActive, sessionVersion: { increment: 1 } },
   });
 
   await audit({

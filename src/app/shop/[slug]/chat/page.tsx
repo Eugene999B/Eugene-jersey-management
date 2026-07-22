@@ -5,6 +5,7 @@ import { MessageCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { startCustomerChatAction } from "@/app/shop/[slug]/chat/actions";
 import { prisma } from "@/lib/db";
+import { getBuyerSession } from "@/lib/buyer-session";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -15,6 +16,7 @@ export default async function PublicChatPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const query = await searchParams;
   const shop = await prisma.shop.findUnique({ where: { slug } });
+  const buyer = await getBuyerSession();
   if (!shop || !shop.isActive || !shop.storefrontEnabled) notFound();
 
   const style = {
@@ -51,17 +53,13 @@ export default async function PublicChatPage({ params, searchParams }: Props) {
               Message sent. The shop can reply using your phone or email.
             </div>
           ) : null}
-          <form action={startCustomerChatAction} className="space-y-3">
+          {!buyer ? <div className="rounded-[8px] border border-[#ded8cd] bg-[#f8fafc] p-5"><p className="font-semibold">Sign in before starting a conversation</p><p className="mt-2 text-sm text-slate-600">This protects the shop from spam and keeps replies connected to your verified buyer account.</p><Link className="mt-4 inline-flex min-h-11 items-center rounded-[8px] bg-[#111827] px-4 text-sm font-semibold text-white" href={`/buyer/login?next=${encodeURIComponent(`/shop/${shop.slug}/chat`)}`}>Buyer sign in</Link></div> : <form action={startCustomerChatAction} className="space-y-3">
             <input type="hidden" name="shopSlug" value={shop.slug} />
-            <input className="field" name="name" placeholder="Your name" required />
-            <div className="grid gap-3 md:grid-cols-2">
-              <input className="field" name="phone" placeholder="Phone number" />
-              <input className="field" name="email" type="email" placeholder="Email" />
-            </div>
+            <div className="rounded-[8px] bg-[#f6f4ef] p-3 text-sm"><p className="font-semibold">{buyer.name}</p><p className="mt-1 text-slate-500">{buyer.phone}{buyer.email ? ` · ${buyer.email}` : ""}</p></div>
             <input className="field" name="subject" placeholder="Subject" defaultValue="Order question" required />
             <textarea className="field min-h-40" name="body" placeholder="Write your message" required />
             <Button className="w-full"><Send size={16} /> Send message</Button>
-          </form>
+          </form>}
         </div>
       </section>
     </main>

@@ -6,6 +6,8 @@ import { closeDayAction } from "@/app/dashboard/closing/actions";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 type Props = {
   searchParams?: Promise<{ date?: string }>;
@@ -24,6 +26,7 @@ function bounds(value: string) {
 }
 
 export default async function ClosingPage({ searchParams }: Props) {
+  await requireRole(permissions.closing);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 

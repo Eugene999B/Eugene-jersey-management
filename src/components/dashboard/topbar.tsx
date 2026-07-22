@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Bell, CircleUserRound, Search } from "lucide-react";
 import { prisma } from "@/lib/db";
-import type { SessionUser } from "@/lib/rbac";
+import { hasRole, permissions, type SessionUser } from "@/lib/rbac";
 
 type TopbarProps = {
   session: SessionUser;
@@ -47,7 +47,7 @@ export async function DashboardTopbar({ session, shopId }: TopbarProps) {
               </span>
             ) : null}
           </div>
-          <Link href="/dashboard/settings" className="rounded-[8px] border border-[#ded8cd] bg-white p-2 text-[var(--shop-primary)]" title="Shop settings"><CircleUserRound size={19} /></Link>
+          {hasRole(session, permissions.settings) ? <Link href="/dashboard/settings" className="rounded-[8px] border border-[#ded8cd] bg-white p-2 text-[var(--shop-primary)]" title="Shop settings"><CircleUserRound size={19} /></Link> : <span className="rounded-[8px] border border-[#ded8cd] bg-white p-2 text-slate-400" title={session.role.replaceAll("_", " ")}><CircleUserRound size={19} /></span>}
         </div>
       </div>
     </header>

@@ -6,32 +6,43 @@ import { ReportActions } from "@/components/reports/report-actions";
 import { prisma } from "@/lib/db";
 import { currency } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { hasRole, permissions } from "@/lib/rbac";
 
-type Props = {
-  searchParams?: Promise<{ range?: string }>;
-};
+type Props = { searchParams?: Promise<{ range?: string; from?: string; to?: string }> };
 
 function rangeStart(range = "30") {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - Number(range));
+  const days = [0, 7, 30, 365].includes(Number(range)) ? Number(range) : 30;
+  date.setDate(date.getDate() - days);
   return date;
 }
 
+function inputDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 export default async function ReportsPage({ searchParams }: Props) {
+  await requireRole(permissions.reportsRead);
   const params = (await searchParams) ?? {};
-  const { shop } = await getTenantContext();
+  const { shop, session } = await getTenantContext();
   if (!shop) return null;
 
-  const start = rangeStart(params.range ?? "30");
+  const presetStart = rangeStart(params.range ?? "30");
+  const parsedFrom = params.from ? new Date(`${params.from}T00:00:00`) : presetStart;
+  const parsedTo = params.to ? new Date(`${params.to}T23:59:59.999`) : new Date();
+  const start = Number.isNaN(parsedFrom.getTime()) ? presetStart : parsedFrom;
+  const end = Number.isNaN(parsedTo.getTime()) || parsedTo < start ? new Date() : parsedTo;
+  const createdAt = { gte: start, lte: end };
   const [orders, orderItems, variants, staff] = await Promise.all([
     prisma.order.findMany({
-      where: { shopId: shop.id, createdAt: { gte: start }, status: { not: "CANCELLED" } },
+      where: { shopId: shop.id, createdAt, status: { not: "CANCELLED" } },
       include: { processedBy: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.orderItem.findMany({
-      where: { order: { shopId: shop.id, createdAt: { gte: start }, status: { not: "CANCELLED" } } },
+      where: { order: { shopId: shop.id, createdAt, status: { not: "CANCELLED" } } },
       include: { productVariant: { include: { product: true } } },
     }),
     prisma.productVariant.findMany({
@@ -76,14 +87,6 @@ export default async function ReportsPage({ searchParams }: Props) {
     staffSales.set(key, existing);
   });
 
-  const csv = [
-    "Metric,Value",
-    `Revenue,${revenue}`,
-    `Orders,${orders.length}`,
-    `Average Order,${averageOrder}`,
-    `Low Stock,${variants.filter((variant) => variant.stockQty <= variant.product.lowStockThreshold).length}`,
-  ].join("\n");
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -91,17 +94,13 @@ export default async function ReportsPage({ searchParams }: Props) {
           <h1 className="text-2xl font-semibold">Reports</h1>
           <p className="mt-2 text-sm text-slate-500">Sales, stock, best sellers, and staff performance.</p>
         </div>
-        <ReportActions csv={csv} range={params.range ?? "30"} />
+        <ReportActions from={inputDate(start)} to={inputDate(end)} canDownload={hasRole(session, permissions.reports)} />
       </div>
 
       <form className="panel flex flex-wrap items-center gap-3 p-4">
         <span className="text-sm font-semibold">Date range</span>
-        <select className="field max-w-48" name="range" defaultValue={params.range ?? "30"}>
-          <option value="0">Today</option>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="365">Last year</option>
-        </select>
+        <label className="text-xs font-semibold text-slate-600">From<input className="field mt-1" type="date" name="from" defaultValue={inputDate(start)} /></label>
+        <label className="text-xs font-semibold text-slate-600">To<input className="field mt-1" type="date" name="to" defaultValue={inputDate(end)} /></label>
         <button className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply</button>
       </form>
 

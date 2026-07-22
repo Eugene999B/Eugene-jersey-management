@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { DebtStatus, InstallmentStatus, NotificationChannel, PaymentMethod } from "@prisma/client";
+import { DebtStatus, InstallmentStatus, NotificationChannel, PaymentMethod, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -87,6 +87,7 @@ const paymentSchema = z.object({
 export async function recordDebtPaymentAction(formData: FormData) {
   const session = await requireRole(permissions.debts);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
+  const shopId = session.shopId;
 
   const parsed = paymentSchema.safeParse({
     debtId: formData.get("debtId"),
@@ -97,58 +98,62 @@ export async function recordDebtPaymentAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/debts?error=payment");
 
-  const debt = await prisma.debt.findFirstOrThrow({
-    where: { id: parsed.data.debtId, shopId: session.shopId },
-    include: { installments: { orderBy: { dueDate: "asc" } } },
-  });
+  let paymentResult: { debtId: string; paidAmount: number };
+  try {
+    paymentResult = await prisma.$transaction(async (tx) => {
+      const debt = await tx.debt.findFirstOrThrow({
+        where: { id: parsed.data.debtId, shopId },
+      });
+      const installments = await tx.debtInstallment.findMany({ where: { debtId: debt.id }, orderBy: { dueDate: "asc" } });
+      const balance = Number(debt.principalAmount) - Number(debt.paidAmount);
+      if (balance <= 0 || parsed.data.amount > balance) throw new Error("AMOUNT_EXCEEDS_BALANCE");
+      const paidAmount = Number((Number(debt.paidAmount) + parsed.data.amount).toFixed(2));
+      const fullyPaid = paidAmount >= Number(debt.principalAmount);
+      const updated = await tx.debt.updateMany({
+        where: { id: debt.id, paidAmount: debt.paidAmount },
+        data: { paidAmount, status: fullyPaid ? DebtStatus.PAID : DebtStatus.PARTIAL },
+      });
+      if (updated.count !== 1) throw new Error("DEBT_CHANGED");
 
-  const balance = Number(debt.principalAmount) - Number(debt.paidAmount);
-  if (balance <= 0 || parsed.data.amount > balance) redirect("/dashboard/debts?error=amount-exceeds-balance");
-
-  const paidAmount = Number((Number(debt.paidAmount) + parsed.data.amount).toFixed(2));
-  const fullyPaid = paidAmount >= Number(debt.principalAmount);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.debtPayment.create({
-      data: {
-        shopId: session.shopId!,
-        debtId: debt.id,
-        receivedById: session.id,
-        amount: parsed.data.amount,
-        method: parsed.data.method,
-        reference: parsed.data.reference,
-        notes: parsed.data.notes,
-      },
-    });
-
-    await tx.debt.update({
-      where: { id: debt.id },
-      data: {
-        paidAmount,
-        status: fullyPaid ? DebtStatus.PAID : DebtStatus.PARTIAL,
-      },
-    });
-
-    let remaining = paidAmount;
-    for (const installment of debt.installments) {
-      const installmentPaid = remaining >= Number(installment.amount);
-      remaining = Math.max(0, remaining - Number(installment.amount));
-      await tx.debtInstallment.update({
-        where: { id: installment.id },
+      await tx.debtPayment.create({
         data: {
-          status: installmentPaid ? InstallmentStatus.PAID : installment.dueDate < new Date() ? InstallmentStatus.LATE : InstallmentStatus.SCHEDULED,
-          paidAt: installmentPaid ? installment.paidAt ?? new Date() : null,
+          shopId,
+          debtId: debt.id,
+          receivedById: session.id,
+          amount: parsed.data.amount,
+          method: parsed.data.method,
+          reference: parsed.data.reference,
+          notes: parsed.data.notes,
         },
       });
+
+      let remaining = paidAmount;
+      for (const installment of installments) {
+        const installmentPaid = remaining >= Number(installment.amount);
+        remaining = Math.max(0, remaining - Number(installment.amount));
+        await tx.debtInstallment.update({
+          where: { id: installment.id },
+          data: {
+            status: installmentPaid ? InstallmentStatus.PAID : installment.dueDate < new Date() ? InstallmentStatus.LATE : InstallmentStatus.SCHEDULED,
+            paidAt: installmentPaid ? installment.paidAt ?? new Date() : null,
+          },
+        });
+      }
+      return { debtId: debt.id, paidAmount };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    if (error instanceof Error && (error.message === "AMOUNT_EXCEEDS_BALANCE" || error.message === "DEBT_CHANGED")) {
+      redirect("/dashboard/debts?error=amount-exceeds-balance");
     }
-  });
+    throw error;
+  }
 
   await audit({
     shopId: session.shopId,
     userId: session.id,
     action: "debt.payment_recorded",
     entityType: "Debt",
-    entityId: debt.id,
+    entityId: paymentResult.debtId,
     metadata: { amount: parsed.data.amount, method: parsed.data.method, reference: parsed.data.reference },
   });
 

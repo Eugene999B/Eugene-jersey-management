@@ -37,7 +37,31 @@ export async function getSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return verifySessionToken(token);
+  const tokenSession = await verifySessionToken(token);
+  if (!tokenSession) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: tokenSession.id },
+    select: {
+      id: true,
+      shopId: true,
+      email: true,
+      name: true,
+      role: true,
+      isActive: true,
+      sessionVersion: true,
+    },
+  });
+
+  if (!user?.isActive || user.sessionVersion !== tokenSession.sessionVersion) return null;
+  return {
+    id: user.id,
+    shopId: user.shopId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    sessionVersion: user.sessionVersion,
+  };
 }
 
 export async function requireSession() {

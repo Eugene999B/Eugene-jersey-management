@@ -20,7 +20,9 @@ const supplierSchema = z.object({
   leadTimeDays: z.coerce.number().int().min(0).max(365).default(7),
   rating: z.coerce.number().int().min(1).max(5).default(5),
   portalEmail: z.string().email().optional(),
-  portalPassword: z.string().min(6).optional(),
+  portalPassword: z.string().min(8).max(100).optional(),
+}).refine((value) => Boolean(value.portalEmail) === Boolean(value.portalPassword), {
+  message: "Portal email and password must be supplied together.",
 });
 
 function purchaseOrderNumber() {
@@ -45,43 +47,42 @@ export async function createSupplierAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/suppliers?error=supplier");
 
-  const portalPasswordHash = parsed.data.portalPassword ? await hashPassword(parsed.data.portalPassword) : null;
-  const portalUser = parsed.data.portalEmail && portalPasswordHash
-    ? await prisma.user.upsert({
-        where: { email: parsed.data.portalEmail.toLowerCase() },
-        update: {
-          shopId: session.shopId,
-          name: parsed.data.contactName ?? parsed.data.name,
-          phone: parsed.data.phone,
-          role: Role.SUPPLIER,
-          passwordHash: portalPasswordHash,
-          isActive: true,
-        },
-        create: {
-          shopId: session.shopId,
-          email: parsed.data.portalEmail.toLowerCase(),
-          name: parsed.data.contactName ?? parsed.data.name,
-          phone: parsed.data.phone,
-          role: Role.SUPPLIER,
-          passwordHash: portalPasswordHash,
-          isActive: true,
-        },
-      })
-    : null;
+  const portalEmail = parsed.data.portalEmail?.toLowerCase();
+  if (portalEmail) {
+    const existing = await prisma.user.findUnique({ where: { email: portalEmail }, select: { id: true } });
+    if (existing) redirect("/dashboard/suppliers?error=portal-email-exists");
+  }
 
-  const supplier = await prisma.supplier.create({
-    data: {
-      shopId: session.shopId,
-      portalUserId: portalUser?.id,
-      name: parsed.data.name,
-      contactName: parsed.data.contactName,
-      email: parsed.data.email,
-      phone: parsed.data.phone,
-      categories: parsed.data.categories,
-      paymentTerms: parsed.data.paymentTerms,
-      leadTimeDays: parsed.data.leadTimeDays,
-      rating: parsed.data.rating,
-    },
+  const portalPasswordHash = parsed.data.portalPassword ? await hashPassword(parsed.data.portalPassword) : null;
+  const { supplier, portalUser } = await prisma.$transaction(async (tx) => {
+    const createdPortalUser = portalEmail && portalPasswordHash
+      ? await tx.user.create({
+          data: {
+            shopId: session.shopId,
+            email: portalEmail,
+            name: parsed.data.contactName ?? parsed.data.name,
+            phone: parsed.data.phone,
+            role: Role.SUPPLIER,
+            passwordHash: portalPasswordHash,
+            isActive: true,
+          },
+        })
+      : null;
+    const createdSupplier = await tx.supplier.create({
+      data: {
+        shopId: session.shopId!,
+        portalUserId: createdPortalUser?.id,
+        name: parsed.data.name,
+        contactName: parsed.data.contactName,
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        categories: parsed.data.categories,
+        paymentTerms: parsed.data.paymentTerms,
+        leadTimeDays: parsed.data.leadTimeDays,
+        rating: parsed.data.rating,
+      },
+    });
+    return { supplier: createdSupplier, portalUser: createdPortalUser };
   });
 
   await audit({

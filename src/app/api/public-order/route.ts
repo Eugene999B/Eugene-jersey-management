@@ -4,7 +4,7 @@ import { DeliveryStatus, FulfillmentType, NotificationChannel, OrderStatus, Paym
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { initializePaystackTransaction } from "@/lib/payments";
+import { initializePaystackTransaction, isPaystackCheckoutReady } from "@/lib/payments";
 import { sendCustomerMessage } from "@/lib/messaging";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { createNumericCode } from "@/lib/phone-codes";
@@ -19,14 +19,16 @@ const orderSchema = z.object({
   notes: z.string().optional(),
   fulfillmentType: z.nativeEnum(FulfillmentType).default(FulfillmentType.PICKUP),
   deliveryAddress: z.string().optional(),
+  deliveryZoneId: z.string().optional(),
   deliveryCity: z.string().optional(),
   deliveryArea: z.string().optional(),
   deliveryNotes: z.string().optional(),
   paymentChoice: z.enum(["PAYSTACK", "CASH"]),
+  idempotencyKey: z.string().min(8).max(100),
 });
 
 function receiptNumber(shopSlug: string) {
-  return `${shopSlug.split("-").map((part) => part[0]).join("").slice(0, 4).toUpperCase() || "SHOP"}-${Date.now().toString().slice(-7)}`;
+  return `${shopSlug.split("-").map((part) => part[0]).join("").slice(0, 4).toUpperCase() || "SHOP"}-${Date.now().toString().slice(-7)}-${nanoid(4).toUpperCase()}`;
 }
 
 function redirectTo(path: string) {
@@ -45,10 +47,12 @@ export async function POST(request: NextRequest) {
     notes: formData.get("notes") || undefined,
     fulfillmentType: formData.get("fulfillmentType") || FulfillmentType.PICKUP,
     deliveryAddress: formData.get("deliveryAddress") || undefined,
+    deliveryZoneId: formData.get("deliveryZoneId") || undefined,
     deliveryCity: formData.get("deliveryCity") || undefined,
     deliveryArea: formData.get("deliveryArea") || undefined,
     deliveryNotes: formData.get("deliveryNotes") || undefined,
     paymentChoice: formData.get("paymentChoice"),
+    idempotencyKey: formData.get("idempotencyKey"),
   });
 
   if (!parsed.success) return redirectTo(`/shop/${shopSlug}?error=invalid`);
@@ -73,8 +77,19 @@ export async function POST(request: NextRequest) {
   if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled) {
     return redirectTo(`/shop/${parsed.data.shopSlug}?error=closed`);
   }
-  if (parsed.data.paymentChoice === "PAYSTACK" && (!process.env.PAYSTACK_SECRET_KEY || !shop.paymentConfig?.allowCard)) {
+  if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && parsed.data.paymentChoice === "CASH") {
+    return redirectTo(`/shop/${shopSlug}?error=delivery-payment`);
+  }
+  if (parsed.data.paymentChoice === "PAYSTACK" && !isPaystackCheckoutReady(shop.paymentConfig)) {
     return redirectTo(`/shop/${parsed.data.shopSlug}?error=payment`);
+  }
+  if (parsed.data.paymentChoice === "CASH" && !shop.paymentConfig?.allowCash) {
+    return redirectTo(`/shop/${parsed.data.shopSlug}?error=payment`);
+  }
+
+  const duplicateOrder = await prisma.order.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey } });
+  if (duplicateOrder?.buyerId === buyer.id) {
+    return redirectTo(`/track/${duplicateOrder.receiptNumber}?access=${encodeURIComponent(duplicateOrder.publicAccessToken)}`);
   }
 
   const variant = await prisma.productVariant.findFirst({
@@ -85,8 +100,14 @@ export async function POST(request: NextRequest) {
     return redirectTo(`/shop/${shop.slug}?error=stock`);
   }
 
+  const deliveryZone = parsed.data.fulfillmentType === FulfillmentType.DELIVERY && parsed.data.deliveryZoneId
+    ? await prisma.deliveryZone.findFirst({ where: { id: parsed.data.deliveryZoneId, shopId: shop.id, isActive: true } })
+    : null;
+  if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && !deliveryZone) {
+    return redirectTo(`/shop/${shop.slug}?error=delivery`);
+  }
   const unitPrice = Number(variant.priceOverride ?? variant.product.basePrice);
-  const deliveryFee = parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? 0 : 0;
+  const deliveryFee = parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? Number(deliveryZone?.fee ?? 0) : 0;
   const totalAmount = unitPrice * parsed.data.quantity + deliveryFee;
   const publicAccessToken = nanoid(32);
   const cashHoldExpiresAt = parsed.data.paymentChoice === "CASH"
@@ -106,15 +127,12 @@ export async function POST(request: NextRequest) {
       if (updated.count !== 1) throw new Error("INSUFFICIENT_STOCK");
     }
 
-    const customer = await tx.customer.create({
-      data: {
-        shopId: shop.id,
-        name: buyer.name,
-        phone: buyer.phone,
-        email: buyer.email,
-        group: "Online",
-      },
+    const matchedCustomer = await tx.customer.findFirst({
+      where: { shopId: shop.id, OR: [{ phone: buyer.phone }, ...(buyer.email ? [{ email: buyer.email }] : [])] },
     });
+    const customer = matchedCustomer
+      ? await tx.customer.update({ where: { id: matchedCustomer.id }, data: { name: buyer.name, phone: buyer.phone, email: buyer.email } })
+      : await tx.customer.create({ data: { shopId: shop.id, name: buyer.name, phone: buyer.phone, email: buyer.email, group: "Online" } });
 
     const order = await tx.order.create({
       data: {
@@ -127,6 +145,7 @@ export async function POST(request: NextRequest) {
         buyerId: buyer.id,
         notes: parsed.data.notes,
         publicAccessToken,
+        idempotencyKey: parsed.data.idempotencyKey,
         cashHoldExpiresAt,
         paystackReference: parsed.data.paymentChoice === "PAYSTACK" ? paystackReference : null,
         fulfillmentType: parsed.data.fulfillmentType,
@@ -136,6 +155,7 @@ export async function POST(request: NextRequest) {
         deliveryArea: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? parsed.data.deliveryArea : null,
         deliveryNotes: parsed.data.fulfillmentType === FulfillmentType.DELIVERY ? parsed.data.deliveryNotes : null,
         deliveryFee,
+        deliveryZoneId: deliveryZone?.id ?? null,
         pickupCodeHash: hashToken(verificationCode),
         pickupCodeLast4: verificationCode.slice(-4),
         items: {
@@ -172,6 +192,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { order, customer } = orderResult;
+  const trackUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}`;
 
   await audit({
     shopId: shop.id,
@@ -189,8 +210,8 @@ export async function POST(request: NextRequest) {
     const verifyCopy = parsed.data.fulfillmentType === FulfillmentType.PICKUP
       ? `Pickup code: ${verificationCode}. Bring this code and your phone number when collecting.`
       : `Delivery verification code: ${verificationCode}. Share it only after receiving the order.`;
-    const body = `${shop.name}: order ${order.receiptNumber} received. ${verifyCopy} Track: ${(process.env.APP_URL ?? "").replace(/\/$/, "")}/track/${order.receiptNumber}`;
-    await Promise.all([
+    const body = `${shop.name}: order ${order.receiptNumber} received. ${verifyCopy} Track: ${trackUrl}`;
+    await Promise.allSettled([
       customer.phone ? sendCustomerMessage({
         shopId: shop.id,
         customerId: customer.id,
@@ -227,20 +248,24 @@ export async function POST(request: NextRequest) {
   }
 
   if (parsed.data.paymentChoice === "PAYSTACK") {
-    const callbackUrl = `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/track/${order.receiptNumber}`;
-    const initialized = await initializePaystackTransaction({
-      email: customer.email ?? `${customer.id}@customer.local`,
-      amount: totalAmount,
-      currency: shop.currency,
-      reference: paystackReference,
-      callbackUrl,
-      subaccount: shop.paymentConfig?.paystackSubaccountCode,
-      transactionCharge: shop.paymentConfig?.paystackTransactionCharge,
-      bearer: shop.paymentConfig?.paystackChargeBearer as "account" | "subaccount" | "all-proportional" | "all" | null,
-      metadata: { orderId: order.id, shopId: shop.id, receiptNumber: order.receiptNumber },
-    });
-    if (initialized.authorizationUrl) return redirectTo(initialized.authorizationUrl);
+    const callbackUrl = `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/api/paystack/callback`;
+    try {
+      const initialized = await initializePaystackTransaction({
+        email: customer.email ?? `${customer.id}@customer.local`,
+        amount: totalAmount,
+        currency: shop.currency,
+        reference: paystackReference,
+        callbackUrl,
+        subaccount: shop.paymentConfig?.paystackSubaccountCode,
+        transactionCharge: shop.paymentConfig?.paystackTransactionCharge,
+        bearer: shop.paymentConfig?.paystackChargeBearer as "account" | "subaccount" | "all-proportional" | "all" | null,
+        metadata: { orderId: order.id, shopId: shop.id, receiptNumber: order.receiptNumber },
+      });
+      if (initialized.authorizationUrl) return redirectTo(initialized.authorizationUrl);
+    } catch {
+      return redirectTo(`/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}&payment=failed`);
+    }
   }
 
-  return redirectTo(`/track/${order.receiptNumber}`);
+  return redirectTo(`/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}`);
 }

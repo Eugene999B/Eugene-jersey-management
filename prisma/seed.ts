@@ -13,7 +13,10 @@ async function main() {
     throw new Error("Demo seed is disabled in production. Use `npm run db:seed:demo` only for demo work, or run `npm run admin:bootstrap` to create the real platform admin.");
   }
 
-  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "Ghana123";
+  const demoPassword = process.env.SEED_DEMO_PASSWORD;
+  if (!demoPassword || demoPassword.length < 12) {
+    throw new Error("Set SEED_DEMO_PASSWORD to a unique password of at least 12 characters before loading demo accounts.");
+  }
   const passwordHash = await bcrypt.hash(demoPassword, 12);
 
   const demoShop = await prisma.shop.upsert({
@@ -597,6 +600,7 @@ async function main() {
       channel: OrderChannel.POS,
       totalAmount: "360.00",
       receiptNumber: "APS-10001",
+      publicAccessToken: "demo-order-access-aps-10001",
       notes: "Rush jersey set for weekend fixture.",
       rush: true,
       items: {

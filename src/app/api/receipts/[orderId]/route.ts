@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { currency } from "@/lib/format";
+import { permissions } from "@/lib/rbac";
 
 type RouteContext = {
   params: Promise<{ orderId: string }>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const session = await requireSession();
+  const session = await requireRole(permissions.orderFinance);
   const { orderId } = await context.params;
   const order = await prisma.order.findFirst({
     where: {
@@ -27,10 +28,16 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Receipt not found." }, { status: 404 });
   }
 
+  const escapeHtml = (value: unknown) => String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
   const html = `<!doctype html>
   <html>
     <head>
-      <title>Receipt ${order.receiptNumber}</title>
+      <title>Receipt ${escapeHtml(order.receiptNumber)}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #111827; }
         .receipt { max-width: 420px; margin: auto; border: 1px solid #ded8cd; padding: 18px; }
@@ -43,17 +50,17 @@ export async function GET(_request: Request, context: RouteContext) {
     </head>
     <body>
       <div class="receipt">
-        <h1>${order.shop.name}</h1>
-        <p>Receipt: ${order.receiptNumber}</p>
-        <p>Customer: ${order.customer?.name ?? "Walk-in"}</p>
+        <h1>${escapeHtml(order.shop.name)}</h1>
+        <p>Receipt: ${escapeHtml(order.receiptNumber)}</p>
+        <p>Customer: ${escapeHtml(order.customer?.name ?? "Walk-in")}</p>
         <table>
           ${order.items.map((item) => `
             <tr>
-              <td>${item.quantity}x ${item.productVariant.product.name}<br><small>${item.productVariant.sku}</small></td>
-              <td style="text-align:right">${currency(Number(item.unitPrice) * item.quantity, order.shop.currency)}</td>
+              <td>${item.quantity}x ${escapeHtml(item.productVariant.product.name)}<br><small>${escapeHtml(item.productVariant.sku)}</small></td>
+              <td style="text-align:right">${escapeHtml(currency(Number(item.unitPrice) * item.quantity, order.shop.currency))}</td>
             </tr>
           `).join("")}
-          <tr><td class="total">Total</td><td class="total" style="text-align:right">${currency(order.totalAmount.toString(), order.shop.currency)}</td></tr>
+          <tr><td class="total">Total</td><td class="total" style="text-align:right">${escapeHtml(currency(order.totalAmount.toString(), order.shop.currency))}</td></tr>
         </table>
       </div>
       <script>window.print()</script>
@@ -61,6 +68,6 @@ export async function GET(_request: Request, context: RouteContext) {
   </html>`;
 
   return new NextResponse(html, {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" },
   });
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/db";
 
 export const BUYER_SESSION_COOKIE = "sports_shop_buyer";
 export const BUYER_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -54,7 +55,14 @@ export async function getBuyerSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(BUYER_SESSION_COOKIE)?.value;
   if (!token) return null;
-  return verifyBuyerSessionToken(token);
+  const tokenSession = await verifyBuyerSessionToken(token);
+  if (!tokenSession) return null;
+  const buyer = await prisma.buyerAccount.findUnique({
+    where: { id: tokenSession.id },
+    select: { id: true, phone: true, email: true, name: true, isActive: true },
+  });
+  if (!buyer?.isActive || buyer.phone !== tokenSession.phone) return null;
+  return { id: buyer.id, phone: buyer.phone, email: buyer.email, name: buyer.name };
 }
 
 export async function setBuyerSessionCookie(buyer: BuyerSession) {

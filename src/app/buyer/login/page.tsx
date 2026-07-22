@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, MessageSquareText, Phone, ShieldCheck, Store } from "lucide-react";
 import { buyerPasswordLoginAction, requestBuyerLoginCodeAction, verifyBuyerLoginCodeAction } from "@/app/buyer/login/actions";
+import { isSmsDeliveryConfigured } from "@/lib/messaging";
 
 type Props = {
   searchParams?: Promise<{ sent?: string; phone?: string; next?: string; error?: string }>;
@@ -10,12 +11,15 @@ const errors: Record<string, string> = {
   invalid: "Check the phone number and details, then try again.",
   code: "That code is not correct or has expired.",
   rate: "Too many code attempts. Please wait a few minutes and try again.",
+  email: "That email already belongs to another buyer account.",
   "login-required": "Login first to continue.",
+  sms: "SMS verification is temporarily unavailable. Existing buyers can still use phone and password.",
 };
 
 export default async function BuyerLoginPage({ searchParams }: Props) {
   const params = (await searchParams) ?? {};
   const next = params.next ?? "/shops";
+  const smsReady = isSmsDeliveryConfigured();
 
   return (
     <main className="min-h-screen bg-[#10151f] px-3 py-4 text-white sm:px-5">
@@ -82,19 +86,20 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
               </form>
 
               <div className="grid gap-4 lg:grid-cols-2">
-              <form action={requestBuyerLoginCodeAction} className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
+              <form action={requestBuyerLoginCodeAction} className={`rounded-[8px] border border-[#ded8cd] bg-white p-4 ${!smsReady ? "opacity-70" : ""}`}>
                 <div className="mb-3 flex items-center gap-2">
                   <MessageSquareText size={17} className="text-[#0f766e]" />
                   <h3 className="font-semibold">SMS setup or recovery</h3>
                 </div>
+                {!smsReady ? <p className="mb-3 rounded-[8px] border border-amber-200 bg-amber-50 p-2 text-xs font-medium text-amber-800">New-account setup and SMS recovery are paused until the platform SMS provider is configured. Existing buyers can use phone and password.</p> : null}
                 <input type="hidden" name="next" value={next} />
                 <div className="space-y-3">
                   <input className="field" name="name" placeholder="Full name" required />
                   <input className="field" name="phone" placeholder="+233..." defaultValue={params.phone ?? ""} required />
-                  <input className="field" name="password" type="password" placeholder="New password" required />
+                  <input className="field" name="password" type="password" minLength={8} placeholder="New password (8+ characters)" required disabled={!smsReady} />
                   <input className="field" name="email" type="email" placeholder="Email optional" />
-                  <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">
-                    Send SMS <ArrowRight size={16} />
+                  <button disabled={!smsReady} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                    {smsReady ? "Send SMS" : "SMS unavailable"} <ArrowRight size={16} />
                   </button>
                 </div>
               </form>

@@ -1,10 +1,13 @@
 import { OrderBoard } from "@/components/orders/order-board";
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 type OrdersPageProps = { searchParams?: Promise<{ q?: string }> };
 
 export default async function OrdersPage({ searchParams }: OrdersPageProps) {
+  await requireRole(permissions.ordersRead);
   const params = (await searchParams) ?? {};
   const query = params.q?.trim().slice(0, 80) ?? "";
   const { session, shop } = await getTenantContext();
@@ -24,6 +27,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     },
     include: {
       customer: true,
+      payments: true,
       items: {
         include: {
           productVariant: {
@@ -60,6 +64,10 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           customerName: order.customer?.name ?? "Walk-in customer",
           status: order.status,
           rush: order.rush,
+          fulfillmentType: order.fulfillmentType,
+          fulfillmentVerified: Boolean(order.customerVerifiedAt),
+          hasPendingCash: order.payments.some((payment) => payment.method === "CASH" && payment.status === "PENDING"),
+          hasPendingOnlinePayment: order.payments.some((payment) => payment.method !== "CASH" && payment.status === "PENDING"),
           totalAmount: Number(order.totalAmount),
           items: order.items.map((item) => ({
             name: item.productVariant.product.name,

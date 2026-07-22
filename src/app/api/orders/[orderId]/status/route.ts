@@ -19,6 +19,14 @@ const designerAllowed: Record<OrderStatus, OrderStatus[]> = {
   CANCELLED: [],
 };
 
+const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+  IN_PRODUCTION: [OrderStatus.READY, OrderStatus.CANCELLED],
+  READY: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
 type RouteContext = {
   params: Promise<{ orderId: string }>;
 };
@@ -28,9 +36,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!session.shopId) {
     return NextResponse.json({ error: "Missing shop context." }, { status: 403 });
   }
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  }
 
   const { orderId } = await context.params;
-  const parsed = schema.safeParse(await request.json());
+  const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid status payload." }, { status: 400 });
   }
@@ -45,6 +57,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   if (session.role === Role.DESIGNER && !designerAllowed[order.status].includes(parsed.data.status)) {
     return NextResponse.json({ error: "Designer role can only move orders toward Ready." }, { status: 403 });
+  }
+  if (parsed.data.status !== order.status && !statusTransitions[order.status].includes(parsed.data.status)) {
+    return NextResponse.json({ error: `Orders cannot move from ${order.status} to ${parsed.data.status}.` }, { status: 409 });
+  }
+  if (parsed.data.status === OrderStatus.COMPLETED && order.pickupCodeHash) {
+    return NextResponse.json({ error: "Verify pickup or delivery before completing this order." }, { status: 409 });
   }
 
   const updated = await prisma.order.update({

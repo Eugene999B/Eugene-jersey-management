@@ -1,8 +1,11 @@
 import { FileDown } from "lucide-react";
 import { ExportCenter } from "@/components/exports/export-center";
 import { getTenantContext } from "@/lib/tenant";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/rbac";
 
 export default async function ExportsPage() {
+  await requireRole(permissions.exports);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
