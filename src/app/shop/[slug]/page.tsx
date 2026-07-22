@@ -103,6 +103,8 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
   if (!shop || !shop.isActive || !shop.storefrontEnabled || shop.verificationStatus !== ShopVerificationStatus.VERIFIED) notFound();
   const onlinePaymentReady = isPaystackCheckoutReady(shop.paymentConfig);
   const cashReady = Boolean(shop.paymentConfig?.allowCash);
+  const deliveryReady = onlinePaymentReady && shop.deliveryZones.length > 0;
+  const checkoutReady = shop.publicOrderingEnabled && (onlinePaymentReady || cashReady);
 
   const style = {
     "--shop-primary": shop.primaryColor,
@@ -146,23 +148,29 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
         <div className="grid gap-4 lg:grid-cols-[1fr_390px]">
           <div className="rounded-[8px] bg-[#111827] p-5 text-white sm:p-7">
             <div className="flex flex-wrap gap-2">
-              <Badge tone={shop.publicOrderingEnabled ? "green" : "orange"}>
-                {shop.publicOrderingEnabled ? "Online ordering open" : "Browsing only"}
+              <Badge tone={checkoutReady ? "green" : "orange"}>
+                {checkoutReady ? "Ordering open" : "Browsing only"}
               </Badge>
               <Badge tone="blue">Pickup code</Badge>
-              <Badge tone="orange">Card / Mastercard / Visa</Badge>
+              {onlinePaymentReady ? <Badge tone="orange">Card / Mastercard / Visa</Badge> : cashReady ? <Badge tone="orange">Cash pickup</Badge> : null}
             </div>
             <h2 className="mt-6 max-w-3xl text-3xl font-semibold leading-tight sm:text-5xl">
               Jerseys, team kits, equipment, and custom print orders.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/70">
-              Choose a size or equipment variant, pay online through Paystack, reserve for cash pickup, or chat with the shop before ordering.
+              {onlinePaymentReady && cashReady
+                ? "Choose a size or equipment variant, pay securely online or reserve for cash pickup, and chat with the shop before ordering."
+                : onlinePaymentReady
+                  ? "Choose a size or equipment variant, pay securely online, or chat with the shop before ordering."
+                  : cashReady
+                    ? "Choose a size or equipment variant, reserve it for cash pickup, or chat with the shop before ordering."
+                    : "Browse available products and chat with the shop before ordering."}
             </p>
             <div className="mt-6 grid gap-2 sm:grid-cols-3">
               <div className="rounded-[8px] border border-white/10 bg-white/[0.06] p-3 text-sm">
-                <CreditCard size={18} className="text-[#f97316]" />
-                <p className="mt-2 font-semibold">Secure online pay</p>
-                <p className="mt-1 text-xs text-white/55">Cards, Mastercard, Visa, and mobile money.</p>
+                {onlinePaymentReady ? <CreditCard size={18} className="text-[#f97316]" /> : <Wallet size={18} className="text-[#f97316]" />}
+                <p className="mt-2 font-semibold">{onlinePaymentReady ? "Secure online pay" : cashReady ? "Pay at pickup" : "Ordering paused"}</p>
+                <p className="mt-1 text-xs text-white/55">{onlinePaymentReady ? "Cards, Mastercard, Visa, and mobile money." : cashReady ? "Cash is collected only when staff verifies pickup." : "Contact the shop before placing an order."}</p>
               </div>
               <div className="rounded-[8px] border border-white/10 bg-white/[0.06] p-3 text-sm">
                 <PackageCheck size={18} className="text-[#f97316]" />
@@ -171,8 +179,8 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
               </div>
               <div className="rounded-[8px] border border-white/10 bg-white/[0.06] p-3 text-sm">
                 <Bike size={18} className="text-[#f97316]" />
-                <p className="mt-2 font-semibold">Delivery verify</p>
-                <p className="mt-1 text-xs text-white/55">Customer confirms after delivery.</p>
+                <p className="mt-2 font-semibold">{deliveryReady ? "Delivery verify" : "Delivery unavailable"}</p>
+                <p className="mt-1 text-xs text-white/55">{deliveryReady ? "Customer confirms after delivery." : "Delivery opens when online payment and a zone are ready."}</p>
               </div>
             </div>
           </div>
@@ -274,13 +282,13 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                           <input type="radio" name="fulfillmentType" value="PICKUP" defaultChecked />
                           <Store size={16} /> Pickup
                         </label>
-                        <label className={`flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold ${!shop.deliveryZones.length ? "cursor-not-allowed opacity-50" : ""}`}>
-                          <input type="radio" name="fulfillmentType" value="DELIVERY" disabled={!shop.deliveryZones.length} />
+                        <label className={`flex items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-2 text-sm font-semibold ${!deliveryReady ? "cursor-not-allowed opacity-50" : ""}`}>
+                          <input type="radio" name="fulfillmentType" value="DELIVERY" disabled={!deliveryReady} />
                           <Bike size={16} /> Delivery
                         </label>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        <select className="field sm:col-span-2" name="deliveryZoneId" defaultValue="">
+                        <select className="field sm:col-span-2" name="deliveryZoneId" defaultValue="" disabled={!deliveryReady}>
                           <option value="">Select delivery zone when using delivery</option>
                           {shop.deliveryZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name} - {currency(zone.fee.toString(), shop.currency)}</option>)}
                         </select>
@@ -299,7 +307,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
                           <Wallet size={16} /> Cash (pickup only)
                         </label> : null}
                       </div>
-                      {!shop.deliveryZones.length ? <p className="text-xs font-medium text-amber-700">Delivery is unavailable until this shop adds a delivery zone.</p> : null}
+                      {!shop.deliveryZones.length ? <p className="text-xs font-medium text-amber-700">Delivery is unavailable until this shop adds a delivery zone.</p> : !onlinePaymentReady ? <p className="text-xs font-medium text-amber-700">Delivery is unavailable until secure online payment is configured.</p> : null}
                       {!onlinePaymentReady && cashReady ? <p className="text-xs font-medium text-amber-700">Online payment is unavailable. This order will be paid at pickup.</p> : null}
                       {!onlinePaymentReady && !cashReady ? <p className="text-xs font-semibold text-red-700">This shop has no live checkout payment method. Contact the shop before ordering.</p> : null}
                       <div className="grid gap-2 sm:grid-cols-2">
