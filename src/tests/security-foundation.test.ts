@@ -51,9 +51,17 @@ describe("security foundations", () => {
     expect(source).not.toContain("cookies.delete");
   });
 
-  it("posts staff login credentials to the browser-visible origin", () => {
-    const source = readFileSync(new URL("../components/auth/staff-login-form.tsx", import.meta.url), "utf8");
-    expect(source).toContain('new URL("/api/auth/login", window.location.origin)');
+  it("submits staff login with same-origin fetch instead of native form-action", () => {
+    const formSource = readFileSync(new URL("../components/auth/staff-login-form.tsx", import.meta.url), "utf8");
+    const routeSource = readFileSync(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8");
+
+    expect(formSource).toContain('event.preventDefault()');
+    expect(formSource).toContain('fetch("/api/auth/login"');
+    expect(formSource).toContain('credentials: "same-origin"');
+    expect(formSource).not.toContain('action="/api/auth/login"');
+    expect(routeSource).toContain('"x-ejm-login"');
+    expect(routeSource).toContain("redirectPath");
+    expect(routeSource).toContain('"Cache-Control": "no-store"');
   });
 
   it("trusts the forwarded public origin but rejects an unrelated origin", () => {

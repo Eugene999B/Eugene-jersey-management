@@ -30,11 +30,34 @@ function safeNext(value: string | undefined, role: Role) {
   return value;
 }
 
-function redirectToLogin(request: NextRequest, error: string, next?: string | null, loginId?: string | null) {
+function wantsJson(request: NextRequest) {
+  return request.headers.get("x-ejm-login") === "fetch"
+    || request.headers.get("accept")?.includes("application/json") === true;
+}
+
+function loginFailure(
+  request: NextRequest,
+  error: string,
+  options: { next?: string | null; loginId?: string | null; status?: number } = {},
+) {
+  if (wantsJson(request)) {
+    const response = NextResponse.json(
+      { ok: false, error },
+      {
+        status: options.status ?? (error === "rate" ? 429 : 401),
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
+    response.cookies.delete(SESSION_COOKIE);
+    return response;
+  }
+
   const url = new URL("/login", request.url);
   url.searchParams.set("error", error);
-  if (next && next.startsWith("/") && !next.startsWith("//")) url.searchParams.set("next", next);
-  if (loginId) url.searchParams.set("loginId", loginId.slice(0, 180));
+  if (options.next && options.next.startsWith("/") && !options.next.startsWith("//")) {
+    url.searchParams.set("next", options.next);
+  }
+  if (options.loginId) url.searchParams.set("loginId", options.loginId.slice(0, 180));
   const response = NextResponse.redirect(url, 303);
   response.cookies.delete(SESSION_COOKIE);
   return response;
@@ -73,7 +96,11 @@ export async function POST(request: NextRequest) {
   });
 
   if (!parsed.success) {
-    return redirectToLogin(request, "invalid", String(formData.get("next") ?? ""), String(formData.get("loginId") ?? ""));
+    return loginFailure(request, "invalid", {
+      status: 400,
+      next: String(formData.get("next") ?? ""),
+      loginId: String(formData.get("loginId") ?? ""),
+    });
   }
 
   const identifier = (parsed.data.loginId ?? parsed.data.email ?? "unknown").trim().toLowerCase();
@@ -83,19 +110,27 @@ export async function POST(request: NextRequest) {
       enforceRateLimit({ key: `staff-login-ip:${requestIp(request)}`, limit: 60, windowSeconds: 15 * 60 }),
     ]);
   } catch {
-    return redirectToLogin(request, "rate", parsed.data.next, parsed.data.loginId);
+    return loginFailure(request, "rate", {
+      next: parsed.data.next,
+      loginId: parsed.data.loginId,
+      status: 429,
+    });
   }
 
   const user = await findLoginUser(parsed.data);
   const now = new Date();
   if (!user || !user.isActive || (user.shopId && !user.shop?.isActive)) {
     await verifyPassword(parsed.data.password, DUMMY_PASSWORD_HASH);
-    return redirectToLogin(request, "invalid", parsed.data.next, parsed.data.loginId);
+    return loginFailure(request, "invalid", { next: parsed.data.next, loginId: parsed.data.loginId });
   }
 
   if (user.lockUntil && user.lockUntil > now) {
     await verifyPassword(parsed.data.password, DUMMY_PASSWORD_HASH);
-    return redirectToLogin(request, "rate", parsed.data.next, parsed.data.loginId);
+    return loginFailure(request, "rate", {
+      next: parsed.data.next,
+      loginId: parsed.data.loginId,
+      status: 429,
+    });
   }
 
   const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
@@ -117,7 +152,11 @@ export async function POST(request: NextRequest) {
       entityId: user.id,
       metadata: { failedLoginCount, loginId: parsed.data.loginId ?? parsed.data.email ?? null },
     });
-    return redirectToLogin(request, lockUntil ? "rate" : "invalid", parsed.data.next, parsed.data.loginId);
+    return loginFailure(request, lockUntil ? "rate" : "invalid", {
+      next: parsed.data.next,
+      loginId: parsed.data.loginId,
+      status: lockUntil ? 429 : 401,
+    });
   }
 
   await prisma.user.update({
@@ -140,7 +179,13 @@ export async function POST(request: NextRequest) {
     role: user.role,
     sessionVersion: user.sessionVersion,
   });
-  const response = NextResponse.redirect(new URL(safeNext(parsed.data.next, user.role), request.url), 303);
+  const redirectPath = safeNext(parsed.data.next, user.role);
+  const response = wantsJson(request)
+    ? NextResponse.json(
+        { ok: true, redirectPath },
+        { headers: { "Cache-Control": "no-store" } },
+      )
+    : NextResponse.redirect(new URL(redirectPath, request.url), 303);
   response.cookies.set(SESSION_COOKIE, token, persistentSessionCookieOptions(SESSION_TTL_SECONDS));
   return response;
 }
