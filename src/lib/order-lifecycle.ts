@@ -3,9 +3,11 @@ import "server-only";
 import { OrderChannel, OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
+const cancellableUnpaidStatuses = [OrderStatus.PENDING, OrderStatus.IN_PRODUCTION, OrderStatus.READY];
+
 export type ReservationReleaseResult = {
   released: boolean;
-  reason: "released" | "not-found" | "already-released" | "not-pending" | "paid" | "changed";
+  reason: "released" | "not-found" | "already-released" | "not-cancellable" | "paid" | "changed";
 };
 
 export async function releaseUnpaidOnlineReservation(input: {
@@ -26,14 +28,14 @@ export async function releaseUnpaidOnlineReservation(input: {
 
     if (!order) return { released: false, reason: "not-found" };
     if (order.stockReleasedAt || order.status === OrderStatus.CANCELLED) return { released: false, reason: "already-released" };
-    if (order.channel !== OrderChannel.ONLINE || order.status !== OrderStatus.PENDING) return { released: false, reason: "not-pending" };
+    if (order.channel !== OrderChannel.ONLINE || !cancellableUnpaidStatuses.includes(order.status)) return { released: false, reason: "not-cancellable" };
     if (order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS)) return { released: false, reason: "paid" };
 
     const claimed = await tx.order.updateMany({
       where: {
         id: order.id,
         channel: OrderChannel.ONLINE,
-        status: OrderStatus.PENDING,
+        status: { in: cancellableUnpaidStatuses },
         stockReleasedAt: null,
         payments: { none: { status: PaymentStatus.SUCCESS } },
       },
