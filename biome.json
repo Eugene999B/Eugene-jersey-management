@@ -14,9 +14,9 @@
       "*.mjs",
       "*.ts",
       "*.tsx",
-      "!docs/word/**",
-      "!.next/**",
-      "!coverage/**"
+      "!docs/word",
+      "!.next",
+      "!coverage"
     ]
   },
   "formatter": {
