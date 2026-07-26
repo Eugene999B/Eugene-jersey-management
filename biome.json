@@ -34,7 +34,11 @@
         "noUnusedVariables": "warn"
       },
       "suspicious": {
-        "noExplicitAny": "off"
+        "noExplicitAny": "off",
+        "noImplicitAnyLet": "warn"
+      },
+      "performance": {
+        "noImgElement": "off"
       },
       "style": {
         "useImportType": "off",
