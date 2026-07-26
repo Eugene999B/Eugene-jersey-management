@@ -16,7 +16,7 @@ function metadataBase() {
 export const metadata: Metadata = {
   metadataBase: metadataBase(),
   title: { default: "Eugene Jersey Management", template: "%s | Eugene Jersey Management" },
-  description: "Multi-tenant jersey production, sports retail, POS, customer, credit, stock and design operations.",
+  description: "Professional multi-tenant jersey production, sports retail, POS, customer, credit, stock and design operations.",
   applicationName: "Eugene Jersey Management",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -28,26 +28,26 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Eugene Jersey Management",
     title: "Eugene Jersey Management",
-    description: "Sell, design, produce and control sports retail operations from one secure workspace.",
-    images: [{ url: "/brand/ejm-logo.svg", width: 760, height: 180, alt: "Eugene Jersey Management" }],
+    description: "Sell, design, produce and control professional sports retail operations from one secure workspace.",
+    images: [{ url: "/brand/ejm-logo.svg", width: 860, height: 210, alt: "Eugene Jersey Management" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Eugene Jersey Management",
-    description: "Jersey production, sports retail and shop operations.",
+    description: "Professional jersey production, sports retail and multi-shop operations.",
     images: ["/brand/ejm-logo.svg"],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f766e",
+  themeColor: "#0b1f3a",
   colorScheme: "light",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-[#f6f4ef] text-slate-950">{children}</body>
+      <body className="min-h-full flex flex-col bg-[#f7f8fa] text-slate-950">{children}</body>
     </html>
   );
 }
