@@ -11,7 +11,7 @@ const designSchema = z.object({
   id: z.string().min(1).optional(),
   title: z.string().trim().min(2).max(120),
   customer: z.string().trim().max(120).optional(),
-  machineProfile: z.enum(["Generic SVG", "SignMaster", "VinylMaster", "Print/RIP"]),
+  machineProfile: z.enum(["Generic SVG", "HPGL / PLT cutter", "SignMaster", "VinylMaster", "Print/RIP"]),
   canvas: z.record(z.string(), z.unknown()),
 });
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     title: parsed.data.title,
     customerId,
     machineProfile: parsed.data.machineProfile,
-    exportFormat: "SVG",
+    exportFormat: parsed.data.machineProfile === "HPGL / PLT cutter" ? "HPGL" : "SVG",
     canvasJson: parsed.data.canvas as Prisma.InputJsonValue,
     status: DesignJobStatus.DRAFT,
   };
