@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
+import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
 const schema = z.object({
   status: z.nativeEnum(OrderStatus),
@@ -31,8 +32,7 @@ type RouteContext = { params: Promise<{ orderId: string }> };
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const session = await requireRole(permissions.orders);
   if (!session.shopId) return NextResponse.json({ error: "Missing shop context." }, { status: 403 });
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  if (!isTrustedApplicationOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
 
   const { orderId } = await context.params;
   const parsed = schema.safeParse(await request.json().catch(() => null));

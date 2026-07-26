@@ -5,12 +5,13 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { permissions } from "@/lib/rbac";
+import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
 const designSchema = z.object({
   id: z.string().min(1).optional(),
   title: z.string().trim().min(2).max(120),
   customer: z.string().trim().max(120).optional(),
-  machineProfile: z.enum(["Generic SVG", "SignMaster", "VinylMaster", "Print/RIP"]),
+  machineProfile: z.enum(["Generic SVG", "HPGL / PLT cutter", "SignMaster", "VinylMaster", "Print/RIP"]),
   canvas: z.record(z.string(), z.unknown()),
 });
 
@@ -18,8 +19,7 @@ export async function POST(request: NextRequest) {
   const session = await requireRole(permissions.designs);
   if (!session.shopId) return NextResponse.json({ error: "A shop workspace is required." }, { status: 403 });
 
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!isTrustedApplicationOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   }
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     title: parsed.data.title,
     customerId,
     machineProfile: parsed.data.machineProfile,
-    exportFormat: "SVG",
+    exportFormat: parsed.data.machineProfile === "HPGL / PLT cutter" ? "HPGL" : "SVG",
     canvasJson: parsed.data.canvas as Prisma.InputJsonValue,
     status: DesignJobStatus.DRAFT,
   };
