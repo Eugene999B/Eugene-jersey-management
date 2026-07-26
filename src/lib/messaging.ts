@@ -58,10 +58,7 @@ async function sendViaArkesel(input: ProviderMessageInput, token: string, sender
   });
   if (!response.ok) return { status: NotificationStatus.FAILED, providerReference: `ARKESEL-${response.status}` };
   const payload = await response.json().catch(() => null) as { data?: { id?: string }; id?: string; reference?: string } | null;
-  return {
-    status: NotificationStatus.SENT,
-    providerReference: payload?.data?.id ?? payload?.id ?? payload?.reference ?? "ARKESEL-SENT",
-  };
+  return { status: NotificationStatus.SENT, providerReference: payload?.data?.id ?? payload?.id ?? payload?.reference ?? "ARKESEL-SENT" };
 }
 
 async function sendViaGenericProvider(input: ProviderMessageInput) {
@@ -77,26 +74,16 @@ async function sendViaGenericProvider(input: ProviderMessageInput) {
       console.warn(`[messaging] ${input.channel} provider is not configured; message queued without exposing recipient or content.`);
       return { status: NotificationStatus.QUEUED, providerReference: "CONSOLE-QUEUE" };
     }
-
     const response = await fetch(config.url, {
       method: "POST",
       headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to: recipient,
-        channel: input.channel,
-        subject: input.subject,
-        message: input.body,
-        metadata: input.metadata,
-      }),
+      body: JSON.stringify({ to: recipient, channel: input.channel, subject: input.subject, message: input.body, metadata: input.metadata }),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
       cache: "no-store",
     });
     if (!response.ok) return { status: NotificationStatus.FAILED, providerReference: `HTTP-${response.status}` };
     const payload = await response.json().catch(() => null) as { id?: string; reference?: string } | null;
-    return {
-      status: NotificationStatus.SENT,
-      providerReference: payload?.id ?? payload?.reference ?? "GENERIC-SENT",
-    };
+    return { status: NotificationStatus.SENT, providerReference: payload?.id ?? payload?.reference ?? "GENERIC-SENT" };
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     return { status: NotificationStatus.FAILED, providerReference: timedOut ? "PROVIDER-TIMEOUT" : "PROVIDER-ERROR" };
@@ -122,6 +109,10 @@ export async function sendCustomerMessage(input: SendMessageInput) {
   });
 }
 
+export async function sendDirectMessage(input: ProviderMessageInput) {
+  return sendViaGenericProvider(input);
+}
+
 export async function sendDirectSms(input: {
   recipientPhone: string;
   recipientName?: string | null;
@@ -129,7 +120,7 @@ export async function sendDirectSms(input: {
   subject?: string | null;
   metadata?: Prisma.InputJsonValue;
 }) {
-  return sendViaGenericProvider({
+  return sendDirectMessage({
     channel: NotificationChannel.SMS,
     recipientPhone: input.recipientPhone,
     recipientName: input.recipientName,
