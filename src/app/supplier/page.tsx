@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { PackageCheck, Truck } from "lucide-react";
 import { Role } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { acknowledgeSupplierOrderAction } from "@/app/supplier/actions";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -22,11 +22,11 @@ export default async function SupplierPortalPage() {
 
   if (!supplier) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f6f4ef] p-6">
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="panel max-w-md p-6 text-center">
           <h1 className="text-2xl font-semibold">Supplier portal unavailable</h1>
           <p className="mt-3 text-sm text-slate-500">This supplier profile is inactive or no longer linked to an active shop.</p>
-          <Link className="mt-5 inline-flex rounded-[8px] bg-slate-950 px-4 py-2 text-sm font-semibold text-white" href="/logout">Sign out</Link>
+          <LogoutButton className="mt-5 bg-slate-950 text-white hover:bg-slate-800" />
         </div>
       </main>
     );
@@ -34,14 +34,14 @@ export default async function SupplierPortalPage() {
 
   const style = { "--shop-primary": supplier.shop.primaryColor, "--shop-secondary": supplier.shop.secondaryColor } as React.CSSProperties;
   return (
-    <main style={style} className="min-h-screen bg-[#f6f4ef]">
-      <header className="border-b border-[#ded8cd] bg-white px-5 py-4">
+    <main style={style} className="min-h-screen bg-slate-100">
+      <header className="border-b border-slate-200 bg-white px-5 py-4">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="rounded-[8px] bg-[var(--shop-primary)] p-3 text-white"><Truck size={22} /></div>
+            <div className="rounded-xl bg-[var(--shop-primary)] p-3 text-white"><Truck size={22} /></div>
             <div><p className="text-sm text-slate-500">Supplier portal for {supplier.shop.name}</p><h1 className="text-2xl font-semibold">{supplier.name}</h1></div>
           </div>
-          <Link className="rounded-[8px] border border-[#ded8cd] bg-white px-4 py-2 text-sm font-semibold" href="/logout">Sign out</Link>
+          <LogoutButton className="border border-slate-200 bg-white text-slate-800 hover:bg-red-50 hover:text-red-700" />
         </div>
       </header>
 
@@ -53,8 +53,8 @@ export default async function SupplierPortalPage() {
         </div>
 
         <section className="panel overflow-hidden">
-          <div className="border-b border-[#ded8cd] p-5"><h2 className="text-lg font-semibold">Purchase orders from {supplier.shop.name}</h2></div>
-          <div className="divide-y divide-[#ded8cd] bg-white">
+          <div className="border-b border-slate-200 p-5"><h2 className="text-lg font-semibold">Purchase orders from {supplier.shop.name}</h2></div>
+          <div className="divide-y divide-slate-200 bg-white">
             {supplier.supplierOrders.map((order) => (
               <article key={order.id} className="grid gap-4 p-4 lg:grid-cols-[1fr_180px]">
                 <div>
