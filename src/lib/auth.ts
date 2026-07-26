@@ -5,12 +5,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { strongPasswordSchema } from "@/lib/password-policy";
 import { hasRole, type SessionUser } from "@/lib/rbac";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySessionToken } from "@/lib/session-token";
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
 
 export async function hashPassword(password: string) {
-  return bcrypt.hash(password, 12);
+  const parsed = strongPasswordSchema.safeParse(password);
+  if (!parsed.success) throw new Error("PASSWORD_POLICY_VIOLATION");
+  return bcrypt.hash(parsed.data, 12);
 }
 
 export async function verifyPassword(password: string, hash: string) {
