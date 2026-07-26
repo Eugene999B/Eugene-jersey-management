@@ -9,6 +9,11 @@ import { currency, shortDate, titleCase } from "@/lib/format";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
+const lockedReturnStatuses = new Set<ReturnRequestStatus>([
+  ReturnRequestStatus.REFUNDED,
+  ReturnRequestStatus.EXCHANGED,
+]);
+
 function returnStatusOptions(status: ReturnRequestStatus) {
   if (status === ReturnRequestStatus.REQUESTED) {
     return [ReturnRequestStatus.REQUESTED, ReturnRequestStatus.APPROVED, ReturnRequestStatus.REJECTED, ReturnRequestStatus.CANCELLED];
@@ -106,21 +111,24 @@ export default async function CommercePage() {
           <p className="mt-2 text-sm text-slate-500">Approval and receipt can be recorded here. Refunds and exchanges require a dedicated payment and stock workflow and cannot be marked manually.</p>
         </div>
         <div className="divide-y divide-[#ded8cd] bg-white">
-          {returns.map((request) => (
-            <form key={request.id} action={updateReturnRequestAction} className="grid gap-3 p-4 lg:grid-cols-[1fr_180px_1fr_auto]">
-              <input type="hidden" name="requestId" value={request.id} />
-              <div>
-                <p className="font-semibold">{request.order.receiptNumber}</p>
-                <p className="text-sm text-slate-500">{request.order.buyer?.name ?? request.order.customer?.name ?? "Customer"} | {shortDate(request.requestedAt)}</p>
-                <p className="mt-1 text-sm text-slate-600">{request.reason}</p>
-              </div>
-              <select className="field" name="status" defaultValue={request.status} disabled={[ReturnRequestStatus.REFUNDED, ReturnRequestStatus.EXCHANGED].includes(request.status)}>
-                {returnStatusOptions(request.status).map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
-              </select>
-              <input className="field" name="resolution" maxLength={1000} placeholder="Resolution note" defaultValue={request.resolution ?? ""} />
-              <Button variant="outline" disabled={[ReturnRequestStatus.REFUNDED, ReturnRequestStatus.EXCHANGED].includes(request.status)}><PackageCheck size={16} /> Update</Button>
-            </form>
-          ))}
+          {returns.map((request) => {
+            const locked = lockedReturnStatuses.has(request.status);
+            return (
+              <form key={request.id} action={updateReturnRequestAction} className="grid gap-3 p-4 lg:grid-cols-[1fr_180px_1fr_auto]">
+                <input type="hidden" name="requestId" value={request.id} />
+                <div>
+                  <p className="font-semibold">{request.order.receiptNumber}</p>
+                  <p className="text-sm text-slate-500">{request.order.buyer?.name ?? request.order.customer?.name ?? "Customer"} | {shortDate(request.requestedAt)}</p>
+                  <p className="mt-1 text-sm text-slate-600">{request.reason}</p>
+                </div>
+                <select className="field" name="status" defaultValue={request.status} disabled={locked}>
+                  {returnStatusOptions(request.status).map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
+                </select>
+                <input className="field" name="resolution" maxLength={1000} placeholder="Resolution note" defaultValue={request.resolution ?? ""} />
+                <Button variant="outline" disabled={locked}><PackageCheck size={16} /> Update</Button>
+              </form>
+            );
+          })}
           {!returns.length ? <p className="p-5 text-sm text-slate-500">No return requests yet.</p> : null}
         </div>
       </section>
