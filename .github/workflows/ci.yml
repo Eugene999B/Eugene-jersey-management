@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -45,8 +45,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || '' }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -54,20 +52,15 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Resolve audit-branch lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/full-system-hardening-and-brand' && github.actor != 'github-actions[bot]'
+      - name: Resolve lockfile for validation
         run: npm install --package-lock-only --ignore-scripts
 
-      - name: Commit resolved lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/full-system-hardening-and-brand' && github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          if git diff --quiet -- package-lock.json; then exit 0; fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Refresh lockfile for direct ESLint plugins"
-          git push origin HEAD:agent/full-system-hardening-and-brand
+      - name: Upload resolved lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-package-lock
+          path: package-lock.json
+          retention-days: 3
 
       - name: Install dependencies
         run: npm ci
