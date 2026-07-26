@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Eugene Jersey Management</title>
+  <desc id="desc">A shield and jersey collar forming the EJM sports operations monogram.</desc>
+  <defs>
+    <linearGradient id="shield" x1="32" y1="24" x2="220" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#07111F"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="72" y1="56" x2="190" y2="198" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDBA74"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+  </defs>
+  <path d="M128 12 224 48v70c0 60-38 105-96 126-58-21-96-66-96-126V48l96-36Z" fill="url(#shield)"/>
+  <path d="M128 27 208 57v61c0 49-29 87-80 108-51-21-80-59-80-108V57l80-30Z" fill="none" stroke="#F8FAFC" stroke-opacity=".2" stroke-width="4"/>
+  <path d="m83 65 27-12 18 22 18-22 27 12-17 38v70h-56v-70L83 65Z" fill="#F8FAFC"/>
+  <path d="m108 54 20 22 20-22 11 5c-6 22-17 34-31 34s-25-12-31-34l11-5Z" fill="url(#accent)"/>
+  <path d="M98 112h35v13h-21v11h18v13h-18v12h22v13H98v-62Zm42 0h15l10 24 10-24h15v62h-14v-34l-8 20h-7l-8-20v34h-13v-62Z" fill="#07111F"/>
+  <path d="M55 122h31M170 190h31" stroke="#F97316" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="66" cy="122" r="4" fill="#F8FAFC"/>
+  <circle cx="190" cy="190" r="4" fill="#F8FAFC"/>
+</svg>
