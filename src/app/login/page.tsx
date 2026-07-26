@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Boxes, CreditCard, LockKeyhole, Palette, ScanLine, ShoppingBag, Sparkles } from "lucide-react";
+import { ArrowRight, Boxes, CreditCard, Palette, ScanLine, ShoppingBag, Sparkles } from "lucide-react";
+import { StaffLoginForm } from "@/components/auth/staff-login-form";
 
 export const metadata: Metadata = { title: "Open your workspace" };
 
@@ -67,13 +68,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             {error ? <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 sm:text-sm" role="alert">{error}</div> : null}
             {params.reset ? <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 sm:text-sm">Password updated. Sign in with the new password.</div> : null}
 
-            <form action="/api/auth/login" method="post" className="rounded-2xl border border-[#d9d3c8] bg-white p-4 shadow-[0_18px_50px_rgba(11,31,58,0.10)] sm:p-6">
-              <input type="hidden" name="next" value={params.next ?? ""} />
-              <label className="block"><span className="mb-1.5 block text-xs font-semibold sm:text-sm">Login ID or work email</span><input className="field min-h-11 sm:min-h-12" name="loginId" autoComplete="username" defaultValue={params.loginId ?? ""} placeholder="Your personal Login ID" required /></label>
-              <label className="mt-3 block"><span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold sm:text-sm"><span>Password</span><Link href="/forgot-password" className="text-[#b51220] hover:underline">Forgot password?</Link></span><div className="relative"><LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><input className="field min-h-11 pl-10 sm:min-h-12" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required /></div></label>
-              <button type="submit" className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b1f3a] px-5 text-sm font-semibold text-white transition hover:bg-[#153a69] focus:outline-none focus:ring-4 focus:ring-[#f4b942]/35">Open workspace <ArrowRight size={17} /></button>
-              <p className="mt-2 text-center text-[10px] leading-4 text-slate-500 sm:mt-3 sm:text-xs">Protected by account and network rate limits.</p>
-            </form>
+            <StaffLoginForm nextPath={params.next} defaultLoginId={params.loginId} />
 
             <div className="mt-3 flex items-center justify-center gap-5 text-xs font-semibold text-[#0b1f3a] sm:mt-4 sm:grid sm:grid-cols-2 sm:gap-3">
               <Link href="/buyer/login" className="inline-flex items-center gap-1.5 sm:min-h-11 sm:justify-between sm:rounded-xl sm:border sm:border-[#d9d3c8] sm:bg-white sm:px-4"><span className="flex items-center gap-2"><ShoppingBag size={15} /> Buyer sign in</span><ArrowRight className="hidden sm:block" size={15} /></Link>
