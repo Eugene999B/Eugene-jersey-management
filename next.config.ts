@@ -25,12 +25,16 @@ function durableMediaPatterns(): RemotePattern[] {
   }
 }
 
+const noStoreHeaders = [
+  { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+  { key: "Pragma", value: "no-cache" },
+  { key: "Expires", value: "0" },
+];
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  images: {
-    remotePatterns: durableMediaPatterns(),
-  },
+  images: { remotePatterns: durableMediaPatterns() },
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",
@@ -42,27 +46,15 @@ const nextConfig: NextConfig = {
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
-      // Staff login now uses same-origin fetch. The HTTPS scheme allowance keeps
-      // any previously cached native form and Paystack handoff from being blocked
-      // while browsers replace the old login document after this deployment.
-      "form-action 'self' https:",
+      "form-action 'self' https://checkout.paystack.com https://*.paystack.co",
     ].join("; ");
 
     return [
-      {
-        source: "/login",
-        headers: [
-          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
-          { key: "Pragma", value: "no-cache" },
-          { key: "Expires", value: "0" },
-        ],
-      },
-      {
-        source: "/api/auth/login",
-        headers: [
-          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
-        ],
-      },
+      { source: "/login", headers: noStoreHeaders },
+      { source: "/buyer/login", headers: noStoreHeaders },
+      { source: "/api/auth/login", headers: noStoreHeaders },
+      { source: "/logout", headers: noStoreHeaders },
+      { source: "/buyer/logout", headers: noStoreHeaders },
       {
         source: "/(.*)",
         headers: [
