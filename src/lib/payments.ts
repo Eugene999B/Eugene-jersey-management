@@ -1,8 +1,10 @@
 import "server-only";
 
 import { createHmac, timingSafeEqual } from "crypto";
-import { PaymentStatus } from "@prisma/client";
+import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+
+const PAYSTACK_TIMEOUT_MS = Math.max(5_000, Math.min(30_000, Number(process.env.PAYSTACK_TIMEOUT_MS ?? 15_000)));
 
 type PaystackInitInput = {
   email: string;
@@ -16,14 +18,10 @@ type PaystackInitInput = {
   bearer?: "account" | "subaccount" | "all-proportional" | "all" | null;
 };
 
-type PaystackInitResult = {
-  authorizationUrl: string | null;
-  reference: string;
-  providerEnabled: boolean;
-};
+type PaystackInitResult = { authorizationUrl: string | null; reference: string; providerEnabled: boolean };
 
 export function amountToSubunit(amount: number) {
-  return Math.round(amount * 100);
+  return Math.round((amount + Number.EPSILON) * 100);
 }
 
 function secretKey() {
@@ -36,20 +34,11 @@ export function isPaystackCheckoutReady(config?: { allowCard?: boolean | null; p
 
 export async function initializePaystackTransaction(input: PaystackInitInput): Promise<PaystackInitResult> {
   const key = secretKey();
-  if (!key) {
-    return {
-      authorizationUrl: null,
-      reference: input.reference,
-      providerEnabled: false,
-    };
-  }
+  if (!key) return { authorizationUrl: null, reference: input.reference, providerEnabled: false };
 
   const response = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       email: input.email,
       amount: amountToSubunit(input.amount),
@@ -61,33 +50,26 @@ export async function initializePaystackTransaction(input: PaystackInitInput): P
       bearer: input.bearer || undefined,
       metadata: input.metadata,
     }),
+    signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
+    cache: "no-store",
   });
-
-  const payload = await response.json() as {
+  const payload = await response.json().catch(() => null) as {
     status?: boolean;
     message?: string;
     data?: { authorization_url?: string; reference?: string };
-  };
-
-  if (!response.ok || !payload.status || !payload.data?.authorization_url) {
-    throw new Error(payload.message ?? "Paystack transaction initialization failed.");
+  } | null;
+  if (!response.ok || !payload?.status || !payload.data?.authorization_url) {
+    throw new Error(payload?.message ?? "Paystack transaction initialization failed.");
   }
-
-  return {
-    authorizationUrl: payload.data.authorization_url,
-    reference: payload.data.reference ?? input.reference,
-    providerEnabled: true,
-  };
+  return { authorizationUrl: payload.data.authorization_url, reference: payload.data.reference ?? input.reference, providerEnabled: true };
 }
 
 export function verifyPaystackWebhookSignature(rawBody: string, signature: string | null) {
   const key = secretKey();
-  if (!key || !signature) return false;
-  const expected = createHmac("sha512", key).update(rawBody).digest("hex");
-  const expectedBuffer = Buffer.from(expected, "hex");
+  if (!key || !signature || !/^[a-f0-9]{128}$/i.test(signature)) return false;
+  const expectedBuffer = Buffer.from(createHmac("sha512", key).update(rawBody).digest("hex"), "hex");
   const signatureBuffer = Buffer.from(signature, "hex");
-  if (expectedBuffer.length !== signatureBuffer.length) return false;
-  return timingSafeEqual(expectedBuffer, signatureBuffer);
+  return expectedBuffer.length === signatureBuffer.length && timingSafeEqual(expectedBuffer, signatureBuffer);
 }
 
 export type PaystackTransactionData = {
@@ -103,21 +85,14 @@ export type PaystackTransactionData = {
 export async function verifyPaystackTransaction(reference: string) {
   const key = secretKey();
   if (!key) return null;
-
   const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  const payload = await response.json().catch(() => null) as {
-    status?: boolean;
-    message?: string;
-    data?: PaystackTransactionData;
-  } | null;
-
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!response) return null;
+  const payload = await response.json().catch(() => null) as { status?: boolean; data?: PaystackTransactionData } | null;
   if (!response.ok || !payload?.status || !payload.data) return null;
   return payload.data;
 }
@@ -126,64 +101,51 @@ export async function settlePaystackTransaction(data: PaystackTransactionData) {
   const reference = data.reference;
   if (!reference) return { status: "ignored" as const, reason: "missing-reference" };
 
-  const payment = await prisma.payment.findFirst({
-    where: { providerReference: reference },
-    include: { order: { include: { shop: true } } },
-  });
-  if (!payment) return { status: "ignored" as const, reason: "payment-not-found" };
-  if (payment.status === PaymentStatus.SUCCESS && payment.verifiedAt) {
-    return { status: "processed" as const, payment, reason: "already-verified" };
-  }
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.findFirst({
+      where: { providerReference: reference },
+      include: { order: { include: { shop: true } } },
+    });
+    if (!payment) return { status: "ignored" as const, reason: "payment-not-found" };
+    if (payment.status === PaymentStatus.SUCCESS && payment.verifiedAt) {
+      return { status: "processed" as const, payment, reason: "already-verified" };
+    }
 
-  if (data.status !== "success") {
-    const updated = await prisma.payment.update({
-      where: { id: payment.id },
+    const fail = async (reason: string, message: string) => {
+      await tx.payment.updateMany({
+        where: { id: payment.id, status: { not: PaymentStatus.SUCCESS } },
+        data: { status: PaymentStatus.FAILED, gatewayResponse: message, providerChannel: data.channel },
+      });
+      const updated = await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: { order: true } });
+      return { status: "failed" as const, payment: updated, reason };
+    };
+
+    if (data.status !== "success") return fail(data.status ?? "not-success", data.gateway_response ?? data.status ?? "Payment not successful");
+    const expectedAmount = amountToSubunit(Number(payment.amount));
+    if (typeof data.amount !== "number") return fail("missing-amount", "Verified provider response did not include an amount.");
+    if (data.amount !== expectedAmount) return fail("amount-mismatch", `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`);
+    if (!data.currency) return fail("missing-currency", "Verified provider response did not include a currency.");
+    if (data.currency.toUpperCase() !== payment.order.shop.currency.toUpperCase()) {
+      return fail("currency-mismatch", `Currency mismatch: expected ${payment.order.shop.currency}, got ${data.currency}`);
+    }
+    if (payment.order.status === OrderStatus.CANCELLED || payment.order.stockReleasedAt) {
+      return fail("reservation-released", "Payment arrived after the order reservation was released. Manual reconciliation or refund is required.");
+    }
+
+    const changed = await tx.payment.updateMany({
+      where: { id: payment.id, status: { not: PaymentStatus.SUCCESS } },
       data: {
-        status: PaymentStatus.FAILED,
-        gatewayResponse: data.gateway_response ?? data.status ?? "Payment not successful",
+        status: PaymentStatus.SUCCESS,
+        verifiedAt: new Date(),
+        gatewayResponse: data.gateway_response ?? "Successful",
         providerChannel: data.channel,
       },
-      include: { order: true },
     });
-    return { status: "failed" as const, payment: updated, reason: data.status ?? "not-success" };
-  }
-
-  const expectedAmount = amountToSubunit(Number(payment.amount));
-  if (typeof data.amount === "number" && data.amount !== expectedAmount) {
-    const updated = await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: PaymentStatus.FAILED,
-        gatewayResponse: `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`,
-        providerChannel: data.channel,
-      },
-      include: { order: true },
-    });
-    return { status: "failed" as const, payment: updated, reason: "amount-mismatch" };
-  }
-  if (data.currency && data.currency !== payment.order.shop.currency) {
-    const updated = await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: PaymentStatus.FAILED,
-        gatewayResponse: `Currency mismatch: expected ${payment.order.shop.currency}, got ${data.currency}`,
-        providerChannel: data.channel,
-      },
-      include: { order: true },
-    });
-    return { status: "failed" as const, payment: updated, reason: "currency-mismatch" };
-  }
-
-  const updated = await prisma.payment.update({
-    where: { id: payment.id },
-    data: {
-      status: PaymentStatus.SUCCESS,
-      verifiedAt: new Date(),
-      gatewayResponse: data.gateway_response ?? "Successful",
-      providerChannel: data.channel,
-    },
-    include: { order: true },
-  });
-
-  return { status: "processed" as const, payment: updated, reason: "verified" };
+    if (changed.count !== 1) {
+      const current = await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: { order: true } });
+      return { status: "processed" as const, payment: current, reason: "already-verified" };
+    }
+    const updated = await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: { order: true } });
+    return { status: "processed" as const, payment: updated, reason: "verified" };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15_000 });
 }
