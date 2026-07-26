@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PASSWORD_MIN_LENGTH, strongPasswordSchema } from "@/lib/password-policy";
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
@@ -22,5 +23,14 @@ describe("security foundations", () => {
     expect(options.path).toBe("/");
     expect(options.maxAge).toBe(3600);
     expect(options.expires.getTime()).toBeGreaterThanOrEqual(before + 3_599_000);
+  });
+
+  it("never verifies or deletes a valid staff session inside Proxy", () => {
+    const source = readFileSync(new URL("../proxy.ts", import.meta.url), "utf8");
+
+    expect(source).toContain("hasSessionCookie");
+    expect(source).not.toContain("verifySessionToken");
+    expect(source).not.toContain("response.cookies.delete");
+    expect(source).not.toContain("cookies.delete");
   });
 });
