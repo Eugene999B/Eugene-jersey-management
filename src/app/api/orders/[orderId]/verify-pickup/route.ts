@@ -13,7 +13,6 @@ const schema = z.object({
   code: z.string().regex(/^\d{6}$/),
   cashCollected: z.boolean().default(false),
 });
-
 type RouteContext = { params: Promise<{ orderId: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -42,6 +41,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (order.fulfillmentType !== FulfillmentType.PICKUP || order.status !== OrderStatus.READY || !order.pickupCodeHash) {
     return NextResponse.json({ error: "Only a ready, unverified pickup order can be released." }, { status: 409 });
   }
+
   const expectedPhone = normalizePhone(order.buyer?.phone ?? order.customer?.phone ?? "");
   if (!expectedPhone || expectedPhone !== normalizePhone(parsed.data.phone) || order.pickupCodeHash !== hashToken(parsed.data.code)) {
     return NextResponse.json({ error: "The customer phone or pickup code is incorrect." }, { status: 400 });
@@ -49,25 +49,35 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const pendingCash = order.payments.find((payment) => payment.method === PaymentMethod.CASH && payment.status === PaymentStatus.PENDING);
   const pendingOnline = order.payments.some((payment) => payment.method !== PaymentMethod.CASH && payment.status === PaymentStatus.PENDING);
+  const successfulPayment = order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS || payment.method === PaymentMethod.STORE_CREDIT);
   if (pendingOnline) return NextResponse.json({ error: "Online payment is still pending. Confirm it before releasing this order." }, { status: 409 });
   if (pendingCash && !parsed.data.cashCollected) return NextResponse.json({ error: "Confirm that cash was collected before releasing this order." }, { status: 400 });
+  if (!pendingCash && !successfulPayment) return NextResponse.json({ error: "No confirmed payment is attached to this order." }, { status: 409 });
 
-  await prisma.$transaction(async (tx) => {
-    const updated = await tx.order.updateMany({
-      where: { id: order.id, status: OrderStatus.READY, pickupVerifiedAt: null },
-      data: {
-        status: OrderStatus.COMPLETED,
-        pickupVerifiedAt: new Date(),
-        customerVerifiedAt: new Date(),
-        pickupCodeHash: null,
-        pickupCodeLast4: null,
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (pendingCash) {
+        const payment = await tx.payment.updateMany({
+          where: { id: pendingCash.id, orderId: order.id, status: PaymentStatus.PENDING },
+          data: { status: PaymentStatus.SUCCESS, verifiedAt: new Date(), gatewayResponse: "Cash collected at pickup" },
+        });
+        if (payment.count !== 1) throw new Error("PAYMENT_CHANGED");
+      }
+      const updated = await tx.order.updateMany({
+        where: { id: order.id, shopId: session.shopId!, status: OrderStatus.READY, pickupVerifiedAt: null, stockReleasedAt: null },
+        data: {
+          status: OrderStatus.COMPLETED,
+          pickupVerifiedAt: new Date(),
+          customerVerifiedAt: new Date(),
+          pickupCodeHash: null,
+          pickupCodeLast4: null,
+        },
+      });
+      if (updated.count !== 1) throw new Error("PICKUP_ALREADY_RELEASED");
     });
-    if (updated.count !== 1) throw new Error("PICKUP_ALREADY_RELEASED");
-    if (pendingCash) {
-      await tx.payment.update({ where: { id: pendingCash.id }, data: { status: PaymentStatus.SUCCESS, verifiedAt: new Date(), gatewayResponse: "Cash collected at pickup" } });
-    }
-  });
+  } catch {
+    return NextResponse.json({ error: "This order or payment changed. Refresh and try again." }, { status: 409 });
+  }
 
   await audit({
     shopId: session.shopId,
