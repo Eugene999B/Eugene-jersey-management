@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
   const user = await findLoginUser(parsed.data);
 
-  if (!user || !user.isActive) {
+  if (!user || !user.isActive || (user.shopId && !user.shop?.isActive)) {
     await verifyPassword(parsed.data.password, DUMMY_PASSWORD_HASH);
     return redirectToLogin("invalid", parsed.data.next, parsed.data.loginId);
   }
