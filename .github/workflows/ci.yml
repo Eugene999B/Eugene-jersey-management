@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -45,8 +45,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || '' }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -56,25 +54,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Apply Biome safe fixes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/full-system-hardening-and-brand' && github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          set +e
-          npx biome lint . --write --max-diagnostics=200
-          exit 0
-
-      - name: Commit Biome safe fixes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/full-system-hardening-and-brand' && github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          if git diff --quiet; then exit 0; fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add biome.json prisma.config.ts src
-          git commit -m "Apply safe Biome lint fixes"
-          git push origin HEAD:agent/full-system-hardening-and-brand
 
       - name: Audit high-severity dependencies
         shell: bash
