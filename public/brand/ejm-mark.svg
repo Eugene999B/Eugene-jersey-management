@@ -1,23 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
   <title id="title">Eugene Jersey Management</title>
-  <desc id="desc">Official EJM shield with a professional jersey emblem.</desc>
+  <desc id="desc">Modern EJM monogram formed from connected digital ribbons.</desc>
   <defs>
-    <linearGradient id="navy" x1="44" y1="22" x2="212" y2="232" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#153A69"/>
-      <stop offset="1" stop-color="#081A31"/>
+    <linearGradient id="surface" x1="26" y1="22" x2="226" y2="238" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10243E"/>
+      <stop offset="1" stop-color="#050B14"/>
     </linearGradient>
-    <linearGradient id="red" x1="76" y1="60" x2="178" y2="184" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F04444"/>
-      <stop offset="1" stop-color="#B51220"/>
+    <linearGradient id="signal" x1="52" y1="54" x2="202" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00D4FF"/>
+      <stop offset=".52" stop-color="#4F7CFF"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
     </linearGradient>
+    <linearGradient id="accent" x1="58" y1="194" x2="199" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D8D"/>
+      <stop offset="1" stop-color="#FF7A59"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix in="blur" values="0 0 0 0 0 0 0 0 0 0.75 0 0 0 0 1 0 0 0 .28 0"/>
+    </filter>
   </defs>
-  <path d="M128 10 224 47v72c0 61-38 105-96 127-58-22-96-66-96-127V47l96-37Z" fill="url(#navy)"/>
-  <path d="M128 24 210 56v62c0 50-29 87-82 108-53-21-82-58-82-108V56l82-32Z" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="5"/>
-  <path d="m80 70 31-15 17 20 17-20 31 15-15 36v79H95v-79L80 70Z" fill="#FFFFFF"/>
-  <path d="M80 70 111 55l8 10-17 30-16 11-6-36Zm96 0-31-15-8 10 17 30 16 11 6-36Z" fill="url(#red)"/>
-  <path d="m111 55 17 20 17-20 11 5c-5 20-15 31-28 31s-23-11-28-31l11-5Z" fill="#F4B942"/>
-  <path d="M106 112h25v11h-14v9h12v11h-12v10h15v11h-26v-52Zm31 0h12l8 19 8-19h12v52h-11v-30l-6 16h-6l-6-16v30h-11v-52Z" fill="#0B1F3A"/>
-  <path d="M70 121h18M168 180h18" stroke="#F4B942" stroke-width="7" stroke-linecap="round"/>
-  <circle cx="66" cy="121" r="4" fill="#E31B23"/>
-  <circle cx="190" cy="180" r="4" fill="#E31B23"/>
+  <rect x="10" y="10" width="236" height="236" rx="62" fill="url(#surface)"/>
+  <path d="M49 76c0-14 11-25 25-25h64v25H79a5 5 0 0 0-5 5v16h54v25H74v28c0 3 2 5 5 5h53v25H74c-14 0-25-11-25-25V76Z" fill="#F8FAFC"/>
+  <path d="M139 51h27v94c0 11-5 17-15 17-8 0-14-4-20-12l-19 16c10 15 23 23 41 23 26 0 42-16 42-43V76h12V51h-68Z" fill="url(#signal)"/>
+  <path d="m102 188 22-52 20 34 19-34 24 52h-29l-14-25-14 25h-28Z" fill="url(#accent)"/>
+  <path d="M63 207h130" stroke="#00D4FF" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+  <path d="M60 45h118" stroke="#00D4FF" stroke-width="5" stroke-linecap="round" opacity=".18" filter="url(#glow)"/>
 </svg>
