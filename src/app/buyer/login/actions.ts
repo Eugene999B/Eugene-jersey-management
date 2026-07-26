@@ -103,13 +103,13 @@ export async function buyerPasswordLoginAction(formData: FormData) {
       enforceRateLimit({ key: `buyer-password-login-ip:${await requestIp()}`, limit: 40, windowSeconds: 15 * 60 }),
     ]);
   } catch {
-    redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+    redirect(`/buyer/login?error=rate&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
   const buyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
   const validPassword = await verifyPassword(parsed.data.password, buyer?.passwordHash ?? DUMMY_PASSWORD_HASH);
   if (!buyer || !buyer.isActive || !buyer.passwordHash || !validPassword) {
-    redirect(`/buyer/login?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+    redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
   const updated = await prisma.buyerAccount.update({ where: { id: buyer.id }, data: { lastLoginAt: new Date() } });
@@ -152,9 +152,7 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
   });
   if (!consumed?.pendingPasswordHash || !consumed.pendingName) redirect(`/buyer/login?error=code&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 
-  const emailOwner = consumed.pendingEmail
-    ? await prisma.buyerAccount.findUnique({ where: { email: consumed.pendingEmail } })
-    : null;
+  const emailOwner = consumed.pendingEmail ? await prisma.buyerAccount.findUnique({ where: { email: consumed.pendingEmail } }) : null;
   if (emailOwner && emailOwner.id !== existingBuyer?.id) redirect(`/buyer/login?error=email&phone=${encodeURIComponent(parsed.data.phone)}`);
 
   const updated = existingBuyer
