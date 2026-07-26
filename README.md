@@ -148,6 +148,7 @@ npm.cmd run build
 npm.cmd run docs:generate
 npm.cmd run admin:bootstrap
 npm.cmd run production:activate
+npm.cmd run production:purge-demo
 ```
 
 ## Railway Deployment
@@ -155,12 +156,16 @@ npm.cmd run production:activate
 Railway uses `railway.toml`:
 
 - Build: `npx prisma generate && npm run build`
-- Pre-deploy: `npx prisma migrate deploy && npm run production:activate`
+- Pre-deploy: `npx prisma migrate deploy && npm run production:activate && npm run production:purge-demo`
 - Start: `HOSTNAME=0.0.0.0 npm run start`
 
 Production deployment is GitHub-controlled. Set `ADMIN_EMAIL` and, for the first activation, a strong `ADMIN_PASSWORD`. Optional variables are `ADMIN_LOGIN_ID`, `ADMIN_NAME`, and `ADMIN_PHONE`. Keep `ADMIN_FORCE_RESET=false` during normal operation.
 
-The first successful deployment creates the real Super Admin and retires all known demo access. Later deployments keep that state without resetting the administrator password. See `docs/source/11_Production_Activation.md` for the activation and password-recovery procedure.
+The activation command creates or preserves the real Super Admin and retires demo access. The purge command normally skips. For the one-time permanent cleanup, set `PURGE_DEMO_DATA=PURGE-ACC-PRO-DEMO-2026`, deploy once, verify the application, then remove `PURGE_DEMO_DATA` from Railway.
+
+The purge refuses to run unless an active shop-independent real Super Admin exists. It also refuses when demo identities have references outside the seeded demo tenant. It deletes the seeded Accra Pro Sports tenant, demo users, demo buyer, demo products, stock, orders, payments, suppliers, reviews and related records while preserving the production schema, Prisma migrations and real administrator.
+
+See `docs/source/11_Production_Activation.md` for activation, password recovery and permanent demo-cleanup procedures.
 
 Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not connect this repository to the Chalin project. This repository deploys to the Railway project named `Eugene Jersey Management`.
 
@@ -171,11 +176,12 @@ Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not conn
 - `prisma/seed.ts`: Intentional local demo data.
 - `scripts/bootstrap-admin.ts`: Manual Super Admin bootstrap utility.
 - `scripts/activate-production.ts`: Idempotent Railway production activation and demo retirement.
-- `docs/source/11_Production_Activation.md`: GitHub-only production activation runbook.
+- `scripts/purge-demo-data.ts`: Guarded one-time permanent deletion of seeded production demo data.
+- `docs/source/11_Production_Activation.md`: GitHub-only production activation and cleanup runbook.
 - `src/app/login/page.tsx`: Role-detect login UI.
 - `src/app/api/auth/login/route.ts`: Staff/admin/supplier login backend.
 - `src/app/buyer/login`: Buyer login and SMS recovery.
-- `src/app/admin`: Super Admin command center and actions.
+- `src/app/admin`: Super Admin platform command center and actions.
 - `src/app/dashboard`: Shop dashboard.
 - `src/components/design/design-studio.tsx`: Jersey design studio.
 - `src/lib/auth.ts`: Staff/admin session helpers.
@@ -196,6 +202,7 @@ Before editing:
 6. If changing the database, add a Prisma migration and update local demo data when relevant.
 7. If changing design studio behaviour, test selection, movement, mirror view, zoom, and mobile layout.
 8. Use GitHub pull requests and Railway deployment as the production source of truth.
+9. Never weaken or bypass the `PURGE_DEMO_DATA` confirmation and cross-tenant safety checks.
 
 Generated Word docs live in `docs/word` when `npm.cmd run docs:generate` is run.
 
@@ -207,9 +214,10 @@ Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc
 
 Highest-priority status from the latest audit:
 
-- Production activation now creates the real administrator from Railway variables and retires demo access automatically.
-- GitHub Actions validates migrations, lint, TypeScript, tests, and build on pull requests.
+- Production activation creates the real administrator from Railway variables and retires demo access automatically.
+- A guarded one-time purge permanently removes seeded demo business data without dropping the production database.
+- GitHub Actions validates the real seed-activate-purge lifecycle against disposable PostgreSQL, then runs lint, TypeScript, tests and build.
 - Dashboard pages have central page-level role guards in `src/lib/dashboard-access.ts`.
 - POS, cart checkout, and public ordering use transaction-safe conditional stock decrements.
 - Design Studio has undo, redo, delete selected, grouped templates, richer shapes, improved selection math, and clearer machine connection details.
-- Still needed: persistent saved design jobs, duplicate/copy/paste, multi-select/grouping, deeper machine path conversion, broader browser/mobile tests, and production Paystack/Arkesel monitoring.
+- Still needed: real-business onboarding, end-to-end browser tests, Paystack/Arkesel production controls, Design Studio completion, 2FA, session management and mobile hardening.
