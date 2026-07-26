@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, LogOut, MessageCircle, Palette, Settings, ShoppingCart, Tags, Truck, Users } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
+import { BrandImage } from "@/components/ui/brand-image";
 import { canSeeNav, roleLabels } from "@/lib/rbac";
 
 const navItems = [
@@ -39,14 +39,13 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
   const pathname = usePathname();
   const visible = canSeeNav(role);
   const items = navItems.filter((item) => visible[item.key]);
-  const logoUrl = shop.logoUrl || "/brand/ejm-mark.svg";
 
   if (variant === "mobile") {
     return (
       <section className="border-b border-[#ded8cd] bg-[#fffdf8]">
         <div className="flex items-center justify-between gap-3 px-3 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Image src={logoUrl} alt={shop.name} width={38} height={38} className="rounded-[8px] object-cover" />
+            <BrandImage src={shop.logoUrl} alt={shop.name} width={38} height={38} className="rounded-[8px] object-cover" />
             <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{shop.name}</p><p className="text-xs text-slate-500">{roleLabels[role]}</p></div>
           </div>
           <Link href="/logout" prefetch={false} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold text-slate-700"><LogOut size={16} />Sign out</Link>
@@ -66,7 +65,7 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
     <aside className="flex h-full min-h-screen flex-col border-r border-[#ded8cd] bg-[#fffdf8]">
       <div className="border-b border-[#ded8cd] p-4">
         <div className="flex items-center gap-3">
-          <Image src={logoUrl} alt={shop.name} width={42} height={42} className="rounded-[8px] object-cover" />
+          <BrandImage src={shop.logoUrl} alt={shop.name} width={42} height={42} className="rounded-[8px] object-cover" priority />
           <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{shop.name}</p><p className="text-xs text-slate-500">{shop.planTier} plan</p></div>
         </div>
       </div>
