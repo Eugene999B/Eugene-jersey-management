@@ -59,7 +59,7 @@ describe("security foundations", () => {
     expect(formSource).toContain('fetch("/api/auth/login"');
     expect(formSource).toContain('credentials: "same-origin"');
     expect(formSource).not.toContain('action="/api/auth/login"');
-    expect(routeSource).toContain('"X-EJM-Login"');
+    expect(routeSource).toContain('"x-ejm-login"');
     expect(routeSource).toContain("redirectPath");
     expect(routeSource).toContain('"Cache-Control": "no-store"');
   });
