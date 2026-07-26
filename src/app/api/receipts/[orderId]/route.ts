@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { currency } from "@/lib/format";
 import { permissions } from "@/lib/rbac";
+import { requireTenantShopId, withTenantScope } from "@/lib/tenant-scope";
 
 type RouteContext = {
   params: Promise<{ orderId: string }>;
@@ -10,12 +11,14 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const session = await requireRole(permissions.orderFinance);
+  if (!session.shopId) {
+    return NextResponse.json({ error: "A shop workspace is required." }, { status: 403 });
+  }
+
+  const shopId = requireTenantShopId(session);
   const { orderId } = await context.params;
   const order = await prisma.order.findFirst({
-    where: {
-      id: orderId,
-      shopId: session.shopId ?? undefined,
-    },
+    where: withTenantScope(shopId, { id: orderId }),
     include: {
       shop: true,
       customer: true,
