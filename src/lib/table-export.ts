@@ -1,5 +1,5 @@
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
-import ExcelJS from "exceljs";
+import writeExcelFile from "write-excel-file/node";
 
 export type TableExport = {
   title: string;
@@ -106,32 +106,25 @@ export async function buildTableDocx(exportData: TableExport) {
 }
 
 export async function buildTableXlsx(exportData: TableExport) {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Eugene Jersey Management";
-  workbook.created = new Date();
-  const worksheet = workbook.addWorksheet("Report");
-  worksheet.addRow([exportData.title]);
-  worksheet.mergeCells(1, 1, 1, Math.max(1, exportData.columns.length));
-  worksheet.getCell(1, 1).font = { size: 18, bold: true, color: { argb: "FF0F766E" } };
-  if (exportData.subtitle) {
-    worksheet.addRow([exportData.subtitle]);
-    worksheet.mergeCells(2, 1, 2, Math.max(1, exportData.columns.length));
-    worksheet.getCell(2, 1).font = { italic: true, color: { argb: "FF64748B" } };
-  }
-  for (const metric of exportData.metrics ?? []) worksheet.addRow([metric.label, metric.value]);
-  worksheet.addRow([]);
-  const header = worksheet.addRow(exportData.columns);
-  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
-  header.alignment = { vertical: "middle" };
-  worksheet.views = [{ state: "frozen", ySplit: header.number }];
-  for (const row of exportData.rows) worksheet.addRow(row);
-  worksheet.autoFilter = { from: { row: header.number, column: 1 }, to: { row: header.number, column: Math.max(1, exportData.columns.length) } };
-  worksheet.columns.forEach((column, index) => {
-    const values = [exportData.columns[index] ?? "", ...exportData.rows.map((row) => String(row[index] ?? ""))];
-    column.width = Math.min(48, Math.max(12, ...values.map((value) => value.length + 2)));
+  const metricRows = (exportData.metrics ?? []).map((metric) => [metric.label, metric.value] as Array<string | number>);
+  const sheetData: Array<Array<string | number>> = [
+    [exportData.title],
+    ...(exportData.subtitle ? [[exportData.subtitle]] : []),
+    ...metricRows,
+    [],
+    exportData.columns,
+    ...exportData.rows,
+  ];
+  const widths = exportData.columns.map((column, index) => {
+    const values = [column, ...exportData.rows.map((row) => String(row[index] ?? ""))];
+    return { width: Math.min(48, Math.max(12, ...values.map((value) => value.length + 2))) };
   });
-  return Buffer.from(await workbook.xlsx.writeBuffer());
+  const buffer = await writeExcelFile(sheetData, {
+    sheet: "Report",
+    columns: widths,
+    stickyRowsCount: Math.max(1, sheetData.length - exportData.rows.length),
+  }).toBuffer();
+  return Buffer.from(buffer);
 }
 
 function pdfEscape(text: string) {
