@@ -1,8 +1,36 @@
 import type { NextConfig } from "next";
 
+type RemotePattern = {
+  protocol: "http" | "https";
+  hostname: string;
+  port: string;
+  pathname: string;
+};
+
+function durableMediaPatterns(): RemotePattern[] {
+  const value = process.env.MEDIA_PUBLIC_URL?.trim();
+  if (!value) return [];
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && url.protocol === "http:")) return [];
+    const basePath = url.pathname.replace(/\/$/, "");
+    return [{
+      protocol: url.protocol.slice(0, -1) as "http" | "https",
+      hostname: url.hostname,
+      port: url.port,
+      pathname: `${basePath || ""}/**`,
+    }];
+  } catch {
+    return [];
+  }
+}
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  images: {
+    remotePatterns: durableMediaPatterns(),
+  },
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",
