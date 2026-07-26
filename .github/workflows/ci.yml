@@ -1,0 +1,79 @@
+name: Validate Eugene Jersey Management
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "agent/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sports_shop_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sports_shop_platform"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sports_shop_platform?schema=public
+      SESSION_SECRET: github-actions-validation-secret-at-least-32-characters
+      APP_URL: http://localhost:3000
+      MEDIA_STORAGE_PROVIDER: local
+      SMS_PROVIDER: console
+      WHATSAPP_PROVIDER: console
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Test Paystack helpers
+        run: npx vitest run src/tests/payments.test.ts
+
+      - name: Test role permissions
+        run: npx vitest run src/tests/rbac.test.ts
+
+      - name: Test dashboard access
+        run: npx vitest run src/tests/dashboard-access.test.ts
+
+      - name: Test document exports
+        run: npx vitest run src/tests/table-export.test.ts
+
+      - name: Build
+        run: npm run build

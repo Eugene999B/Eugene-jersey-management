@@ -1,6 +1,6 @@
 # Eugene Jersey Management - System Diagnostic, Progress, and Roadmap
 
-Updated: 2026-07-25 (Grok hardening review)
+Updated: 2026-07-26
 
 Live app: https://web-production-8ee56.up.railway.app
 
@@ -12,48 +12,56 @@ Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc
 
 The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, design studio, suppliers, network, admin, Paystack hooks, and SMS hooks.
 
-**Not ready for paid shop onboarding** until production credentials are rotated, real payment/SMS providers are verified live, and test coverage grows.
+Production account activation is now repository-controlled: Railway migrations are followed by `production:activate`, which creates the real administrator from Railway variables and retires seeded demo access.
 
-## Already resolved in code (as of 2026-07-22+)
+**Not ready for paid shop onboarding** until the activation deployment succeeds, the real administrator login is verified, real payment/SMS providers are verified live, and test coverage grows.
 
-1. **Production seed safety** — `railway.toml` preDeploy runs only `npx prisma migrate deploy`. Demo seed is opt-in via `db:seed:demo` / `setup:demo`. `admin:bootstrap` exists for real Super Admin.
-2. **Dashboard page-level RBAC** — `src/lib/dashboard-access.ts` used by `src/proxy.ts`. Patch pack adds a **server layout second layer** via `x-pathname`.
-3. **Transaction-safe stock decrement** — POS / cart / public order use guarded `updateMany` with `stockQty >= quantity`.
-4. **Design studio** — production sheet workspace, undo/redo, delete, duplicate, save to `DesignJob`, upload via `/api/uploads`, SVG/print/manifest, device readiness checks.
-5. **Buyer SMS pending password** — password hash stored on `PhoneVerificationCode.pendingPasswordHash` until `consumePhoneCode` succeeds; not written to `BuyerAccount` early.
-6. **Paystack callback** — verifies transaction then settles. Webhook verifies HMAC signature and records `PaymentProviderEvent`.
+## Already resolved in code
 
-## Hardening applied in the 2026-07-25 patch pack
+1. **Production account activation** — `railway.toml` runs migrations and the idempotent `production:activate` command. The command creates the real Super Admin from Railway `ADMIN_*` variables, deactivates demo identities, invalidates demo sessions, suspends the demo shop, and disables demo ordering.
+2. **Production seed safety** — demo seed is opt-in via `db:seed:demo` / `setup:demo`; published default demo passwords have been removed from active documentation and environment examples.
+3. **Suspended tenant login block** — staff and suppliers connected to an inactive shop are rejected during authentication.
+4. **Dashboard page-level RBAC** — `src/lib/dashboard-access.ts` is used by `src/proxy.ts`, with a server layout second layer via `x-pathname`.
+5. **Transaction-safe stock decrement** — POS, cart, and public order use guarded `updateMany` with `stockQty >= quantity`.
+6. **Design studio** — production sheet workspace, undo/redo, delete, duplicate, save to `DesignJob`, upload via `/api/uploads`, SVG/print/manifest, and device readiness checks.
+7. **Buyer SMS pending password** — password hash is stored on `PhoneVerificationCode.pendingPasswordHash` until verification succeeds.
+8. **Paystack callback** — verifies transactions before settlement. Webhooks verify HMAC signatures and record `PaymentProviderEvent`.
+9. **Paystack mismatch handling** — amount/currency mismatch updates the Payment row to `FAILED`.
+10. **GitHub validation** — pull requests run PostgreSQL migrations, lint, TypeScript, unit tests, and production build.
 
-1. **Paystack amount/currency mismatch** now updates the Payment row to `FAILED` (previously returned failed without writing FAILED for mismatch).
-2. **Proxy** forwards `x-pathname` for server components.
-3. **Dashboard layout** re-checks `canAccessDashboardPath` (defense in depth).
-4. **New unit tests**: `src/tests/payments.test.ts`, `src/tests/dashboard-access.test.ts`.
+## Immediate activation checklist
+
+1. Merge the production activation pull request after GitHub validation passes.
+2. Confirm Railway deploy succeeds with all required `ADMIN_*` variables.
+3. Sign in using the real `ADMIN_LOGIN_ID` or `ADMIN_EMAIL` and confirm `/admin` opens.
+4. Confirm seeded demo staff, supplier, buyer, and shop access no longer works.
+5. Set `ADMIN_FORCE_RESET=false` after activation. Remove `ADMIN_PASSWORD` after the real login is verified.
 
 ## Still required before selling to shops
 
-1. Rotate any live demo accounts (`Ghana123`, seeded Login IDs) on Railway; bootstrap a strong Super Admin.
-2. Expand automated tests (E2E login, concurrent stock, design save/load, full Paystack webhook settle with DB).
-3. Design: multi-select, group/ungroup, true SVG-to-cut-path HPGL/DXF, per-shop machine profiles, mobile inspector.
-4. Paystack: refunds UI, POS real gateway charge (not sandbox record-only), subaccount onboarding UX, webhook retry dashboard.
-5. Arkesel: delivery status storage, retry queue, balance warning, templates, consent/opt-out.
-6. Schedule `jobs:release-reservations` in production.
-7. 2FA for Super Admin and shop Owners; admin session list / force logout.
-8. Mobile dashboard UX pass + screenshot tests.
-9. Clean Turbopack media-storage NFT warning.
-10. Refresh Google Drive docs after each major push so they match `docs/source/10_...`.
+1. Expand automated tests: E2E login, concurrent stock, design save/load, and full Paystack webhook settlement with a database.
+2. Design: multi-select, group/ungroup, true SVG-to-cut-path HPGL/DXF, per-shop machine profiles, and mobile inspector.
+3. Paystack: refunds UI, real POS gateway charge, subaccount onboarding UX, and webhook retry dashboard.
+4. Arkesel: delivery status storage, retry queue, balance warning, templates, and consent/opt-out.
+5. Schedule `jobs:release-reservations` in production.
+6. Add 2FA for Super Admin and shop Owners, plus admin session list and forced logout.
+7. Complete the mobile dashboard UX pass and screenshot tests.
+8. Clean the Turbopack media-storage NFT warning.
+9. Refresh Google Drive docs after each major merge so they match repository source documentation.
 
 ## Recommended implementation order
 
-1. Apply the patch pack files and push; run lint / tsc / test / prisma validate / build.
-2. Production credential rotation + admin bootstrap.
-3. E2E smoke tests for login + role blocking + checkout.
-4. Paystack refunds + POS real charge path.
-5. Design multi-select / cut-path / mobile.
-6. SMS production controls.
-7. 2FA and session management.
+1. Complete and deploy production account activation.
+2. Run E2E smoke tests for real admin login, role blocking, and checkout.
+3. Add stock concurrency and payment settlement integration tests.
+4. Complete Paystack refunds and real POS charge path.
+5. Complete Design Studio multi-select, cut-path, and mobile work.
+6. Add SMS production controls.
+7. Add 2FA and session management.
 
 ## Validation commands
+
+GitHub Actions is the primary validation source. Equivalent commands are:
 
 ```powershell
 npm.cmd run lint
@@ -66,9 +74,10 @@ npm.cmd run build
 
 ## AI handoff rules
 
-1. Read README.md then this diagnostic.
+1. Read `README.md`, this diagnostic, and `docs/source/11_Production_Activation.md` before production changes.
 2. Never touch Chalin projects.
 3. Keep frontend/backend together in this Next.js app unless deliberately splitting later.
-4. Migrations required for schema changes.
-5. Access control: check `rbac.ts`, `dashboard-access.ts`, `proxy.ts`, and page server asserts.
-6. Design changes: test selection, movement, mirror, zoom, save, mobile layout.
+4. Prisma migrations are required for schema changes.
+5. Access control changes must check `rbac.ts`, `dashboard-access.ts`, `proxy.ts`, server assertions, and inactive-shop handling.
+6. Design changes must test selection, movement, mirror, zoom, save, and mobile layout.
+7. Use GitHub branches, pull requests, checks, and Railway deployment as the production source of truth.
