@@ -2,11 +2,11 @@ import type { CSSProperties, ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { canAccessDashboardPath } from "@/lib/dashboard-access";
 import { getTenantContext } from "@/lib/tenant";
-import { LinkButton } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +24,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   if (!shop) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f6f4ef] p-6">
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="panel max-w-md p-6 text-center">
           <h1 className="text-2xl font-semibold">No shop assigned</h1>
           <p className="mt-3 text-sm text-slate-600">This account is not connected to a shop workspace.</p>
-          <LinkButton href="/logout" className="mt-5">Return to login</LinkButton>
+          <LogoutButton className="mt-5 bg-slate-950 text-white hover:bg-slate-800" label="Return to login" />
         </div>
       </main>
     );
@@ -40,14 +40,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   } as CSSProperties;
 
   return (
-    <div style={style} className="grid min-h-screen bg-[#f6f4ef] lg:grid-cols-[260px_1fr]">
-      <div className="hidden lg:block">
-        <DashboardSidebar role={session.role} shop={shop} />
-      </div>
+    <div style={style} className="grid min-h-screen bg-slate-100 lg:grid-cols-[260px_1fr]">
+      <div className="hidden lg:block"><DashboardSidebar role={session.role} shop={shop} /></div>
       <div className="min-w-0">
-        <div className="lg:hidden">
-          <DashboardSidebar role={session.role} shop={shop} variant="mobile" />
-        </div>
+        <div className="lg:hidden"><DashboardSidebar role={session.role} shop={shop} variant="mobile" /></div>
         <DashboardTopbar session={session} shopId={shop.id} />
         <main className="p-4 lg:p-6">{children}</main>
       </div>

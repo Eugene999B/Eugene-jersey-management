@@ -1,45 +1,46 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, Building2, CreditCard, LifeBuoy, LogOut, MessageCircle, Settings, Shield, Store, UserCog, UsersRound } from "lucide-react";
+import { Activity, BarChart3, Building2, CreditCard, LifeBuoy, MessageCircle, Settings, Shield, Store, UserCog, UsersRound } from "lucide-react";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 const adminNav = [
-  { href: "/admin#overview", label: "Overview", icon: BarChart3 },
-  { href: "/admin#shops", label: "Shops", icon: Store },
-  { href: "/admin#workers", label: "Admin staff", icon: UserCog },
-  { href: "/admin#support", label: "Support desk", icon: LifeBuoy },
-  { href: "/admin#billing", label: "Billing", icon: CreditCard },
-  { href: "/admin#activity", label: "Activity logs", icon: Activity },
-  { href: "/admin#security", label: "Security", icon: Shield },
-  { href: "/admin#settings", label: "Settings", icon: Settings },
+  { href: "#overview", label: "Overview", icon: BarChart3 },
+  { href: "#shops", label: "Shops", icon: Store },
+  { href: "#workers", label: "Admin staff", icon: UserCog },
+  { href: "#support", label: "Support desk", icon: LifeBuoy },
+  { href: "#billing", label: "Billing", icon: CreditCard },
+  { href: "#activity", label: "Activity logs", icon: Activity },
+  { href: "#security", label: "Security", icon: Shield },
+  { href: "#settings", label: "Settings", icon: Settings },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireRole(permissions.superAdmin);
   return (
-    <div className="min-h-screen bg-[#eef1f3] text-slate-950">
-      <div className="grid min-h-screen lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="border-b border-slate-200 bg-slate-950 text-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r lg:border-white/10">
+    <div className="min-h-screen bg-[#f4f6f8] text-slate-950">
+      <div className="grid min-h-screen lg:grid-cols-[276px_minmax(0,1fr)]">
+        <aside className="border-b border-slate-200 bg-[#081528] text-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r lg:border-white/10">
           <div className="flex h-full flex-col">
             <div className="border-b border-white/10 p-5">
-              <Link href="/admin" className="flex items-center gap-3">
-                <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={52} height={52} priority />
-                <div><p className="text-sm text-white/55">Platform Command</p><h1 className="text-xl font-semibold">Super Admin</h1></div>
+              <Link href="/admin" prefetch={false} className="flex items-center gap-3">
+                <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={48} height={48} priority />
+                <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300/75">Platform control</p><h1 className="mt-1 text-lg font-semibold">Super Admin</h1></div>
               </Link>
             </div>
-            <nav className="flex gap-2 overflow-x-auto p-3 lg:grid lg:overflow-visible">
+            <nav className="flex gap-2 overflow-x-auto p-3 lg:grid lg:overflow-visible" aria-label="Admin sections">
               {adminNav.map((item) => {
                 const Icon = item.icon;
-                return <Link key={item.href} className="inline-flex min-h-11 shrink-0 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white" href={item.href}><Icon size={17} />{item.label}</Link>;
+                return <a key={item.href} className="inline-flex min-h-11 shrink-0 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-white/68 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50" href={item.href}><Icon size={17} />{item.label}</a>;
               })}
             </nav>
             <div className="mt-auto hidden border-t border-white/10 p-4 lg:block">
-              <div className="rounded-[8px] bg-white/8 p-3"><p className="text-xs uppercase text-white/45">Signed in as</p><p className="mt-1 truncate text-sm font-semibold">{session.name}</p><p className="mt-1 truncate text-xs text-white/55">{session.email}</p></div>
-              <Link className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] bg-white px-3 text-sm font-semibold text-slate-950" href="/logout"><LogOut size={16} /> Sign out</Link>
+              <div className="rounded-xl bg-white/[0.07] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">Signed in as</p><p className="mt-1 truncate text-sm font-semibold">{session.name}</p><p className="mt-1 truncate text-xs text-white/55">{session.email}</p></div>
+              <LogoutButton className="mt-3 w-full bg-white text-slate-950 hover:bg-slate-100" />
             </div>
           </div>
         </aside>
@@ -48,13 +49,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Image className="lg:hidden" src="/brand/ejm-mark.svg" alt="" width={38} height={38} />
-                <div><p className="text-xs font-semibold uppercase text-[#0f766e]">Eugene Jersey Management</p><h2 className="text-lg font-semibold">Platform operations centre</h2></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-cyan-700">Eugene Jersey Management</p><h2 className="text-lg font-semibold">Platform operations centre</h2></div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href="/shops"><UsersRound size={16} /> Buyer marketplace</Link>
-                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href="/admin/shops/new"><Building2 size={16} /> New shop</Link>
-                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] bg-slate-950 px-3 text-sm font-semibold text-white" href="/admin#support"><MessageCircle size={16} /> Issues</Link>
-                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold lg:hidden" href="/logout"><LogOut size={16} /> Sign out</Link>
+                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold" href="/shops" prefetch={false}><UsersRound size={16} /> Marketplace</Link>
+                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold" href="/admin/shops/new" prefetch={false}><Building2 size={16} /> New shop</Link>
+                <a className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#081528] px-3 text-sm font-semibold text-white" href="#support"><MessageCircle size={16} /> Issues</a>
+                <LogoutButton className="border border-slate-200 bg-white text-slate-800 lg:hidden" />
               </div>
             </div>
           </header>

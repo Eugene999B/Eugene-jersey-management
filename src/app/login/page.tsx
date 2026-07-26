@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Boxes, CreditCard, Palette, ScanLine, ShoppingBag, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Boxes, CreditCard, Palette, ShieldCheck, ShoppingBag, Sparkles } from "lucide-react";
 import { StaffLoginForm } from "@/components/auth/staff-login-form";
 
-export const metadata: Metadata = { title: "Open your workspace" };
+export const metadata: Metadata = { title: "Secure workspace access" };
+export const dynamic = "force-dynamic";
 
 const errorCopy: Record<string, string> = {
   invalid: "The Login ID or password is not correct.",
@@ -16,67 +17,60 @@ const errorCopy: Record<string, string> = {
   "invalid-invite": "That staff invitation is invalid, expired, or already belongs to an account.",
 };
 
-type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; loginId?: string; reset?: string }> };
-const workflow = [
-  { icon: ShoppingBag, label: "Sell", detail: "POS, receipts and verified tenders" },
-  { icon: Palette, label: "Design", detail: "Artwork prepared on production material" },
-  { icon: ScanLine, label: "Produce", detail: "Orders, cutters and print handoff" },
-  { icon: Boxes, label: "Control", detail: "Stock, debts, closing and reports" },
-];
+type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; reset?: string; loggedOut?: string }> };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = (await searchParams) ?? {};
   const error = params.error ? errorCopy[params.error] ?? errorCopy.invalid : null;
 
   return (
-    <main className="h-[100svh] overflow-hidden bg-[#081a31] text-white">
-      <section className="mx-auto grid h-full max-w-[1500px] lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="relative hidden overflow-hidden border-r border-white/10 p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
-          <div className="absolute inset-0 opacity-70 [background:radial-gradient(circle_at_18%_18%,rgba(227,27,35,0.22),transparent_31%),radial-gradient(circle_at_82%_72%,rgba(244,185,66,0.18),transparent_34%)]" />
-          <div className="absolute inset-x-10 top-1/2 h-px bg-gradient-to-r from-transparent via-[#f4b942]/45 to-transparent" />
-          <Link href="/" className="relative inline-flex items-center">
-            <Image src="/brand/ejm-logo.svg" alt="Eugene Jersey Management" width={360} height={88} priority />
-          </Link>
+    <main className="h-[100dvh] overflow-hidden bg-[#07111f] text-white">
+      <div className="grid h-full lg:grid-cols-[minmax(0,1.08fr)_minmax(480px,0.92fr)]">
+        <section className="relative hidden overflow-hidden border-r border-white/10 lg:flex lg:flex-col lg:justify-between lg:p-9 xl:p-12">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_10%,rgba(0,212,255,0.2),transparent_30%),radial-gradient(circle_at_85%_80%,rgba(139,92,246,0.22),transparent_35%),linear-gradient(145deg,#07111f_0%,#0b1930_55%,#07111f_100%)]" />
+          <div className="absolute -right-28 top-20 h-72 w-72 rounded-full border border-cyan-300/15" /><div className="absolute -right-10 top-36 h-44 w-44 rounded-full border border-violet-300/15" />
+          <Link href="/" className="relative inline-flex w-fit items-center"><Image src="/brand/ejm-logo.svg" alt="Eugene Jersey Management" width={340} height={82} priority /></Link>
 
-          <div className="relative max-w-3xl py-10">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#f4b942]/25 bg-[#f4b942]/10 px-4 py-2 text-sm font-semibold text-[#ffe3a0]"><Sparkles size={16} /> Professional shop operations</div>
-            <h1 className="text-5xl font-semibold leading-[0.98] xl:text-7xl">Open the shop.<br /><span className="text-[#f4b942]">Run the whole workflow.</span></h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 xl:text-lg">Sales, jersey design, production, stock, customer accounts and management controls in one secure workspace.</p>
-            <div className="mt-9 grid gap-3 sm:grid-cols-2">
-              {workflow.map(({ icon: Icon, label, detail }, index) => (
-                <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4 backdrop-blur">
-                  <div className="flex items-start gap-4"><span className="rounded-xl bg-white/8 p-3 text-[#f4b942]"><Icon size={21} /></span><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">0{index + 1}</p><p className="mt-1 font-semibold">{label}</p><p className="mt-1 text-sm text-white/55">{detail}</p></div></div>
-                </div>
-              ))}
+          <div className="relative max-w-3xl py-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-cyan-200"><Sparkles size={14} /> Private operations access</div>
+            <h1 className="mt-7 text-[clamp(3.6rem,6vw,6.4rem)] font-black leading-[0.89] tracking-[-0.065em]">Your business.<br /><span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">Fully in control.</span></h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-white/58 xl:text-lg">Enter the workspace for sales, customers, production, stock, finance and management—without changing tools or losing accountability.</p>
+            <div className="mt-8 grid max-w-2xl grid-cols-2 gap-3">
+              {[{ icon: CreditCard, title: "Commerce", text: "POS, online orders and payments" }, { icon: Palette, title: "Production", text: "Design and machine-ready handoff" }, { icon: Boxes, title: "Inventory", text: "Stock, purchasing and suppliers" }, { icon: ShieldCheck, title: "Control", text: "Roles, audit and tenant isolation" }].map(({ icon: Icon, title, text }) => <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4 backdrop-blur"><Icon size={19} className="text-cyan-300" /><p className="mt-4 text-sm font-bold">{title}</p><p className="mt-1 text-xs leading-5 text-white/45">{text}</p></div>)}
             </div>
           </div>
-          <div className="relative flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-5 text-xs font-semibold uppercase tracking-[0.14em] text-white/40"><span>Tenant isolated</span><span>Role controlled</span><span>Audit recorded</span><span>Production focused</span></div>
-        </div>
 
-        <div className="flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f7f8fa] px-4 py-3 text-slate-950 sm:px-8 sm:py-5 lg:px-12 xl:px-20">
-          <div className="w-full max-w-lg">
-            <Link href="/" className="mb-3 flex justify-center lg:hidden">
-              <Image src="/brand/ejm-logo.svg" alt="Eugene Jersey Management" width={265} height={65} priority />
-            </Link>
+          <div className="relative flex items-center justify-between border-t border-white/10 pt-5 text-xs font-semibold text-white/38"><span>Secure sessions</span><span>Role-aware access</span><span>Audit recorded</span></div>
+        </section>
 
-            <div className="mb-3 text-center sm:mb-5 lg:text-left">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#e31b23] sm:text-xs">Secure workspace access</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:mt-2 sm:text-4xl">Welcome to your shift.</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-600 sm:mt-2 sm:text-sm">Use your personal Login ID or work email.</p>
+        <section className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-3 text-[#07111f] sm:px-7 sm:py-5 lg:px-10 xl:px-16">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_5%,rgba(0,212,255,0.11),transparent_28%),radial-gradient(circle_at_95%_90%,rgba(139,92,246,0.11),transparent_30%)]" />
+          <div className="relative w-full max-w-[520px] [@media(max-height:650px)]:scale-[0.92]">
+            <div className="mb-3 flex items-center justify-between lg:hidden">
+              <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600"><ArrowLeft size={16} /> Home</Link>
+              <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={46} height={46} priority />
             </div>
 
-            {error ? <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 sm:text-sm" role="alert">{error}</div> : null}
-            {params.reset ? <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 sm:text-sm">Password updated. Sign in with the new password.</div> : null}
-
-            <StaffLoginForm nextPath={params.next} defaultLoginId={params.loginId} />
-
-            <div className="mt-3 flex items-center justify-center gap-5 text-xs font-semibold text-[#0b1f3a] sm:mt-4 sm:grid sm:grid-cols-2 sm:gap-3">
-              <Link href="/buyer/login" className="inline-flex items-center gap-1.5 sm:min-h-11 sm:justify-between sm:rounded-xl sm:border sm:border-[#d9d3c8] sm:bg-white sm:px-4"><span className="flex items-center gap-2"><ShoppingBag size={15} /> Buyer sign in</span><ArrowRight className="hidden sm:block" size={15} /></Link>
-              <Link href="/shops" className="inline-flex items-center gap-1.5 sm:min-h-11 sm:justify-between sm:rounded-xl sm:border sm:border-[#d9d3c8] sm:bg-white sm:px-4"><span className="flex items-center gap-2"><CreditCard size={15} /> Browse shops</span><ArrowRight className="hidden sm:block" size={15} /></Link>
+            <div className="mb-4 sm:mb-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-600 sm:text-xs">Secure workspace</p>
+              <h2 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">Sign in and continue.</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600 [@media(max-height:650px)]:hidden">Each team member uses a private access ID. Credentials are never displayed in the URL or retained by the application.</p>
             </div>
+
+            {error ? <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">{error}</div> : null}
+            {params.reset ? <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">Password updated. Sign in with the new password.</div> : null}
+            {params.loggedOut ? <div className="mb-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900">You have signed out securely.</div> : null}
+
+            <StaffLoginForm nextPath={params.next} />
+
+            <div className="mt-3 grid grid-cols-2 gap-2 [@media(max-height:650px)]:hidden">
+              <Link href="/buyer/login" className="inline-flex min-h-11 items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm"><span className="flex items-center gap-2"><ShoppingBag size={15} /> Buyer access</span><ArrowRight size={15} /></Link>
+              <Link href="/shops" className="inline-flex min-h-11 items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm"><span className="flex items-center gap-2"><BadgeCheck size={15} /> Marketplace</span><ArrowRight size={15} /></Link>
+            </div>
+            <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 [@media(max-height:650px)]:hidden">EJM secure access gateway</p>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   );
 }

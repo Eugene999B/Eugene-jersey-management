@@ -48,7 +48,7 @@ export function trustedApplicationOrigins(request: NextRequest) {
 
 export function isTrustedApplicationOrigin(request: NextRequest) {
   const header = request.headers.get("origin");
-  if (!header) return true;
+  if (!header) return false;
   const origin = normalizedOrigin(header);
   return Boolean(origin && trustedApplicationOrigins(request).has(origin));
 }
