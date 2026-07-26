@@ -7,30 +7,6 @@ type RemotePattern = {
   pathname: string;
 };
 
-function normalizedOrigin(value: string | undefined) {
-  const candidate = value?.trim();
-  if (!candidate) return null;
-  try {
-    return new URL(candidate.includes("://") ? candidate : `https://${candidate}`).origin;
-  } catch {
-    return null;
-  }
-}
-
-function trustedFormOrigins() {
-  const origins = new Set<string>(["https://web-production-8ee56.up.railway.app"]);
-  for (const value of [
-    process.env.APP_URL,
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.RAILWAY_STATIC_URL,
-    process.env.RAILWAY_PUBLIC_DOMAIN,
-  ]) {
-    const origin = normalizedOrigin(value);
-    if (origin) origins.add(origin);
-  }
-  return [...origins];
-}
-
 function durableMediaPatterns(): RemotePattern[] {
   const value = process.env.MEDIA_PUBLIC_URL?.trim();
   if (!value) return [];
@@ -66,10 +42,27 @@ const nextConfig: NextConfig = {
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
-      `form-action 'self' ${trustedFormOrigins().join(" ")} https://checkout.paystack.com https://*.paystack.co`,
+      // Staff login now uses same-origin fetch. The HTTPS scheme allowance keeps
+      // any previously cached native form and Paystack handoff from being blocked
+      // while browsers replace the old login document after this deployment.
+      "form-action 'self' https:",
     ].join("; ");
 
     return [
+      {
+        source: "/login",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+          { key: "Pragma", value: "no-cache" },
+          { key: "Expires", value: "0" },
+        ],
+      },
+      {
+        source: "/api/auth/login",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
