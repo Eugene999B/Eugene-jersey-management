@@ -7,6 +7,7 @@ import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hasRole, type SessionUser } from "@/lib/rbac";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySessionToken } from "@/lib/session-token";
+import { persistentSessionCookieOptions } from "@/lib/session-cookie";
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
@@ -19,13 +20,7 @@ export async function verifyPassword(password: string, hash: string) {
 export async function setSessionCookie(user: SessionUser) {
   const cookieStore = await cookies();
   const token = await signSession(user);
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: SESSION_TTL_SECONDS,
-    path: "/",
-  });
+  cookieStore.set(SESSION_COOKIE, token, persistentSessionCookieOptions(SESSION_TTL_SECONDS));
 }
 
 export async function clearSessionCookie() {
@@ -50,10 +45,13 @@ export async function getSession(): Promise<SessionUser | null> {
       role: true,
       isActive: true,
       sessionVersion: true,
+      shop: { select: { isActive: true } },
     },
   });
 
   if (!user?.isActive || user.sessionVersion !== tokenSession.sessionVersion) return null;
+  if (user.shopId && !user.shop?.isActive) return null;
+
   return {
     id: user.id,
     shopId: user.shopId,
@@ -72,7 +70,11 @@ export async function requireSession() {
 
 export async function requireRole(allowedRoles: Role[]) {
   const session = await requireSession();
-  if (!hasRole(session, allowedRoles)) redirect("/dashboard?error=permission");
+  if (!hasRole(session, allowedRoles)) {
+    if (session.role === Role.SUPER_ADMIN) redirect("/admin?error=permission");
+    if (session.role === Role.SUPPLIER) redirect("/supplier?error=permission");
+    redirect("/dashboard?error=permission");
+  }
   return session;
 }
 
@@ -102,9 +104,9 @@ export async function requireActiveShop(session: SessionUser) {
     },
   });
 
-  if (!shop) {
+  if (!shop || !shop.isActive) {
     await clearSessionCookie();
-    redirect("/login?error=shop-not-found");
+    redirect(`/login?error=${shop ? "shop-suspended" : "shop-not-found"}`);
   }
 
   return shop;
