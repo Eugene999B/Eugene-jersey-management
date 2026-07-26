@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { Role } from "@prisma/client";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { canAccessDashboardPath } from "@/lib/dashboard-access";
@@ -10,9 +11,12 @@ import { LinkButton } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const { session, shop, suspended } = await getTenantContext();
+  const { session, shop } = await getTenantContext();
   const headerStore = await headers();
   const pathname = headerStore.get("x-pathname") || "/dashboard";
+
+  if (session.role === Role.SUPER_ADMIN) redirect("/admin");
+  if (session.role === Role.SUPPLIER) redirect("/supplier");
 
   if (!canAccessDashboardPath(pathname, session.role)) {
     redirect(`/dashboard?error=permission&from=${encodeURIComponent(pathname)}`);
@@ -34,21 +38,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     "--shop-primary": shop.primaryColor,
     "--shop-secondary": shop.secondaryColor,
   } as CSSProperties;
-
-  if (suspended) {
-    return (
-      <main style={style} className="flex min-h-screen items-center justify-center bg-[#f6f4ef] p-6">
-        <div className="panel max-w-lg p-6 text-center">
-          <p className="text-sm font-semibold uppercase text-red-600">Shop suspended</p>
-          <h1 className="mt-2 text-3xl font-semibold">{shop.name} is currently inactive</h1>
-          <p className="mt-3 text-slate-600">
-            Contact the platform Super Admin to reactivate this tenant before staff can access operations.
-          </p>
-          <LinkButton href="/logout" className="mt-6">Sign out</LinkButton>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <div style={style} className="grid min-h-screen bg-[#f6f4ef] lg:grid-cols-[260px_1fr]">
