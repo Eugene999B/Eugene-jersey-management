@@ -1,16 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Boxes,
-  CreditCard,
-  LockKeyhole,
-  Palette,
-  ScanLine,
-  ShoppingBag,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Boxes, CreditCard, LockKeyhole, Palette, ScanLine, ShoppingBag, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = { title: "Open your workspace" };
 
@@ -37,26 +28,23 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const error = params.error ? errorCopy[params.error] ?? errorCopy.invalid : null;
 
   return (
-    <main className="min-h-screen bg-[#07111f] text-white">
-      <section className="mx-auto grid min-h-screen max-w-[1500px] lg:grid-cols-[1.12fr_0.88fr]">
+    <main className="h-[100svh] overflow-hidden bg-[#081a31] text-white">
+      <section className="mx-auto grid h-full max-w-[1500px] lg:grid-cols-[1.1fr_0.9fr]">
         <div className="relative hidden overflow-hidden border-r border-white/10 p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
-          <div className="absolute inset-0 opacity-60 [background:radial-gradient(circle_at_18%_18%,rgba(16,185,129,0.24),transparent_30%),radial-gradient(circle_at_82%_72%,rgba(249,115,22,0.2),transparent_34%)]" />
-          <div className="absolute inset-x-10 top-1/2 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
-          <div className="relative">
-            <Link href="/" className="inline-flex items-center gap-4">
-              <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={58} height={58} priority />
-              <span><span className="block text-sm text-white/55">Eugene Jersey Management</span><span className="block text-lg font-semibold">Sports shop operating system</span></span>
-            </Link>
-          </div>
+          <div className="absolute inset-0 opacity-70 [background:radial-gradient(circle_at_18%_18%,rgba(227,27,35,0.22),transparent_31%),radial-gradient(circle_at_82%_72%,rgba(244,185,66,0.18),transparent_34%)]" />
+          <div className="absolute inset-x-10 top-1/2 h-px bg-gradient-to-r from-transparent via-[#f4b942]/45 to-transparent" />
+          <Link href="/" className="relative inline-flex items-center">
+            <Image src="/brand/ejm-logo.svg" alt="Eugene Jersey Management" width={360} height={88} priority />
+          </Link>
 
-          <div className="relative max-w-3xl py-14">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm font-semibold text-emerald-200"><Sparkles size={16} /> Opening shift</div>
-            <h1 className="text-5xl font-semibold leading-[0.98] xl:text-7xl">Open the shop.<br /><span className="text-emerald-300">Run the whole workflow.</span></h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 xl:text-lg">Start with today&apos;s priorities, move sales into production, prepare artwork on the material, reconcile every payment and close with numbers you can trust.</p>
-            <div className="mt-10 grid gap-3 sm:grid-cols-2">
+          <div className="relative max-w-3xl py-10">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#f4b942]/25 bg-[#f4b942]/10 px-4 py-2 text-sm font-semibold text-[#ffe3a0]"><Sparkles size={16} /> Professional shop operations</div>
+            <h1 className="text-5xl font-semibold leading-[0.98] xl:text-7xl">Open the shop.<br /><span className="text-[#f4b942]">Run the whole workflow.</span></h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 xl:text-lg">Sales, jersey design, production, stock, customer accounts and management controls in one secure workspace.</p>
+            <div className="mt-9 grid gap-3 sm:grid-cols-2">
               {workflow.map(({ icon: Icon, label, detail }, index) => (
-                <div key={label} className="group rounded-2xl border border-white/10 bg-white/[0.055] p-4 backdrop-blur transition hover:border-emerald-300/30 hover:bg-white/[0.08]">
-                  <div className="flex items-start gap-4"><span className="rounded-xl bg-white/8 p-3 text-emerald-300"><Icon size={21} /></span><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">0{index + 1}</p><p className="mt-1 font-semibold">{label}</p><p className="mt-1 text-sm text-white/55">{detail}</p></div></div>
+                <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4 backdrop-blur">
+                  <div className="flex items-start gap-4"><span className="rounded-xl bg-white/8 p-3 text-[#f4b942]"><Icon size={21} /></span><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">0{index + 1}</p><p className="mt-1 font-semibold">{label}</p><p className="mt-1 text-sm text-white/55">{detail}</p></div></div>
                 </div>
               ))}
             </div>
@@ -64,21 +52,33 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <div className="relative flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-5 text-xs font-semibold uppercase tracking-[0.14em] text-white/40"><span>Tenant isolated</span><span>Role controlled</span><span>Audit recorded</span><span>Production focused</span></div>
         </div>
 
-        <div className="flex min-h-screen items-center bg-[#f4f2ec] px-4 py-8 text-slate-950 sm:px-8 lg:px-12 xl:px-20">
-          <div className="mx-auto w-full max-w-xl">
-            <Link href="/" className="mb-10 inline-flex items-center gap-3 lg:hidden"><Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={50} height={50} priority /><span className="font-semibold">Eugene Jersey Management</span></Link>
-            <div className="mb-8"><p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Secure workspace access</p><h2 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Welcome to your shift.</h2><p className="mt-4 max-w-lg leading-6 text-slate-600">Use your personal Login ID or work email. Account details are never exposed before authentication.</p></div>
-            {error ? <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800" role="alert">{error}</div> : null}
-            {params.reset ? <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">Password updated. Sign in with the new password.</div> : null}
+        <div className="flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f7f8fa] px-4 py-3 text-slate-950 sm:px-8 sm:py-5 lg:px-12 xl:px-20">
+          <div className="w-full max-w-lg">
+            <Link href="/" className="mb-3 flex justify-center lg:hidden">
+              <Image src="/brand/ejm-logo.svg" alt="Eugene Jersey Management" width={265} height={65} priority />
+            </Link>
 
-            <form action="/api/auth/login" method="post" className="rounded-2xl border border-[#d9d3c8] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.09)] sm:p-7">
+            <div className="mb-3 text-center sm:mb-5 lg:text-left">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#e31b23] sm:text-xs">Secure workspace access</p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:mt-2 sm:text-4xl">Welcome to your shift.</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-600 sm:mt-2 sm:text-sm">Use your personal Login ID or work email.</p>
+            </div>
+
+            {error ? <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 sm:text-sm" role="alert">{error}</div> : null}
+            {params.reset ? <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 sm:text-sm">Password updated. Sign in with the new password.</div> : null}
+
+            <form action="/api/auth/login" method="post" className="rounded-2xl border border-[#d9d3c8] bg-white p-4 shadow-[0_18px_50px_rgba(11,31,58,0.10)] sm:p-6">
               <input type="hidden" name="next" value={params.next ?? ""} />
-              <label className="block"><span className="mb-2 block text-sm font-semibold">Login ID or work email</span><input className="field min-h-12" name="loginId" autoComplete="username" defaultValue={params.loginId ?? ""} placeholder="Your personal Login ID" required /></label>
-              <label className="mt-4 block"><span className="mb-2 flex items-center justify-between gap-3 text-sm font-semibold"><span>Password</span><Link href="/forgot-password" className="text-[#0f766e] hover:underline">Forgot password?</Link></span><div className="relative"><LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input className="field min-h-12 pl-10" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required /></div></label>
-              <button type="submit" className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-5 text-sm font-semibold text-white transition hover:bg-[#0b5f59] focus:outline-none focus:ring-4 focus:ring-emerald-200">Open workspace <ArrowRight size={17} /></button>
-              <p className="mt-4 text-center text-xs leading-5 text-slate-500">Protected by account and network rate limits. Repeated attempts are recorded without revealing whether an account exists.</p>
+              <label className="block"><span className="mb-1.5 block text-xs font-semibold sm:text-sm">Login ID or work email</span><input className="field min-h-11 sm:min-h-12" name="loginId" autoComplete="username" defaultValue={params.loginId ?? ""} placeholder="Your personal Login ID" required /></label>
+              <label className="mt-3 block"><span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold sm:text-sm"><span>Password</span><Link href="/forgot-password" className="text-[#b51220] hover:underline">Forgot password?</Link></span><div className="relative"><LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><input className="field min-h-11 pl-10 sm:min-h-12" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required /></div></label>
+              <button type="submit" className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b1f3a] px-5 text-sm font-semibold text-white transition hover:bg-[#153a69] focus:outline-none focus:ring-4 focus:ring-[#f4b942]/35">Open workspace <ArrowRight size={17} /></button>
+              <p className="mt-2 text-center text-[10px] leading-4 text-slate-500 sm:mt-3 sm:text-xs">Protected by account and network rate limits.</p>
             </form>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2"><Link href="/buyer/login" className="flex min-h-14 items-center justify-between rounded-xl border border-[#d9d3c8] bg-white px-4 text-sm font-semibold transition hover:border-[#0f766e]"><span className="flex items-center gap-2"><ShoppingBag size={17} /> Buyer sign in</span><ArrowRight size={16} /></Link><Link href="/shops" className="flex min-h-14 items-center justify-between rounded-xl border border-[#d9d3c8] bg-white px-4 text-sm font-semibold transition hover:border-[#0f766e]"><span className="flex items-center gap-2"><CreditCard size={17} /> Browse shops</span><ArrowRight size={16} /></Link></div>
+
+            <div className="mt-3 flex items-center justify-center gap-5 text-xs font-semibold text-[#0b1f3a] sm:mt-4 sm:grid sm:grid-cols-2 sm:gap-3">
+              <Link href="/buyer/login" className="inline-flex items-center gap-1.5 sm:min-h-11 sm:justify-between sm:rounded-xl sm:border sm:border-[#d9d3c8] sm:bg-white sm:px-4"><span className="flex items-center gap-2"><ShoppingBag size={15} /> Buyer sign in</span><ArrowRight className="hidden sm:block" size={15} /></Link>
+              <Link href="/shops" className="inline-flex items-center gap-1.5 sm:min-h-11 sm:justify-between sm:rounded-xl sm:border sm:border-[#d9d3c8] sm:bg-white sm:px-4"><span className="flex items-center gap-2"><CreditCard size={15} /> Browse shops</span><ArrowRight className="hidden sm:block" size={15} /></Link>
+            </div>
           </div>
         </div>
       </section>
