@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, LogOut, MessageCircle, Palette, Settings, ShoppingCart, Tags, Truck, Users } from "lucide-react";
+import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, MessageCircle, Palette, Settings, ShoppingCart, Tags, Truck, Users } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { BrandImage } from "@/components/ui/brand-image";
 import { canSeeNav, roleLabels } from "@/lib/rbac";
 
@@ -42,19 +43,19 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
 
   if (variant === "mobile") {
     return (
-      <section className="border-b border-[#ded8cd] bg-[#fffdf8]">
+      <section className="border-b border-slate-200 bg-white">
         <div className="flex items-center justify-between gap-3 px-3 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <BrandImage src={shop.logoUrl} alt={shop.name} width={38} height={38} className="rounded-[8px] object-cover" />
+            <BrandImage src={shop.logoUrl} alt={shop.name} width={38} height={38} className="rounded-xl object-cover" />
             <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{shop.name}</p><p className="text-xs text-slate-500">{roleLabels[role]}</p></div>
           </div>
-          <Link href="/logout" prefetch={false} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 text-sm font-semibold text-slate-700"><LogOut size={16} />Sign out</Link>
+          <LogoutButton className="shrink-0 border border-slate-200 bg-white text-slate-700 hover:bg-red-50 hover:text-red-700" />
         </div>
-        <nav className="flex gap-2 overflow-x-auto px-3 pb-3">
+        <nav className="flex gap-2 overflow-x-auto px-3 pb-3" aria-label="Shop navigation">
           {items.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
-            return <Link key={item.href} href={item.href} prefetch={false} className={clsx("inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold transition", isActive ? "bg-[var(--shop-primary)] text-white" : "bg-white text-slate-700 hover:bg-[#f6f4ef]")}><Icon size={16} />{item.label}</Link>;
+            return <Link key={item.href} href={item.href} prefetch={false} className={clsx("inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition", isActive ? "bg-[var(--shop-primary)] text-white" : "bg-slate-50 text-slate-700 hover:bg-slate-100")}><Icon size={16} />{item.label}</Link>;
           })}
         </nav>
       </section>
@@ -62,27 +63,27 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
   }
 
   return (
-    <aside className="flex h-full min-h-screen flex-col border-r border-[#ded8cd] bg-[#fffdf8]">
-      <div className="border-b border-[#ded8cd] p-4">
+    <aside className="flex h-full min-h-screen flex-col border-r border-slate-200 bg-white">
+      <div className="border-b border-slate-200 p-4">
         <div className="flex items-center gap-3">
-          <BrandImage src={shop.logoUrl} alt={shop.name} width={42} height={42} className="rounded-[8px] object-cover" priority />
+          <BrandImage src={shop.logoUrl} alt={shop.name} width={42} height={42} className="rounded-xl object-cover" priority />
           <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{shop.name}</p><p className="text-xs text-slate-500">{shop.planTier} plan</p></div>
         </div>
       </div>
-      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+      <nav className="flex-1 space-y-4 overflow-y-auto p-3" aria-label="Shop navigation">
         {navSections.map((section) => {
           const sectionItems = items.filter((item) => item.section === section);
           if (!sectionItems.length) return null;
           return <div key={section}><p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{section}</p><div className="space-y-1">{sectionItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
-            return <Link key={item.href} href={item.href} prefetch={false} className={clsx("flex h-11 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold transition", isActive ? "bg-[var(--shop-primary)] text-white" : "text-slate-600 hover:bg-[#f6f4ef] hover:text-slate-950")}><Icon size={18} />{item.label}</Link>;
+            return <Link key={item.href} href={item.href} prefetch={false} className={clsx("flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition", isActive ? "bg-[var(--shop-primary)] text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950")}><Icon size={18} />{item.label}</Link>;
           })}</div></div>;
         })}
       </nav>
-      <div className="border-t border-[#ded8cd] p-3">
-        <div className="mb-3 rounded-[8px] bg-[#f6f4ef] p-3"><p className="text-xs text-slate-500">Signed in as</p><p className="text-sm font-semibold text-slate-800">{roleLabels[role]}</p></div>
-        <Link href="/logout" prefetch={false} className="flex h-10 items-center gap-3 rounded-[8px] px-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-700"><LogOut size={18} />Sign out</Link>
+      <div className="border-t border-slate-200 p-3">
+        <div className="mb-3 rounded-xl bg-slate-100 p-3"><p className="text-xs text-slate-500">Signed in as</p><p className="text-sm font-semibold text-slate-800">{roleLabels[role]}</p></div>
+        <LogoutButton className="w-full justify-start text-slate-600 hover:bg-red-50 hover:text-red-700" />
       </div>
     </aside>
   );
