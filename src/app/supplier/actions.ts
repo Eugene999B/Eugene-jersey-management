@@ -2,33 +2,34 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { SupplierOrderStatus } from "@prisma/client";
+import { Role, SupplierOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requireSession } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 
 export async function acknowledgeSupplierOrderAction(formData: FormData) {
-  const session = await requireSession();
-  if (session.role !== "SUPPLIER") redirect("/login");
-
+  const session = await requireRole([Role.SUPPLIER]);
   const orderId = String(formData.get("orderId") ?? "");
-  const supplier = await prisma.supplier.findUniqueOrThrow({ where: { portalUserId: session.id } });
-  const order = await prisma.supplierOrder.findFirstOrThrow({
-    where: { id: orderId, supplierId: supplier.id },
-  });
+  if (!orderId) redirect("/supplier?error=order");
 
-  await prisma.supplierOrder.update({
-    where: { id: order.id },
+  const supplier = await prisma.supplier.findFirst({
+    where: { portalUserId: session.id, isActive: true, shop: { isActive: true } },
+    select: { id: true, shopId: true },
+  });
+  if (!supplier) redirect("/supplier?error=inactive");
+
+  const updated = await prisma.supplierOrder.updateMany({
+    where: { id: orderId, supplierId: supplier.id, shopId: supplier.shopId, status: SupplierOrderStatus.SENT },
     data: { status: SupplierOrderStatus.ACKNOWLEDGED },
   });
+  if (updated.count !== 1) redirect("/supplier?error=changed");
 
   await audit({
     shopId: supplier.shopId,
     userId: session.id,
     action: "supplier.order_acknowledged",
     entityType: "SupplierOrder",
-    entityId: order.id,
+    entityId: orderId,
   });
-
   revalidatePath("/supplier");
 }
