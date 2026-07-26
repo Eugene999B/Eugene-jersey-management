@@ -24,13 +24,30 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install --package-lock-only --ignore-scripts
-      - name: Commit lockfile update
+      - name: Resolve lockfile and capture diagnostics
         shell: bash
         run: |
-          if git diff --quiet -- package-lock.json; then exit 0; fi
+          set +e
+          npm install --package-lock-only --ignore-scripts > lock-refresh.log 2>&1
+          exit_code=$?
+          echo "$exit_code" > lock-refresh.exit
+          cat lock-refresh.log
+          exit 0
+      - name: Commit result or diagnostics
+        shell: bash
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Refresh lockfile for direct ESLint plugins"
+          exit_code=$(cat lock-refresh.exit)
+          if [ "$exit_code" = "0" ]; then
+            rm -f lock-refresh.log lock-refresh.exit
+            if git diff --quiet -- package-lock.json; then exit 0; fi
+            git add package-lock.json
+            git commit -m "Refresh lockfile for direct ESLint plugins"
+          else
+            mv lock-refresh.log docs/lock-refresh-error.log
+            rm -f lock-refresh.exit
+            git add docs/lock-refresh-error.log
+            git commit -m "Capture ESLint lockfile refresh error"
+          fi
           git push origin HEAD:agent/full-system-hardening-and-brand
