@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { normalizePhone } from "@/lib/phone";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { hashToken } from "@/lib/tokens";
+import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
 const schema = z.object({
   phone: z.string().min(8).max(24),
@@ -18,8 +19,7 @@ type RouteContext = { params: Promise<{ orderId: string }> };
 export async function POST(request: NextRequest, context: RouteContext) {
   const session = await requireRole([Role.OWNER, Role.MANAGER, Role.CASHIER]);
   if (!session.shopId) return NextResponse.json({ error: "Missing shop context." }, { status: 403 });
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  if (!isTrustedApplicationOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter the full customer phone and 6-digit pickup code." }, { status: 400 });
 

@@ -8,6 +8,7 @@ import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { sendCustomerMessage } from "@/lib/messaging";
 import { normalizePhone } from "@/lib/phone";
+import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().max(100).optional(),
@@ -53,8 +54,7 @@ export async function POST(request: NextRequest) {
   if (!session.shopId) {
     return NextResponse.json({ error: "Missing shop context." }, { status: 403 });
   }
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!isTrustedApplicationOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   }
 

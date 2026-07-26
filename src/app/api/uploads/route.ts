@@ -3,6 +3,7 @@ import { MediaKind } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 import { hasRole, permissions } from "@/lib/rbac";
 
 function parseKind(value: FormDataEntryValue | null) {
@@ -13,8 +14,7 @@ function parseKind(value: FormDataEntryValue | null) {
 export async function POST(request: NextRequest) {
   const session = await requireSession();
   if (!session.shopId) return NextResponse.json({ error: "A shop workspace is required." }, { status: 403 });
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!isTrustedApplicationOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   }
   await enforceRateLimit({
