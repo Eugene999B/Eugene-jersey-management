@@ -63,8 +63,17 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Test
-        run: npm test
+      - name: Test Paystack helpers
+        run: npx vitest run src/tests/payments.test.ts
+
+      - name: Test role permissions
+        run: npx vitest run src/tests/rbac.test.ts
+
+      - name: Test dashboard access
+        run: npx vitest run src/tests/dashboard-access.test.ts
+
+      - name: Test document exports
+        run: npx vitest run src/tests/table-export.test.ts
 
       - name: Build
         run: npm run build
