@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from "@/lib/session-token";
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { isTrustedApplicationOrigin, publicRequestOrigin } from "@/lib/request-origin";
 
 const DUMMY_PASSWORD_HASH = "$2b$12$94A4bgZTq1kkieE.ysBmou2Q7M1Q7es6ib1sj4arKxG9fsC2iDZ3W";
 const MAX_FAILED_LOGINS = 5;
@@ -38,28 +39,25 @@ function wantsJson(request: NextRequest) {
 function loginFailure(
   request: NextRequest,
   error: string,
-  options: { next?: string | null; loginId?: string | null; status?: number } = {},
+  options: { next?: string | null; status?: number } = {},
 ) {
   if (wantsJson(request)) {
     const response = NextResponse.json(
       { ok: false, error },
-      {
-        status: options.status ?? (error === "rate" ? 429 : 401),
-        headers: { "Cache-Control": "no-store" },
-      },
+      { status: options.status ?? (error === "rate" ? 429 : 401), headers: { "Cache-Control": "no-store" } },
     );
     response.cookies.delete(SESSION_COOKIE);
     return response;
   }
 
-  const url = new URL("/login", request.url);
+  const url = new URL("/login", publicRequestOrigin(request));
   url.searchParams.set("error", error);
   if (options.next && options.next.startsWith("/") && !options.next.startsWith("//")) {
     url.searchParams.set("next", options.next);
   }
-  if (options.loginId) url.searchParams.set("loginId", options.loginId.slice(0, 180));
   const response = NextResponse.redirect(url, 303);
   response.cookies.delete(SESSION_COOKIE);
+  response.headers.set("Cache-Control", "no-store");
   return response;
 }
 
@@ -70,23 +68,22 @@ function requestIp(request: NextRequest) {
 }
 
 async function findLoginUser(input: { email?: string; loginId?: string }) {
-  if (input.email) {
-    return prisma.user.findUnique({ where: { email: input.email }, include: { shop: true } });
-  }
+  if (input.email) return prisma.user.findUnique({ where: { email: input.email }, include: { shop: true } });
   const loginId = input.loginId?.trim();
   if (!loginId) return null;
   return prisma.user.findFirst({
-    where: {
-      OR: [
-        { adminLoginId: loginId.toUpperCase() },
-        { email: loginId.toLowerCase() },
-      ],
-    },
+    where: { OR: [{ adminLoginId: loginId.toUpperCase() }, { email: loginId.toLowerCase() }] },
     include: { shop: true },
   });
 }
 
 export async function POST(request: NextRequest) {
+  if (!isTrustedApplicationOrigin(request)) {
+    return wantsJson(request)
+      ? NextResponse.json({ ok: false, error: "origin" }, { status: 403, headers: { "Cache-Control": "no-store" } })
+      : NextResponse.redirect(new URL("/login?error=invalid", publicRequestOrigin(request)), 303);
+  }
+
   const formData = await request.formData();
   const parsed = loginSchema.safeParse({
     loginId: formData.get("loginId") || undefined,
@@ -96,11 +93,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!parsed.success) {
-    return loginFailure(request, "invalid", {
-      status: 400,
-      next: String(formData.get("next") ?? ""),
-      loginId: String(formData.get("loginId") ?? ""),
-    });
+    return loginFailure(request, "invalid", { status: 400, next: String(formData.get("next") ?? "") });
   }
 
   const identifier = (parsed.data.loginId ?? parsed.data.email ?? "unknown").trim().toLowerCase();
@@ -110,40 +103,27 @@ export async function POST(request: NextRequest) {
       enforceRateLimit({ key: `staff-login-ip:${requestIp(request)}`, limit: 60, windowSeconds: 15 * 60 }),
     ]);
   } catch {
-    return loginFailure(request, "rate", {
-      next: parsed.data.next,
-      loginId: parsed.data.loginId,
-      status: 429,
-    });
+    return loginFailure(request, "rate", { next: parsed.data.next, status: 429 });
   }
 
   const user = await findLoginUser(parsed.data);
   const now = new Date();
   if (!user || !user.isActive || (user.shopId && !user.shop?.isActive)) {
     await verifyPassword(parsed.data.password, DUMMY_PASSWORD_HASH);
-    return loginFailure(request, "invalid", { next: parsed.data.next, loginId: parsed.data.loginId });
+    return loginFailure(request, "invalid", { next: parsed.data.next });
   }
 
   if (user.lockUntil && user.lockUntil > now) {
     await verifyPassword(parsed.data.password, DUMMY_PASSWORD_HASH);
-    return loginFailure(request, "rate", {
-      next: parsed.data.next,
-      loginId: parsed.data.loginId,
-      status: 429,
-    });
+    return loginFailure(request, "rate", { next: parsed.data.next, status: 429 });
   }
 
   const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
   if (!validPassword) {
     const failedLoginCount = user.lockUntil && user.lockUntil <= now ? 1 : user.failedLoginCount + 1;
-    const lockUntil = failedLoginCount >= MAX_FAILED_LOGINS
-      ? new Date(now.getTime() + LOCK_MINUTES * 60_000)
-      : null;
+    const lockUntil = failedLoginCount >= MAX_FAILED_LOGINS ? new Date(now.getTime() + LOCK_MINUTES * 60_000) : null;
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { failedLoginCount, lockUntil },
-    });
+    await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount, lockUntil } });
     await audit({
       shopId: user.shopId,
       userId: user.id,
@@ -152,24 +132,11 @@ export async function POST(request: NextRequest) {
       entityId: user.id,
       metadata: { failedLoginCount, loginId: parsed.data.loginId ?? parsed.data.email ?? null },
     });
-    return loginFailure(request, lockUntil ? "rate" : "invalid", {
-      next: parsed.data.next,
-      loginId: parsed.data.loginId,
-      status: lockUntil ? 429 : 401,
-    });
+    return loginFailure(request, lockUntil ? "rate" : "invalid", { next: parsed.data.next, status: lockUntil ? 429 : 401 });
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { failedLoginCount: 0, lockUntil: null, lastLoginAt: now },
-  });
-  await audit({
-    shopId: user.shopId,
-    userId: user.id,
-    action: "auth.login",
-    entityType: "User",
-    entityId: user.id,
-  });
+  await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockUntil: null, lastLoginAt: now } });
+  await audit({ shopId: user.shopId, userId: user.id, action: "auth.login", entityType: "User", entityId: user.id });
 
   const token = await signSession({
     id: user.id,
@@ -181,11 +148,8 @@ export async function POST(request: NextRequest) {
   });
   const redirectPath = safeNext(parsed.data.next, user.role);
   const response = wantsJson(request)
-    ? NextResponse.json(
-        { ok: true, redirectPath },
-        { headers: { "Cache-Control": "no-store" } },
-      )
-    : NextResponse.redirect(new URL(redirectPath, request.url), 303);
+    ? NextResponse.json({ ok: true, redirectPath }, { headers: { "Cache-Control": "no-store" } })
+    : NextResponse.redirect(new URL(redirectPath, publicRequestOrigin(request)), 303);
   response.cookies.set(SESSION_COOKIE, token, persistentSessionCookieOptions(SESSION_TTL_SECONDS));
   return response;
 }
