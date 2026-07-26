@@ -29,8 +29,8 @@ export default async function ForgotPasswordPage({ searchParams }: Props) {
           </div>
         ) : null}
         <form action={requestPasswordResetAction} className="mt-5 space-y-4">
-          <input className="field" name="emailOrPhone" placeholder="+233200000000 or owner@accra.test" required disabled={!smsReady} />
-          <button disabled={!smsReady} className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+          <input className="field" name="emailOrPhone" placeholder="+233200000000 or owner@example.com" required disabled={!smsReady} />
+          <button type="submit" disabled={!smsReady} className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
             Send reset code
           </button>
         </form>

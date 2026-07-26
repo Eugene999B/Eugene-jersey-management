@@ -28,7 +28,7 @@ export default async function InvitePage({ params }: Props) {
           <input type="hidden" name="token" value={token} />
           <input className="field" name="name" placeholder="Your full name" autoComplete="name" required />
           <input className="field" name="password" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={100} placeholder={`Create password (${PASSWORD_MIN_LENGTH}+ characters)`} autoComplete="new-password" required />
-          <button className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Activate account</button>
+          <button type="submit" className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Activate account</button>
         </form>
       </div>
     </main>

@@ -24,7 +24,7 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
           <input className="field" name="phone" placeholder="+233200000000" defaultValue={params.phone ?? ""} autoComplete="tel" />
           <input className="field tracking-[0.18em]" name="code" inputMode="numeric" pattern="\d{6}" maxLength={6} placeholder="SMS code" autoComplete="one-time-code" />
           <input className="field" name="password" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={100} placeholder={`New password (${PASSWORD_MIN_LENGTH}+ characters)`} autoComplete="new-password" required />
-          <button className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Save password</button>
+          <button type="submit" className="w-full rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Save password</button>
         </form>
         <Link className="mt-5 inline-flex text-sm font-semibold text-[#0f766e]" href="/login">Return to login</Link>
       </div>

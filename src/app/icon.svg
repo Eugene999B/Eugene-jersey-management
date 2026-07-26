@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Eugene Jersey Management</title>
   <defs>
     <linearGradient id="s" x1="32" y1="24" x2="220" y2="232" gradientUnits="userSpaceOnUse"><stop stop-color="#0F766E"/><stop offset="1" stop-color="#07111F"/></linearGradient>
     <linearGradient id="a" x1="72" y1="56" x2="190" y2="198" gradientUnits="userSpaceOnUse"><stop stop-color="#FDBA74"/><stop offset="1" stop-color="#F97316"/></linearGradient>

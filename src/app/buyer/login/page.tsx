@@ -54,7 +54,7 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
                 <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
                   <input className="field" name="phone" placeholder="+233..." defaultValue={params.phone ?? ""} autoComplete="tel" required />
                   <input className="field" name="password" type="password" placeholder="Password" autoComplete="current-password" required />
-                  <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Sign in <ArrowRight size={16} /></button>
+                  <button type="submit" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Sign in <ArrowRight size={16} /></button>
                 </div>
               </form>
 
@@ -68,7 +68,7 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
                     <input className="field" name="phone" placeholder="+233..." defaultValue={params.phone ?? ""} autoComplete="tel" required />
                     <input className="field" name="password" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={100} placeholder={`New password (${PASSWORD_MIN_LENGTH}+ characters)`} autoComplete="new-password" required disabled={!smsReady} />
                     <input className="field" name="email" type="email" placeholder="Email optional" autoComplete="email" />
-                    <button disabled={!smsReady} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{smsReady ? "Send SMS" : "SMS unavailable"} <ArrowRight size={16} /></button>
+                    <button type="submit" disabled={!smsReady} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{smsReady ? "Send SMS" : "SMS unavailable"} <ArrowRight size={16} /></button>
                   </div>
                 </form>
 
@@ -78,7 +78,7 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
                   <div className="space-y-3">
                     <input className="field" name="phone" placeholder="+233..." defaultValue={params.phone ?? ""} autoComplete="tel" required />
                     <input className="field tracking-[0.18em]" name="code" inputMode="numeric" pattern="\d{6}" maxLength={6} placeholder="6-digit code" autoComplete="one-time-code" required />
-                    <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#0f766e] px-4 py-3 text-sm font-semibold text-white">Verify and continue <ArrowRight size={16} /></button>
+                    <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#0f766e] px-4 py-3 text-sm font-semibold text-white">Verify and continue <ArrowRight size={16} /></button>
                   </div>
                 </form>
               </div>

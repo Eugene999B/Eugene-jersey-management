@@ -90,7 +90,7 @@ export default async function ShopsPage({ searchParams }: Props) {
           <form className="flex h-fit items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3">
             <Search size={17} className="text-slate-400" />
             <input className="min-h-12 flex-1 bg-transparent text-sm outline-none" name="q" placeholder="Search shops or items" defaultValue={q} />
-            <button className="rounded-[8px] bg-[#111827] px-3 py-2 text-sm font-semibold text-white">Search</button>
+            <button type="submit" className="rounded-[8px] bg-[#111827] px-3 py-2 text-sm font-semibold text-white">Search</button>
           </form>
         </div>
 
