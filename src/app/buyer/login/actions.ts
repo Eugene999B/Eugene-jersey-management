@@ -11,6 +11,7 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 import { normalizePhone, phoneRateKey } from "@/lib/phone";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 import { isSmsDeliveryConfigured } from "@/lib/messaging";
+import { strongPasswordSchema } from "@/lib/password-policy";
 
 const DUMMY_PASSWORD_HASH = "$2b$12$94A4bgZTq1kkieE.ysBmou2Q7M1Q7es6ib1sj4arKxG9fsC2iDZ3W";
 
@@ -23,7 +24,7 @@ const nextPath = (value: FormDataEntryValue | string | null | undefined) => {
 const requestSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone: z.string().min(8).max(24),
-  password: z.string().min(12).max(100),
+  password: strongPasswordSchema,
   email: z.string().email().max(180).optional(),
   next: z.string().max(500).optional(),
 });
