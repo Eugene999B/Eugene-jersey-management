@@ -1,12 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <title>Eugene Jersey Management</title>
   <defs>
-    <linearGradient id="s" x1="32" y1="24" x2="220" y2="232" gradientUnits="userSpaceOnUse"><stop stop-color="#0F766E"/><stop offset="1" stop-color="#07111F"/></linearGradient>
-    <linearGradient id="a" x1="72" y1="56" x2="190" y2="198" gradientUnits="userSpaceOnUse"><stop stop-color="#FDBA74"/><stop offset="1" stop-color="#F97316"/></linearGradient>
+    <linearGradient id="navy" x1="44" y1="22" x2="212" y2="232" gradientUnits="userSpaceOnUse"><stop stop-color="#153A69"/><stop offset="1" stop-color="#081A31"/></linearGradient>
+    <linearGradient id="red" x1="76" y1="60" x2="178" y2="184" gradientUnits="userSpaceOnUse"><stop stop-color="#F04444"/><stop offset="1" stop-color="#B51220"/></linearGradient>
   </defs>
-  <rect width="256" height="256" rx="52" fill="#F6F4EF"/>
-  <path d="M128 14 222 49v69c0 59-37 102-94 124-57-22-94-65-94-124V49l94-35Z" fill="url(#s)"/>
-  <path d="m84 65 26-12 18 22 18-22 26 12-16 37v71h-56v-71L84 65Z" fill="#F8FAFC"/>
-  <path d="m108 54 20 22 20-22 11 5c-6 22-17 34-31 34s-25-12-31-34l11-5Z" fill="url(#a)"/>
-  <path d="M98 112h35v13h-21v11h18v13h-18v12h22v13H98v-62Zm42 0h15l10 24 10-24h15v62h-14v-34l-8 20h-7l-8-20v34h-13v-62Z" fill="#07111F"/>
+  <rect width="256" height="256" rx="54" fill="#F7F8FA"/>
+  <path d="M128 10 224 47v72c0 61-38 105-96 127-58-22-96-66-96-127V47l96-37Z" fill="url(#navy)"/>
+  <path d="M128 24 210 56v62c0 50-29 87-82 108-53-21-82-58-82-108V56l82-32Z" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="5"/>
+  <path d="m80 70 31-15 17 20 17-20 31 15-15 36v79H95v-79L80 70Z" fill="#FFFFFF"/>
+  <path d="M80 70 111 55l8 10-17 30-16 11-6-36Zm96 0-31-15-8 10 17 30 16 11 6-36Z" fill="url(#red)"/>
+  <path d="m111 55 17 20 17-20 11 5c-5 20-15 31-28 31s-23-11-28-31l11-5Z" fill="#F4B942"/>
+  <path d="M106 112h25v11h-14v9h12v11h-12v10h15v11h-26v-52Zm31 0h12l8 19 8-19h12v52h-11v-30l-6 16h-6l-6-16v30h-11v-52Z" fill="#0B1F3A"/>
 </svg>
