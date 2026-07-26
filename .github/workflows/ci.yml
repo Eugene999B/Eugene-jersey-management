@@ -7,6 +7,10 @@ on:
       - main
       - "agent/**"
 
+concurrency:
+  group: ejm-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
