@@ -1,0 +1,124 @@
+name: Fix browser semantics
+
+on:
+  push:
+    branches:
+      - agent/full-system-hardening-and-brand
+    paths:
+      - .github/workflows/fix-browser-semantics.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-system-hardening-and-brand
+      - name: Apply explicit browser semantics
+        shell: python
+        run: |
+          from pathlib import Path
+
+          replacements = {
+            "src/app/admin/page.tsx": [
+              ('<button className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>', '<button type="submit" className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>'),
+            ],
+            "src/app/buyer/login/page.tsx": [
+              ('<button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Sign in', '<button type="submit" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-[#111827] px-4 py-3 text-sm font-semibold text-white">Sign in'),
+              ('<button disabled={!smsReady} className="inline-flex min-h-11 w-full', '<button type="submit" disabled={!smsReady} className="inline-flex min-h-11 w-full'),
+              ('<button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#0f766e]', '<button type="submit" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-[#0f766e]'),
+            ],
+            "src/app/cart/page.tsx": [
+              ('<button className="inline-flex min-h-10 items-center justify-center rounded-[8px] border border-red-200', '<button type="submit" className="inline-flex min-h-10 items-center justify-center rounded-[8px] border border-red-200'),
+            ],
+            "src/app/dashboard/orders/page.tsx": [
+              ('<button className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Search</button>', '<button type="submit" className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Search</button>'),
+            ],
+            "src/app/dashboard/reports/page.tsx": [
+              ('<button className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply</button>', '<button type="submit" className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply</button>'),
+            ],
+            "src/app/forgot-password/page.tsx": [
+              ('placeholder="+233200000000 or owner@accra.test"', 'placeholder="+233200000000 or owner@example.com"'),
+              ('<button disabled={!smsReady} className="w-full', '<button type="submit" disabled={!smsReady} className="w-full'),
+            ],
+            "src/app/invite/[token]/page.tsx": [
+              ('<button className="w-full rounded-[8px] bg-[#111827]', '<button type="submit" className="w-full rounded-[8px] bg-[#111827]'),
+            ],
+            "src/app/login/page.tsx": [
+              (' required autoFocus />', ' required />'),
+              ('<button className="mt-6 inline-flex min-h-12 w-full', '<button type="submit" className="mt-6 inline-flex min-h-12 w-full'),
+            ],
+            "src/app/reset-password/page.tsx": [
+              ('<button className="w-full rounded-[8px] bg-[#111827]', '<button type="submit" className="w-full rounded-[8px] bg-[#111827]'),
+            ],
+            "src/app/shop/[slug]/page.tsx": [
+              ('<button className="rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white">Search</button>', '<button type="submit" className="rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white">Search</button>'),
+            ],
+            "src/app/shops/page.tsx": [
+              ('<button className="rounded-[8px] bg-[#111827] px-3 py-2 text-sm font-semibold text-white">Search</button>', '<button type="submit" className="rounded-[8px] bg-[#111827] px-3 py-2 text-sm font-semibold text-white">Search</button>'),
+            ],
+            "src/components/exports/export-center.tsx": [
+              ('<button className="h-[43px] rounded-lg border border-slate-300', '<button type="button" className="h-[43px] rounded-lg border border-slate-300'),
+            ],
+            "src/components/pos/pos-terminal.tsx": [
+              ('<button\n                key={item}\n                onClick=', '<button\n                type="button"\n                key={item}\n                onClick='),
+              ('<button\n                key={product.id}\n                className=', '<button\n                type="button"\n                key={product.id}\n                className='),
+              ('<button onClick={() => setCart(', '<button type="button" onClick={() => setCart('),
+              ('<button className="rounded-[8px] bg-[#f6f4ef] p-2" onClick=', '<button type="button" className="rounded-[8px] bg-[#f6f4ef] p-2" onClick='),
+              ('<button\n                key={String(method)}\n                onClick=', '<button\n                type="button"\n                key={String(method)}\n                onClick='),
+            ],
+          }
+
+          changed = []
+          for name, pairs in replacements.items():
+            path = Path(name)
+            text = path.read_text(encoding="utf-8")
+            original = text
+            for old, new in pairs:
+              if old not in text:
+                raise SystemExit(f"Expected text not found in {name}: {old[:90]}")
+              text = text.replace(old, new)
+            if text != original:
+              path.write_text(text, encoding="utf-8")
+              changed.append(name)
+
+          icon = Path("src/app/icon.svg")
+          text = icon.read_text(encoding="utf-8")
+          marker = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">\n'
+          if "<title>" not in text:
+            if marker not in text:
+              raise SystemExit("SVG root marker not found")
+            text = text.replace(marker, marker + "  <title>Eugene Jersey Management</title>\n", 1)
+            icon.write_text(text, encoding="utf-8")
+            changed.append(str(icon))
+
+          studio = Path("src/components/design/production-studio.tsx")
+          text = studio.read_text(encoding="utf-8")
+          old_open = '<div key={layer.id} role="button" tabIndex={0} onPointerDown={(event) => startDrag(event, layer)} className={`absolute flex cursor-move select-none items-center justify-center ${selectedId === layer.id ? "ring-2 ring-sky-500 ring-offset-2" : ""} ${layer.locked ? "cursor-not-allowed" : ""}`} style={{'
+          new_open = '<button key={layer.id} type="button" aria-label={`Select and move ${layer.name}`} onClick={(event) => { event.stopPropagation(); setSelectedId(layer.id); }} onPointerDown={(event) => startDrag(event, layer)} className={`absolute flex cursor-move select-none items-center justify-center border-0 bg-transparent p-0 ${selectedId === layer.id ? "ring-2 ring-sky-500 ring-offset-2" : ""} ${layer.locked ? "cursor-not-allowed" : ""}`} style={{'
+          if old_open not in text:
+            raise SystemExit("Design-layer opening element not found")
+          text = text.replace(old_open, new_open, 1)
+          old_close = '              </div> : null)}\n              {!layers.length ?'
+          new_close = '              </button> : null)}\n              {!layers.length ?'
+          if old_close not in text:
+            raise SystemExit("Design-layer closing element not found")
+          text = text.replace(old_close, new_close, 1)
+          studio.write_text(text, encoding="utf-8")
+          changed.append(str(studio))
+
+          print("Updated:")
+          print("\n".join(sorted(set(changed))))
+      - name: Commit semantic fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          git commit -m "Fix explicit browser and accessibility semantics"
+          git push origin HEAD:agent/full-system-hardening-and-brand
