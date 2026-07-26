@@ -33,28 +33,18 @@ Buyers do not use staff IDs. They browse `/shops`, then sign in only when they w
 
 Staff/admin/supplier users use `/login`:
 
-1. Enter Login ID.
-2. The system detects platform admin, admin worker, shop staff, shop workspace, or supplier.
-3. User enters password.
+1. Enter Login ID or work email.
+2. The system finds the assigned account without exposing account details.
+3. User enters the account password.
 4. Redirect is role-safe.
 
-Shop staff can sign in with their own assigned worker Login ID, such as `APS-OWNER`, or through the shop workspace ID, such as `APS-STAFF`, followed by staff email and password.
+Shop staff can sign in with their personal worker Login ID or their work email. Supplier accounts use their assigned supplier Login ID or email.
 
-Current seeded login IDs:
+Production Super Admin access is created from Railway `ADMIN_*` variables by the repository-controlled `production:activate` command. The default Login ID is `EJM-ADMIN-ROOT` when `ADMIN_LOGIN_ID` is not supplied.
 
-- Super Admin Login ID: `YPMS-ADMIN-ROOT`
-- Super Admin email fallback: `super@ypms.test`
-- Shop workspace ID: `APS-STAFF`
-- Owner worker ID: `APS-OWNER`
-- Manager worker ID: `APS-MANAGER`
-- Cashier worker ID: `APS-CASHIER`
-- Designer worker ID: `APS-DESIGNER`
-- Accountant worker ID: `APS-ACCOUNTANT`
-- Supplier Login ID: `APS-SUPPLIER`
+Seeded demo identities are strictly for intentional local demo setup. Production deployment deactivates seeded demo staff, buyer, supplier, and shop access. Demo credentials must never be published or reused in production.
 
-Seeded password: `Ghana123`
-
-The login page must not show any Super Admin code. Admin access is detected from assigned Login ID/email/phone and backend role checks.
+The login page must not show any Super Admin code. Admin access is detected from assigned Login ID/email and backend role checks.
 
 ## Admin System
 
@@ -79,6 +69,7 @@ Important admin logic:
 - Admin worker permissions are stored in `User.adminPermissions`.
 - Admin worker profile fields include `adminLoginId`, `staffTitle`, `department`, `emergencyContact`, and `staffNotes`.
 - Failed staff login attempts are audited and temporarily locked after repeated failures.
+- Users attached to a suspended shop are rejected during login.
 
 ## Buyer Flow
 
@@ -156,6 +147,7 @@ npm.cmd test
 npm.cmd run build
 npm.cmd run docs:generate
 npm.cmd run admin:bootstrap
+npm.cmd run production:activate
 ```
 
 ## Railway Deployment
@@ -163,19 +155,23 @@ npm.cmd run admin:bootstrap
 Railway uses `railway.toml`:
 
 - Build: `npx prisma generate && npm run build`
-- Pre-deploy: `npx prisma migrate deploy`
+- Pre-deploy: `npx prisma migrate deploy && npm run production:activate`
 - Start: `HOSTNAME=0.0.0.0 npm run start`
 
-Production deploys must not run the demo seed. For a real platform admin, set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optional `ADMIN_LOGIN_ID`, `ADMIN_NAME`, `ADMIN_PHONE`, then run `npm.cmd run admin:bootstrap` once against the intended production database. Use `npm.cmd run db:seed:demo` only for local/demo data.
+Production deployment is GitHub-controlled. Set `ADMIN_EMAIL` and, for the first activation, a strong `ADMIN_PASSWORD`. Optional variables are `ADMIN_LOGIN_ID`, `ADMIN_NAME`, and `ADMIN_PHONE`. Keep `ADMIN_FORCE_RESET=false` during normal operation.
 
-Do not connect this repository to the Chalin project. This repository deploys to the Railway project named `Eugene Jersey Management`.
+The first successful deployment creates the real Super Admin and retires all known demo access. Later deployments keep that state without resetting the administrator password. See `docs/source/11_Production_Activation.md` for the activation and password-recovery procedure.
+
+Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not connect this repository to the Chalin project. This repository deploys to the Railway project named `Eugene Jersey Management`.
 
 ## Important Files
 
 - `prisma/schema.prisma`: Database model.
 - `prisma/migrations`: Production migrations.
-- `prisma/seed.ts`: Demo accounts, shop, supplier, buyer, products.
-- `scripts/bootstrap-admin.ts`: Safe production Super Admin bootstrap.
+- `prisma/seed.ts`: Intentional local demo data.
+- `scripts/bootstrap-admin.ts`: Manual Super Admin bootstrap utility.
+- `scripts/activate-production.ts`: Idempotent Railway production activation and demo retirement.
+- `docs/source/11_Production_Activation.md`: GitHub-only production activation runbook.
 - `src/app/login/page.tsx`: Role-detect login UI.
 - `src/app/api/auth/login/route.ts`: Staff/admin/supplier login backend.
 - `src/app/buyer/login`: Buyer login and SMS recovery.
@@ -192,13 +188,14 @@ Do not connect this repository to the Chalin project. This repository deploys to
 
 Before editing:
 
-1. Run `git status --short`.
+1. Inspect the current branch and pull-request diff.
 2. Do not touch unrelated user changes.
 3. Keep Chalin projects separate.
 4. Preserve role-safe redirects and tenant isolation.
-5. Run lint, TypeScript, tests, and build before pushing.
-6. If changing the database, add a Prisma migration and update seed data if demo access depends on it.
-7. If changing design studio behavior, test selection, movement, mirror view, zoom, and mobile layout.
+5. Run lint, TypeScript, tests, and build before merging.
+6. If changing the database, add a Prisma migration and update local demo data when relevant.
+7. If changing design studio behaviour, test selection, movement, mirror view, zoom, and mobile layout.
+8. Use GitHub pull requests and Railway deployment as the production source of truth.
 
 Generated Word docs live in `docs/word` when `npm.cmd run docs:generate` is run.
 
@@ -210,9 +207,9 @@ Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc
 
 Highest-priority status from the latest audit:
 
-- Production demo seeding has been removed from Railway pre-deploy, and a secure admin bootstrap command now exists.
-- Dashboard pages now have central page-level role guards in `src/lib/dashboard-access.ts`.
-- POS, cart checkout, and public ordering now use transaction-safe conditional stock decrements.
-- Design Studio now has undo, redo, delete selected, grouped templates, richer shapes, improved selection math, and clearer machine connection details.
-- Still needed: persistent saved design jobs, duplicate/copy/paste, multi-select/grouping, deeper machine path conversion, and broader browser/mobile tests.
-- Paystack and Arkesel hooks exist, but production payment/SMS operations need callback verification, provider dashboards, retries, and monitoring.
+- Production activation now creates the real administrator from Railway variables and retires demo access automatically.
+- GitHub Actions validates migrations, lint, TypeScript, tests, and build on pull requests.
+- Dashboard pages have central page-level role guards in `src/lib/dashboard-access.ts`.
+- POS, cart checkout, and public ordering use transaction-safe conditional stock decrements.
+- Design Studio has undo, redo, delete selected, grouped templates, richer shapes, improved selection math, and clearer machine connection details.
+- Still needed: persistent saved design jobs, duplicate/copy/paste, multi-select/grouping, deeper machine path conversion, broader browser/mobile tests, and production Paystack/Arkesel monitoring.
