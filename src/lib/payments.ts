@@ -22,7 +22,7 @@ type PaystackInitResult = {
   providerEnabled: boolean;
 };
 
-function amountToSubunit(amount: number) {
+export function amountToSubunit(amount: number) {
   return Math.round(amount * 100);
 }
 
@@ -136,23 +136,42 @@ export async function settlePaystackTransaction(data: PaystackTransactionData) {
   }
 
   if (data.status !== "success") {
-    await prisma.payment.update({
+    const updated = await prisma.payment.update({
       where: { id: payment.id },
       data: {
         status: PaymentStatus.FAILED,
         gatewayResponse: data.gateway_response ?? data.status ?? "Payment not successful",
         providerChannel: data.channel,
       },
+      include: { order: true },
     });
-    return { status: "failed" as const, payment, reason: data.status ?? "not-success" };
+    return { status: "failed" as const, payment: updated, reason: data.status ?? "not-success" };
   }
 
   const expectedAmount = amountToSubunit(Number(payment.amount));
   if (typeof data.amount === "number" && data.amount !== expectedAmount) {
-    return { status: "failed" as const, payment, reason: "amount-mismatch" };
+    const updated = await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: PaymentStatus.FAILED,
+        gatewayResponse: `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`,
+        providerChannel: data.channel,
+      },
+      include: { order: true },
+    });
+    return { status: "failed" as const, payment: updated, reason: "amount-mismatch" };
   }
   if (data.currency && data.currency !== payment.order.shop.currency) {
-    return { status: "failed" as const, payment, reason: "currency-mismatch" };
+    const updated = await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: PaymentStatus.FAILED,
+        gatewayResponse: `Currency mismatch: expected ${payment.order.shop.currency}, got ${data.currency}`,
+        providerChannel: data.channel,
+      },
+      include: { order: true },
+    });
+    return { status: "failed" as const, payment: updated, reason: "currency-mismatch" };
   }
 
   const updated = await prisma.payment.update({

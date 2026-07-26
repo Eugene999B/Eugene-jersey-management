@@ -1,6 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
+import { canAccessDashboardPath } from "@/lib/dashboard-access";
 import { getTenantContext } from "@/lib/tenant";
 import { LinkButton } from "@/components/ui/button";
 
@@ -8,6 +11,12 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const { session, shop, suspended } = await getTenantContext();
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-pathname") || "/dashboard";
+
+  if (!canAccessDashboardPath(pathname, session.role)) {
+    redirect(`/dashboard?error=permission&from=${encodeURIComponent(pathname)}`);
+  }
 
   if (!shop) {
     return (
