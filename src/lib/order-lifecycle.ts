@@ -3,7 +3,11 @@ import "server-only";
 import { OrderChannel, OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
-const cancellableUnpaidStatuses = [OrderStatus.PENDING, OrderStatus.IN_PRODUCTION, OrderStatus.READY];
+const cancellableUnpaidStatuses: OrderStatus[] = [
+  OrderStatus.PENDING,
+  OrderStatus.IN_PRODUCTION,
+  OrderStatus.READY,
+];
 
 export type ReservationReleaseResult = {
   released: boolean;
