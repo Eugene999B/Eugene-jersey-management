@@ -57,6 +57,22 @@ jobs:
       - name: Apply database migrations
         run: npx prisma migrate deploy
 
+      - name: Validate guarded demo purge
+        env:
+          NODE_ENV: test
+          SEED_DEMO_PASSWORD: ci-demo-password-2026
+          ADMIN_EMAIL: ci-admin@example.test
+          ADMIN_LOGIN_ID: EJM-CI-ADMIN
+          ADMIN_NAME: CI Platform Admin
+          ADMIN_PASSWORD: ci-admin-password-2026
+          ADMIN_FORCE_RESET: "false"
+          PURGE_DEMO_DATA: PURGE-ACC-PRO-DEMO-2026
+          PURGE_DEMO_ALLOW_NON_PRODUCTION: "true"
+        run: |
+          npm run db:seed:demo
+          npm run production:activate
+          npm run production:purge-demo
+
       - name: Lint
         run: npm run lint
 
