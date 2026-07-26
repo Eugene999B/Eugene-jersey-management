@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { BillingCycle, OrderStatus, PlanTier, ReturnRequestStatus, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, OrderChannel, OrderStatus, PaymentStatus, PlanTier, ReturnRequestStatus, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
 
 const platformPermissionValues = ["shops", "billing", "support", "workers", "broadcast", "activity", "settings"] as const;
 type PlatformPermission = (typeof platformPermissionValues)[number];
@@ -304,10 +305,23 @@ export async function togglePlatformWorkerAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+const allowedReturnTransitions: Record<ReturnRequestStatus, ReturnRequestStatus[]> = {
+  REQUESTED: [ReturnRequestStatus.APPROVED, ReturnRequestStatus.REJECTED, ReturnRequestStatus.CANCELLED],
+  APPROVED: [ReturnRequestStatus.RECEIVED, ReturnRequestStatus.REJECTED, ReturnRequestStatus.CANCELLED],
+  RECEIVED: [],
+  REFUNDED: [],
+  EXCHANGED: [],
+  REJECTED: [],
+  CANCELLED: [],
+};
+
 const returnIssueSchema = z.object({
-  returnRequestId: z.string().min(1),
-  status: z.nativeEnum(ReturnRequestStatus),
-  resolution: z.string().optional(),
+  returnRequestId: z.string().min(1).max(100),
+  status: z.nativeEnum(ReturnRequestStatus).refine(
+    (status) => status !== ReturnRequestStatus.REFUNDED && status !== ReturnRequestStatus.EXCHANGED,
+    "Refunded and exchanged states require dedicated financial and stock workflows.",
+  ),
+  resolution: z.string().trim().max(1000).optional(),
 });
 
 export async function updateReturnIssueAction(formData: FormData) {
@@ -317,34 +331,48 @@ export async function updateReturnIssueAction(formData: FormData) {
     status: formData.get("status"),
     resolution: formData.get("resolution") || undefined,
   });
+  if (!parsed.success) redirect("/admin?error=return-workflow");
 
-  if (!parsed.success) redirect("/admin?error=issue");
+  const existing = await prisma.returnRequest.findUnique({ where: { id: parsed.data.returnRequestId } });
+  if (!existing) redirect("/admin?error=issue");
+  if (parsed.data.status !== existing.status && !allowedReturnTransitions[existing.status].includes(parsed.data.status)) {
+    redirect("/admin?error=return-transition");
+  }
 
-  const returnRequest = await prisma.returnRequest.update({
-    where: { id: parsed.data.returnRequestId },
+  const terminal = parsed.data.status === ReturnRequestStatus.REJECTED || parsed.data.status === ReturnRequestStatus.CANCELLED;
+  const changed = await prisma.returnRequest.updateMany({
+    where: { id: existing.id, status: existing.status },
     data: {
       status: parsed.data.status,
-      resolution: parsed.data.resolution,
-      resolvedAt: ["APPROVED", "REJECTED", "REFUNDED", "EXCHANGED", "CANCELLED"].includes(parsed.data.status) ? new Date() : undefined,
+      resolution: parsed.data.resolution ?? existing.resolution,
+      resolvedAt: terminal ? existing.resolvedAt ?? new Date() : null,
     },
   });
+  if (changed.count !== 1) redirect("/admin?error=issue-changed");
 
   await audit({
-    shopId: returnRequest.shopId,
+    shopId: existing.shopId,
     userId: session.id,
     action: "admin.return_issue_updated",
     entityType: "ReturnRequest",
-    entityId: returnRequest.id,
-    metadata: { status: returnRequest.status, resolution: returnRequest.resolution },
+    entityId: existing.id,
+    metadata: { from: existing.status, to: parsed.data.status, resolution: parsed.data.resolution },
   });
-
   revalidatePath("/admin");
 }
 
+const allowedAdminOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+  IN_PRODUCTION: [OrderStatus.READY, OrderStatus.CANCELLED],
+  READY: [OrderStatus.CANCELLED],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
 const orderIssueSchema = z.object({
-  orderId: z.string().min(1),
+  orderId: z.string().min(1).max(100),
   status: z.nativeEnum(OrderStatus),
-  notes: z.string().optional(),
+  notes: z.string().trim().max(1000).optional(),
 });
 
 export async function adminUpdateOrderStatusAction(formData: FormData) {
@@ -354,17 +382,42 @@ export async function adminUpdateOrderStatusAction(formData: FormData) {
     status: formData.get("status"),
     notes: formData.get("notes") || undefined,
   });
-
   if (!parsed.success) redirect("/admin?error=issue");
 
-  const order = await prisma.order.update({
+  const order = await prisma.order.findUnique({
     where: { id: parsed.data.orderId },
-    data: {
-      status: parsed.data.status,
-      notes: parsed.data.notes,
-      cancellationReason: parsed.data.status === OrderStatus.CANCELLED ? parsed.data.notes : undefined,
-    },
+    include: { payments: true },
   });
+  if (!order) redirect("/admin?error=issue");
+  if (parsed.data.status !== order.status && !allowedAdminOrderTransitions[order.status].includes(parsed.data.status)) {
+    redirect("/admin?error=order-transition");
+  }
+
+  if (parsed.data.status === OrderStatus.CANCELLED && parsed.data.status !== order.status) {
+    if (order.channel !== OrderChannel.ONLINE) redirect("/admin?error=refund-required");
+    const reason = parsed.data.notes || `Cancelled by platform support agent ${session.name} before confirmed payment.`;
+    const result = await releaseUnpaidOnlineReservation({ orderId: order.id, reason });
+    if (!result.released) redirect(`/admin?error=${result.reason === "paid" ? "refund-required" : "issue-changed"}`);
+    await audit({
+      shopId: order.shopId,
+      userId: session.id,
+      action: "admin.unpaid_order_cancelled",
+      entityType: "Order",
+      entityId: order.id,
+      metadata: { from: order.status, reason },
+    });
+    revalidatePath("/admin");
+    return;
+  }
+
+  if (parsed.data.status !== order.status && order.paystackReference && !order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS)) {
+    redirect("/admin?error=payment-pending");
+  }
+  const changed = await prisma.order.updateMany({
+    where: { id: order.id, status: order.status },
+    data: { status: parsed.data.status, notes: parsed.data.notes ?? order.notes },
+  });
+  if (changed.count !== 1) redirect("/admin?error=issue-changed");
 
   await audit({
     shopId: order.shopId,
@@ -372,9 +425,8 @@ export async function adminUpdateOrderStatusAction(formData: FormData) {
     action: "admin.order_issue_status_updated",
     entityType: "Order",
     entityId: order.id,
-    metadata: { status: order.status, notes: parsed.data.notes },
+    metadata: { from: order.status, to: parsed.data.status, notes: parsed.data.notes },
   });
-
   revalidatePath("/admin");
 }
 
