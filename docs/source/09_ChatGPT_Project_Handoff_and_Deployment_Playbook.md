@@ -1,177 +1,128 @@
-# Sports Shop Platform - ChatGPT Project Handoff and Deployment Playbook
+# Eugene Jersey Management - Project Handoff and Deployment Playbook
 
-A wide context document for ChatGPT, another AI coding agent, or a developer joining the project.
+A repository-first handoff for developers and coding agents joining the project.
 
 ## Executive Summary
 
-Sports Shop Platform is a full-stack multi-tenant sports retail SaaS application. It was built from the YPMS roadmap document and expanded into a professional jersey-shop platform covering tenant administration, staff login, RBAC, catalog, POS, credit sales, debts, custom production orders, design studio, customer messaging, supplier purchasing, shop networking, daily closing, exports, reports, branding, audit logs, and generated documentation.
+Eugene Jersey Management is a full-stack, multi-tenant sports retail and jersey-production platform. It combines tenant administration, staff access, role-based permissions, catalogue and stock, POS, debts, custom production, design tools, customer messaging, supplier purchasing, shop networking, daily closing, exports, public ordering, buyer accounts, audit logging, and deployment automation.
 
-The project is not a separated frontend/backend architecture yet. It is a Next.js App Router application where the user interface, backend API routes, server actions, authentication, database access, and public tracking pages live in the same app. This matters for deployment decisions.
+The application is a single Next.js App Router service. UI, route handlers, server actions, authentication, Prisma access, background-job endpoints, and public pages deploy together. Do not treat it as a static frontend with a separate backend unless the architecture is deliberately refactored.
 
 ## Current Project Location
 
-- Local path: C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready
-- Primary app framework: Next.js 16 App Router with TypeScript.
-- Database: PostgreSQL through Prisma ORM v7 and @prisma/adapter-pg.
-- Styling: Tailwind CSS v4 with custom global UI classes.
-- Generated docs: docs/word and docs/source.
-- Railway config: railway.toml.
-- Prisma schema: prisma/schema.prisma.
-- Initial production migration: prisma/migrations/20260714163000_init/migration.sql.
-- Operations upgrade migration: prisma/migrations/20260719153000_ops_network_closing/migration.sql.
+- Local path: `C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready`
+- Framework: Next.js 16 and TypeScript
+- Database: PostgreSQL through Prisma 7
+- Deployment: Railway application and PostgreSQL service
+- Generated docs: `docs/source` and `docs/word`
+- Railway config: `railway.toml`
+- Prisma schema: `prisma/schema.prisma`
 
-## What Is Implemented
+## Security and Production Rules
 
-- Landing page and login flow.
-- HTTP-only JWT session cookie signed with jose.
-- bcrypt password hashes and account lockout after failed attempts.
-- Super Admin panel at /admin for shops, suspension/reactivation, tenant detail, usage, and announcements.
-- Tenant dashboard at /dashboard with KPIs, low stock, recent orders, and branded shell.
-- Catalog module with categories, templates, products, variants, stock quantities, low-stock thresholds, and personalization/service/rental flags.
-- POS module with touch-friendly product grid, cart, discounts, personalization modal, payment method choice, stock decrement, order creation, and payment record.
-- POS store-credit flow that creates debts and installment schedules automatically.
-- Orders module with production board and role-limited status changes.
-- Daily Closing module at /dashboard/closing with manual counted cash, expected system totals, variance status, history, and printable exports.
-- Exports Center at /dashboard/exports for POS, payment modes, debts, daily closing, catalog, suppliers, shop network, design jobs, messages, and activity logs.
-- Design Studio at /dashboard/designs with garment styles, layers, vinyl colors, heat press presets, cutter profiles, registration marks, weed boxes, mirrored HTV mode, SVG export, JSON job export, and PLT cut-path export.
-- Supplier management at /dashboard/suppliers plus /supplier supplier portal login and purchase order acknowledgement.
-- Shop Network at /dashboard/network with unique shop codes, trusted shop links, outgoing requests, incoming requests, and stock-checked fulfillment.
-- Public shop ordering with Paystack initialization and per-shop subaccount routing fields.
-- Public tracking page at /track/[orderId] or /track/[receiptNumber].
-- Customers, reports, staff invites, shop settings, receipt HTML, notifications table, and audit logs.
-- Seed data for Accra Pro Sports and demo users.
+- Never publish or reuse seeded demo passwords.
+- Never run the demo seed against production unless the explicit production safeguards are satisfied.
+- Production Super Admin access is created from Railway `ADMIN_*` variables.
+- The real administrator must be verified before permanent demo cleanup.
+- Staff, supplier, admin, and buyer sessions use HTTP-only signed cookies.
+- Authoritative access checks belong in server layouts, actions, and route handlers; Proxy performs only an optimistic cookie-presence redirect.
+- Every tenant-owned query or mutation must be scoped to the authenticated `shopId`.
+- Suspended shops and inactive users must be rejected by server-side session checks.
+- Passwords must meet the shared strong-password policy and must never appear in URLs, logs, documentation, or audit metadata.
+- Verification and fulfilment codes must not be stored in customer-message history.
+- Production media must use durable S3/R2-compatible storage, not Railway's temporary filesystem.
+
+## Main Implemented Areas
+
+- `/login`: staff, supplier, shop and platform-admin access.
+- `/admin`: platform administration, verification, billing, support, workers and security activity.
+- `/dashboard`: tenant workspace with POS, orders, production, customers, debts, messages, stock, suppliers, network, closing, commerce, reports and settings.
+- `/supplier`: supplier portal with active-shop enforcement.
+- `/shops` and `/shop/[slug]`: verified public marketplace and storefronts.
+- `/buyer/login`: buyer phone/password and SMS verification flow.
+- `/cart`: multi-item buyer checkout.
+- `/track/[orderId]`: token-protected order tracking, returns and fulfilment verification.
+- `/dashboard/designs`: jersey artwork and production-export tools.
 
 ## Important Files
 
-- src/lib/db.ts: shared Prisma client using PrismaPg adapter.
-- src/lib/auth.ts and src/lib/session-token.ts: password helpers, sessions, cookies, and auth guards.
-- src/lib/rbac.ts: role labels, permission groups, and navigation visibility.
-- src/proxy.ts: route protection for /dashboard and /admin.
-- src/app/api/pos/checkout/route.ts: server-side POS checkout and stock decrement.
-- src/app/api/exports/route.ts: protected report export engine for PDF, Word, and Excel-compatible downloads.
-- src/app/api/public-order/route.ts: public order creation and Paystack initialization with shop subaccount routing.
-- src/app/api/orders/[orderId]/status/route.ts: production status updates and role enforcement.
-- src/app/dashboard/closing/*: daily closing page and server action.
-- src/app/dashboard/suppliers/* and src/app/supplier/*: supplier management and supplier portal.
-- src/app/dashboard/network/*: shop-to-shop linking and transfer requests.
-- src/components/design/design-studio.tsx: browser-side jersey production design surface.
-- src/app/dashboard/*: tenant-facing modules.
-- src/app/admin/*: platform Super Admin modules.
-- prisma/seed.ts: demo data seed script.
-- scripts/generate-docs.ts: generates the Word and markdown documentation pack.
+- `src/lib/auth.ts`: staff/admin session validation and password helpers.
+- `src/lib/session-token.ts`: staff session JWT signing and verification.
+- `src/lib/session-cookie.ts`: durable cookie options.
+- `src/lib/buyer-session.ts`: buyer session validation and revocation.
+- `src/lib/rbac.ts`: role and permission definitions.
+- `src/lib/dashboard-access.ts`: page-level dashboard guards.
+- `src/lib/order-lifecycle.ts`: atomic unpaid-reservation cancellation and stock restoration.
+- `src/lib/payments.ts`: Paystack initialisation, signature verification and settlement.
+- `src/lib/media-storage.ts`: image validation, optimisation and durable storage.
+- `src/app/api/pos/checkout/route.ts`: tenant-scoped POS checkout.
+- `src/app/cart/actions.ts`: buyer-cart checkout and compensation.
+- `src/app/api/public-order/route.ts`: direct public-order checkout.
+- `src/app/api/paystack/webhook/route.ts`: idempotent Paystack webhook handling.
+- `src/app/admin/create-shop-action.ts`: secure owner and tenant onboarding without URL credentials.
+- `prisma/seed.ts`: guarded local demo data only.
+- `scripts/activate-production.ts`: idempotent real-admin activation and demo retirement.
+- `scripts/purge-demo-data.ts`: guarded one-time demo removal.
 
 ## Local Commands
 
 ```powershell
+cd C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready
 npm.cmd install
-npm.cmd run setup:demo
-npm.cmd run dev
+copy .env.example .env
+npm.cmd run db:generate
 npm.cmd run lint
-npm.cmd run test
+npx.cmd tsc --noEmit
+npm.cmd test
 npm.cmd run build
 npm.cmd run docs:generate
 ```
 
-## Demo Accounts
+Use `npm.cmd run setup:demo` only for an intentional local demo environment after setting a unique `SEED_DEMO_PASSWORD` of at least 12 characters. No fixed demo password is stored in this repository.
 
-- Password for all seeded accounts: Ghana123
-- super@ypms.test: Super Admin, opens /admin.
-- owner@accra.test: Owner, full shop workspace.
-- manager@accra.test: Manager.
-- cashier@accra.test: POS and order operations.
-- designer@accra.test: production order workflow.
-- accountant@accra.test: reports and financial visibility.
-- supplier@accra.test: supplier portal.
+## Production Activation
 
-## Deployment Answer: Railway Backend and Database, Cloudflare Frontend
+Railway uses the repository's `railway.toml`:
 
-The exact split of backend plus database on Railway and frontend on Cloudflare Pages is not the best fit for this codebase as it exists today. The backend is not a separate Express/Nest/FastAPI service; it is integrated into Next.js through route handlers and server actions. If only static frontend files are sent to Cloudflare Pages, login, dashboard data, POS checkout, reports, order updates, and receipts will break unless the backend is refactored into a separate API service and the frontend is changed to call that API.
+- Build: Prisma generate and Next.js build.
+- Pre-deploy: Prisma migrations, production admin activation, and guarded demo cleanup.
+- Start: standalone Next.js server bound to `0.0.0.0`.
+- Health check: `/api/health`.
 
-The recommended first production deployment is to deploy the full Next.js app and PostgreSQL database on Railway. Then optionally put Cloudflare in front as DNS, CDN, WAF, and custom domain proxy. This gives you Cloudflare benefits without prematurely splitting the app.
+Required production variables include `DATABASE_URL`, `SESSION_SECRET`, `APP_URL`, `ADMIN_EMAIL`, and the initial `ADMIN_PASSWORD`. Configure Paystack, messaging, durable media storage, and the reservation-job secret before enabling their corresponding production features.
 
-A future split is possible. To do it properly, create a separate backend service on Railway, move Prisma/auth/API logic into that service, expose versioned REST or GraphQL endpoints, and convert the Next.js frontend to a mostly client/static Cloudflare app that consumes the Railway API.
+After the real administrator works:
 
-## Recommended Production Path
+1. Remove `ADMIN_PASSWORD` from Railway variables.
+2. Keep `ADMIN_FORCE_RESET=false` during normal operation.
+3. Use the guarded purge confirmation only once, verify the result, then remove it.
+4. Confirm seeded users, buyer, supplier and shop are inactive or removed.
+5. Confirm the public marketplace contains only verified real shops.
 
-- Step 1: Push sports-shop-platform-github-ready to a private GitHub repository.
-- Step 2: Create a Railway project from that GitHub repository.
-- Step 3: Add a Railway PostgreSQL database.
-- Step 4: Add DATABASE_URL to the Next.js service as a reference variable from the Postgres service.
-- Step 5: Set SESSION_SECRET, APP_URL, PAYSTACK keys, and notification provider variables.
-- Step 6: Let railway.toml run build, pre-deploy migrations, start command, and healthcheck.
-- Step 7: Generate a Railway public domain or connect a custom domain.
-- Step 8: Use Cloudflare DNS/proxy for the custom domain if desired.
+## Deployment Architecture
 
-## GitHub Push Instructions
+The recommended deployment is the full Next.js application and PostgreSQL on Railway. Cloudflare can sit in front for DNS, TLS, WAF, caching and custom-domain proxying. A static Cloudflare Pages frontend would require a deliberate backend extraction and API migration first.
 
-Create a new empty GitHub repository. Do not initialize it with README, license, or gitignore because the project already has those files. Then run the following from the sports-shop-platform-github-ready folder.
+## Change Checklist
 
-```powershell
-cd C:\Users\DDK\Documents\Jersey\sports-shop-platform-github-ready
-git init
-git add .
-git commit -m "Initial Sports Shop Platform build"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/sports-shop-platform-github-ready.git
-git push -u origin main
-```
+Before finishing a change:
 
-## Railway Deployment Instructions
+1. Inspect the current branch and pull-request diff.
+2. Preserve unrelated user work.
+3. Keep all tenant data scoped to `session.shopId` or another verified tenant identifier.
+4. Preserve server-side role checks even when the UI hides a control.
+5. Add a Prisma migration for schema changes.
+6. Run migrations against disposable PostgreSQL in CI.
+7. Run lint, TypeScript, tests and production build.
+8. Review payment, stock and coupon state transitions for retries and races.
+9. Confirm no password, verification code, access token or provider secret is logged.
+10. Keep the pull request draft until every required check is green.
 
-- In Railway, create a new project and choose Deploy from GitHub repo.
-- Select the sports-shop-platform-github-ready repository.
-- Add a PostgreSQL database service from Railway.
-- In the Next.js service Variables tab, add DATABASE_URL as a reference to the Postgres service.
-- Add SESSION_SECRET with a long random value. Never use the local dev value in production.
-- Add APP_URL with the Railway or custom domain URL.
-- Confirm railway.toml is detected. It sets buildCommand, preDeployCommand, startCommand, healthcheckPath, and restart policy.
-- After first deploy, open /login and sign in with a real production Super Admin. Do not rely on demo seed users for production.
+## Current Priorities After This Audit
 
-## Cloudflare Options
-
-- Best near-term option: use Cloudflare DNS, proxy, SSL, caching rules, and WAF in front of the Railway app.
-- Full Cloudflare app option: deploy the entire Next.js app to Cloudflare Workers using the OpenNext adapter. This requires Cloudflare-specific configuration and careful testing of Prisma/PostgreSQL connectivity through edge-compatible drivers or Hyperdrive.
-- Static frontend option: only possible after refactoring the backend into a separate Railway API and changing the frontend to call that API.
-
-## Current Official References Used
-
-- Railway Next.js with Postgres guide: https://docs.railway.com/guides/nextjs
-- Railway config as code reference: https://docs.railway.com/config-as-code/reference
-- GitHub local repository push guide: https://docs.github.com/en/migrations/importing-source-code/using-the-command-line-to-import-source-code/adding-locally-hosted-code-to-github
-- Cloudflare Workers Next.js guide: https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/
-- Cloudflare Pages Next.js guide: https://developers.cloudflare.com/pages/framework-guides/nextjs/
-- Prisma Cloudflare deployment guide: https://www.prisma.io/docs/orm/prisma-client/deployment/edge/deploy-to-cloudflare
-- Cloudflare Hyperdrive Prisma ORM example: https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/prisma-orm/
-
-## What To Ask ChatGPT Next
-
-Paste the prompt below into ChatGPT together with this document or the repository link. It tells ChatGPT how to understand the project without guessing.
-
-```powershell
-You are helping me continue a project named Sports Shop Platform.
-It is a full-stack Next.js 16 App Router + TypeScript + Prisma v7 + PostgreSQL multi-tenant sports retail SaaS.
-Read the repository first. Important files: prisma/schema.prisma, src/lib/db.ts, src/lib/auth.ts, src/lib/rbac.ts, src/proxy.ts, src/app/dashboard, src/app/admin, src/app/api, scripts/generate-docs.ts, railway.toml.
-Do not assume frontend and backend are separate. Server actions, route handlers, auth, and Prisma live inside the Next.js app.
-When changing database models, update prisma/schema.prisma and create a proper Prisma migration.
-Keep tenant isolation by always scoping tenant data with session.shopId.
-Keep role permissions consistent with src/lib/rbac.ts.
-Before finishing any change, run npm run lint, npm run test, npm run build, and npm audit --audit-level=moderate.
-My deployment target is Railway for the full-stack app and PostgreSQL first, with Cloudflare as DNS/proxy. Only split frontend to Cloudflare later if we refactor the backend into a separate API.
-Paystack uses one platform PAYSTACK_SECRET_KEY on the server. Each shop can store its own Paystack subaccount code and mobile money settlement details in Dashboard > Settings.
-The design studio provides SVG, JSON job, and PLT exports. Exact direct cutter control requires confirming the shop's cutter model, driver, and connection protocol before adding a machine bridge.
-```
-
-## Near-Term Development Backlog
-
-- Read docs/source/10_System_Diagnostic_Progress_and_Roadmap.md before starting new work. It contains the latest launch diagnostic, live route checks, known bugs, and the next implementation order.
-- Launch blockers now include production demo seed safety, page-level dashboard RBAC, transaction-safe stock decrement, design undo/redo/delete, grouped templates, machine connection details, Paystack callback verification, and hardened buyer SMS registration.
-- Create production Super Admin setup command and remove dependency on demo seed users.
-- Add real Paystack webhook confirmation and refund handling.
-- Add SMS/WhatsApp provider implementation for Twilio or Africa's Talking.
-- Add automated Paystack subaccount onboarding for shops.
-- Add direct integrations for the exact cutting plotter models used by target shops.
-- Add CSV import mapping UI for catalog bulk uploads.
-- Add customer account storefront or public shop pages.
-- Add rate limiting on login, reset password, checkout, and tracking endpoints.
-- Add 2FA for owner and admin roles.
-- Add automated end-to-end tests for login, POS checkout, and order workflow.
+- End-to-end browser tests for login refresh persistence, POS, buyer checkout and role boundaries.
+- Production Paystack refund and reconciliation workflows.
+- Arkesel sender approval and delivery-status controls.
+- Owner/admin 2FA and active-session management.
+- Reservation-job scheduling and operational alerting.
+- Design Studio device-specific integrations after cutter models and protocols are confirmed.
