@@ -1,0 +1,109 @@
+name: Patch trusted application origins
+
+on:
+  push:
+    branches:
+      - agent/fix-login-csp-and-design-production
+    paths:
+      - .github/workflows/patch-origin-checks.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-login-csp-and-design-production
+      - name: Replace proxy-unsafe origin checks
+        shell: python
+        run: |
+          from pathlib import Path
+
+          files = {
+            "src/app/api/uploads/route.ts": (
+              'import { enforceRateLimit } from "@/lib/rate-limit";\n',
+              'import { enforceRateLimit } from "@/lib/rate-limit";\nimport { isTrustedApplicationOrigin } from "@/lib/request-origin";\n',
+              '''  const origin = request.headers.get("origin");
+            if (origin && origin !== new URL(request.url).origin) {
+              return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+            }
+          ''',
+              '''  if (!isTrustedApplicationOrigin(request)) {
+              return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+            }
+          ''',
+            ),
+            "src/app/api/designs/route.ts": (
+              'import { permissions } from "@/lib/rbac";\n',
+              'import { permissions } from "@/lib/rbac";\nimport { isTrustedApplicationOrigin } from "@/lib/request-origin";\n',
+              '''  const origin = request.headers.get("origin");
+            if (origin && origin !== new URL(request.url).origin) {
+              return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+            }
+          ''',
+              '''  if (!isTrustedApplicationOrigin(request)) {
+              return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+            }
+          ''',
+            ),
+            "src/app/api/orders/[orderId]/status/route.ts": (
+              'import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";\n',
+              'import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";\nimport { isTrustedApplicationOrigin } from "@/lib/request-origin";\n',
+              '''  const origin = request.headers.get("origin");
+            if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+          ''',
+              '''  if (!isTrustedApplicationOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+          ''',
+            ),
+            "src/app/api/orders/[orderId]/verify-pickup/route.ts": (
+              'import { hashToken } from "@/lib/tokens";\n',
+              'import { hashToken } from "@/lib/tokens";\nimport { isTrustedApplicationOrigin } from "@/lib/request-origin";\n',
+              '''  const origin = request.headers.get("origin");
+            if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+          ''',
+              '''  if (!isTrustedApplicationOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+          ''',
+            ),
+            "src/app/api/pos/checkout/route.ts": (
+              'import { normalizePhone } from "@/lib/phone";\n',
+              'import { normalizePhone } from "@/lib/phone";\nimport { isTrustedApplicationOrigin } from "@/lib/request-origin";\n',
+              '''  const origin = request.headers.get("origin");
+            if (origin && origin !== new URL(request.url).origin) {
+              return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+            }
+          ''',
+              '''  if (!isTrustedApplicationOrigin(request)) {
+              return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+            }
+          ''',
+            ),
+          }
+
+          changed = []
+          for name, (old_import, new_import, old_check, new_check) in files.items():
+            path = Path(name)
+            text = path.read_text(encoding="utf-8")
+            if 'from "@/lib/request-origin"' not in text:
+              if old_import not in text:
+                raise SystemExit(f"Import anchor missing: {name}")
+              text = text.replace(old_import, new_import, 1)
+            if old_check not in text:
+              raise SystemExit(f"Origin check missing: {name}")
+            text = text.replace(old_check, new_check, 1)
+            path.write_text(text, encoding="utf-8")
+            changed.append(name)
+
+          print("Updated:\n" + "\n".join(changed))
+      - name: Commit trusted origin checks
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/api
+          git commit -m "Trust forwarded application origins safely"
+          git push origin HEAD:agent/fix-login-csp-and-design-production
