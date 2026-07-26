@@ -10,10 +10,26 @@ import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
 
-const safeImageUrl = z.string().trim().max(2000).refine((value) => {
-  if (value.startsWith("/")) return !value.startsWith("//");
-  try { return new URL(value).protocol === "https:"; } catch { return false; }
-}, "Use a secure HTTPS image or an application asset path.");
+function isManagedImageUrl(value: string) {
+  if (value.startsWith("/") && !value.startsWith("//")) return true;
+  const mediaBase = process.env.MEDIA_PUBLIC_URL?.trim();
+  if (!mediaBase) return false;
+  try {
+    const candidate = new URL(value);
+    const base = new URL(mediaBase);
+    const basePath = base.pathname.replace(/\/$/, "");
+    return candidate.protocol === "https:"
+      && candidate.origin === base.origin
+      && candidate.pathname.startsWith(`${basePath}/`);
+  } catch {
+    return false;
+  }
+}
+
+const safeImageUrl = z.string().trim().max(2000).refine(
+  isManagedImageUrl,
+  "Upload the logo or use a URL from the configured durable media host.",
+);
 
 const schema = z.object({
   name: z.string().trim().min(2).max(140),
@@ -41,6 +57,7 @@ const schema = z.object({
 export async function updateShopSettingsAction(formData: FormData) {
   const session = await requireRole(permissions.settings);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
+  const shopId = session.shopId;
   const parsed = schema.safeParse({
     name: formData.get("name"), logoUrl: formData.get("logoUrl") || undefined,
     primaryColor: formData.get("primaryColor"), secondaryColor: formData.get("secondaryColor"),
@@ -61,7 +78,7 @@ export async function updateShopSettingsAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
-  const shop = await prisma.shop.findUnique({ where: { id: session.shopId }, select: { isActive: true, verificationStatus: true } });
+  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true, verificationStatus: true } });
   if (!shop?.isActive) redirect("/login?error=shop-suspended");
   if ((parsed.data.storefrontEnabled || parsed.data.publicOrderingEnabled) && shop.verificationStatus !== ShopVerificationStatus.VERIFIED) {
     redirect("/dashboard/settings?error=verification-required");
@@ -70,11 +87,11 @@ export async function updateShopSettingsAction(formData: FormData) {
 
   const uploadedLogo = formData.get("logoFile");
   const logoAsset = uploadedLogo instanceof File && uploadedLogo.size > 0
-    ? await createOptimizedMediaAsset({ file: uploadedLogo, shopId: session.shopId, uploadedById: session.id, kind: MediaKind.SHOP_LOGO })
+    ? await createOptimizedMediaAsset({ file: uploadedLogo, shopId, uploadedById: session.id, kind: MediaKind.SHOP_LOGO })
     : null;
 
   await prisma.shop.update({
-    where: { id: session.shopId },
+    where: { id: shopId },
     data: {
       name: parsed.data.name,
       logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
@@ -119,7 +136,7 @@ export async function updateShopSettingsAction(formData: FormData) {
       },
     },
   });
-  await audit({ shopId: session.shopId, userId: session.id, action: "settings.shop_updated", entityType: "Shop", entityId: session.shopId, metadata: { storefrontEnabled: parsed.data.storefrontEnabled, publicOrderingEnabled: parsed.data.publicOrderingEnabled } });
+  await audit({ shopId, userId: session.id, action: "settings.shop_updated", entityType: "Shop", entityId: shopId, metadata: { storefrontEnabled: parsed.data.storefrontEnabled, publicOrderingEnabled: parsed.data.publicOrderingEnabled, logoChanged: Boolean(logoAsset || parsed.data.logoUrl) } });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/shops");
