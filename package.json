@@ -15,6 +15,7 @@
     "db:seed:demo": "tsx prisma/seed.ts --demo",
     "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
     "production:activate": "tsx scripts/activate-production.ts",
+    "production:purge-demo": "tsx scripts/purge-demo-data.ts",
     "docs:generate": "tsx scripts/generate-docs.ts",
     "docs:handoff": "tsx scripts/generate-handoff-doc.ts",
     "jobs:release-reservations": "tsx scripts/release-expired-reservations.ts",
