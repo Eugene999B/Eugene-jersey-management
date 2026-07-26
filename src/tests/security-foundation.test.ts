@@ -6,7 +6,8 @@ describe("security foundations", () => {
   const originalNodeEnv = process.env.NODE_ENV;
 
   afterEach(() => {
-    Object.defineProperty(process.env, "NODE_ENV", { value: originalNodeEnv, writable: true, configurable: true });
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
   });
 
   it("uses a strong shared password policy", () => {
@@ -18,7 +19,7 @@ describe("security foundations", () => {
   });
 
   it("creates durable, HTTP-only, high-priority session cookies", () => {
-    Object.defineProperty(process.env, "NODE_ENV", { value: "production", writable: true, configurable: true });
+    process.env.NODE_ENV = "production";
     const before = Date.now();
     const options = persistentSessionCookieOptions(3600);
 
