@@ -7,6 +7,30 @@ type RemotePattern = {
   pathname: string;
 };
 
+function normalizedOrigin(value: string | undefined) {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+  try {
+    return new URL(candidate.includes("://") ? candidate : `https://${candidate}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+function trustedFormOrigins() {
+  const origins = new Set<string>(["https://web-production-8ee56.up.railway.app"]);
+  for (const value of [
+    process.env.APP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.RAILWAY_STATIC_URL,
+    process.env.RAILWAY_PUBLIC_DOMAIN,
+  ]) {
+    const origin = normalizedOrigin(value);
+    if (origin) origins.add(origin);
+  }
+  return [...origins];
+}
+
 function durableMediaPatterns(): RemotePattern[] {
   const value = process.env.MEDIA_PUBLIC_URL?.trim();
   if (!value) return [];
@@ -42,7 +66,7 @@ const nextConfig: NextConfig = {
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
-      "form-action 'self' https://checkout.paystack.com https://*.paystack.co",
+      `form-action 'self' ${trustedFormOrigins().join(" ")} https://checkout.paystack.com https://*.paystack.co`,
     ].join("; ");
 
     return [
@@ -54,7 +78,7 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), serial=(self)" },
           { key: "X-DNS-Prefetch-Control", value: "off" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
