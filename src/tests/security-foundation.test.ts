@@ -1,15 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { PASSWORD_MIN_LENGTH, strongPasswordSchema } from "@/lib/password-policy";
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
 
 describe("security foundations", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-
-  afterEach(() => {
-    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = originalNodeEnv;
-  });
-
   it("uses a strong shared password policy", () => {
     expect(PASSWORD_MIN_LENGTH).toBeGreaterThanOrEqual(12);
     expect(strongPasswordSchema.safeParse("short1").success).toBe(false);
@@ -19,9 +12,8 @@ describe("security foundations", () => {
   });
 
   it("creates durable, HTTP-only, high-priority session cookies", () => {
-    process.env.NODE_ENV = "production";
     const before = Date.now();
-    const options = persistentSessionCookieOptions(3600);
+    const options = persistentSessionCookieOptions(3600, true);
 
     expect(options.httpOnly).toBe(true);
     expect(options.sameSite).toBe("lax");
