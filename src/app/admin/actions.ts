@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { BillingCycle, OrderStatus, PlanTier, ReturnRequestStatus, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, OrderChannel, OrderStatus, PaymentStatus, PlanTier, ReturnRequestStatus, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
 
 const platformPermissionValues = ["shops", "billing", "support", "workers", "broadcast", "activity", "settings"] as const;
 type PlatformPermission = (typeof platformPermissionValues)[number];
@@ -33,137 +34,8 @@ async function requirePlatformPermission(permission: PlatformPermission) {
   return session;
 }
 
-const createShopSchema = z.object({
-  name: z.string().min(2),
-  slug: z.string().min(3).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  ownerName: z.string().min(2),
-  ownerEmail: z.string().email().transform((value) => value.toLowerCase()),
-  ownerPhone: z.string().optional(),
-  staffLoginId: z.string().optional(),
-  planTier: z.nativeEnum(PlanTier),
-  billingCycle: z.nativeEnum(BillingCycle).default(BillingCycle.MONTHLY),
-  monthlyPrice: z.coerce.number().min(0).optional(),
-  yearlyPrice: z.coerce.number().min(0).optional(),
-  legalBusinessName: z.string().optional(),
-  businessRegistrationNumber: z.string().optional(),
-  taxIdentificationNumber: z.string().optional(),
-  ownerGovernmentId: z.string().optional(),
-  credentialContactName: z.string().optional(),
-  credentialPhone: z.string().optional(),
-  credentialEmail: z.string().email().optional(),
-  credentialAddress: z.string().optional(),
-  credentialDocumentUrl: z.string().url().optional(),
-});
-
-function shopNetworkCode(slug: string) {
-  const prefix = slug
-    .split("-")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 4)
-    .toUpperCase();
-
-  return `${prefix || "SHOP"}-${nanoid(5).toUpperCase()}`;
-}
-
-function shopStaffLoginId(slug: string, provided?: string) {
-  const clean = provided?.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
-  if (clean && clean.length >= 4) return clean;
-  const prefix = slug
-    .split("-")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 4)
-    .toUpperCase();
-
-  return `${prefix || "SHOP"}-STAFF-${nanoid(4).toUpperCase()}`;
-}
-
-export async function createShopAction(formData: FormData) {
-  const session = await requirePlatformPermission("shops");
-  const parsed = createShopSchema.safeParse({
-    name: formData.get("name"),
-    slug: formData.get("slug"),
-    ownerName: formData.get("ownerName"),
-    ownerEmail: formData.get("ownerEmail"),
-    ownerPhone: formData.get("ownerPhone") || undefined,
-    staffLoginId: formData.get("staffLoginId") || undefined,
-    planTier: formData.get("planTier"),
-    billingCycle: formData.get("billingCycle") || BillingCycle.MONTHLY,
-    monthlyPrice: formData.get("monthlyPrice") || undefined,
-    yearlyPrice: formData.get("yearlyPrice") || undefined,
-    legalBusinessName: formData.get("legalBusinessName") || undefined,
-    businessRegistrationNumber: formData.get("businessRegistrationNumber") || undefined,
-    taxIdentificationNumber: formData.get("taxIdentificationNumber") || undefined,
-    ownerGovernmentId: formData.get("ownerGovernmentId") || undefined,
-    credentialContactName: formData.get("credentialContactName") || undefined,
-    credentialPhone: formData.get("credentialPhone") || undefined,
-    credentialEmail: formData.get("credentialEmail") || undefined,
-    credentialAddress: formData.get("credentialAddress") || undefined,
-    credentialDocumentUrl: formData.get("credentialDocumentUrl") || undefined,
-  });
-
-  if (!parsed.success) redirect("/admin/shops/new?error=invalid");
-
-  const existingOwner = await prisma.user.findUnique({ where: { email: parsed.data.ownerEmail }, select: { id: true } });
-  if (existingOwner) redirect("/admin/shops/new?error=email-exists");
-
-  const temporaryPassword = `Launch-${nanoid(14)}`;
-  const passwordHash = await hashPassword(temporaryPassword);
-
-  const shop = await prisma.$transaction(async (tx) => {
-    const createdShop = await tx.shop.create({
-      data: {
-        name: parsed.data.name,
-        slug: parsed.data.slug,
-        networkCode: shopNetworkCode(parsed.data.slug),
-        staffLoginId: shopStaffLoginId(parsed.data.slug, parsed.data.staffLoginId),
-        verificationStatus: ShopVerificationStatus.PENDING,
-        planTier: parsed.data.planTier,
-        billingCycle: parsed.data.billingCycle,
-        monthlyPrice: parsed.data.monthlyPrice,
-        yearlyPrice: parsed.data.yearlyPrice,
-        subscriptionStatus: SubscriptionStatus.TRIAL,
-        subscriptionRenewalAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        legalBusinessName: parsed.data.legalBusinessName,
-        businessRegistrationNumber: parsed.data.businessRegistrationNumber,
-        taxIdentificationNumber: parsed.data.taxIdentificationNumber,
-        ownerGovernmentId: parsed.data.ownerGovernmentId,
-        credentialContactName: parsed.data.credentialContactName || parsed.data.ownerName,
-        credentialPhone: parsed.data.credentialPhone || parsed.data.ownerPhone,
-        credentialEmail: parsed.data.credentialEmail || parsed.data.ownerEmail,
-        credentialAddress: parsed.data.credentialAddress,
-        credentialDocumentUrl: parsed.data.credentialDocumentUrl,
-        paymentConfig: { create: {} },
-      },
-    });
-
-    await tx.user.create({
-      data: {
-        shopId: createdShop.id,
-        email: parsed.data.ownerEmail,
-        name: parsed.data.ownerName,
-        role: Role.OWNER,
-        passwordHash,
-        phone: parsed.data.ownerPhone || parsed.data.credentialPhone,
-      },
-    });
-
-    return createdShop;
-  });
-
-  await audit({
-    shopId: shop.id,
-    userId: session.id,
-    action: "admin.shop_created",
-    entityType: "Shop",
-    entityId: shop.id,
-    metadata: { ownerEmail: parsed.data.ownerEmail, planTier: parsed.data.planTier },
-  });
-
-  revalidatePath("/admin");
-  redirect(`/admin/shops/${shop.id}?credential=${encodeURIComponent(temporaryPassword)}`);
-}
+// Shop creation is implemented only in create-shop-action.ts so owner credentials
+// never pass through URLs, logs, or an obsolete generated-password action.
 
 export async function verifyShopCredentialsAction(formData: FormData) {
   const session = await requirePlatformPermission("shops");
@@ -433,10 +305,23 @@ export async function togglePlatformWorkerAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+const allowedReturnTransitions: Record<ReturnRequestStatus, ReturnRequestStatus[]> = {
+  REQUESTED: [ReturnRequestStatus.APPROVED, ReturnRequestStatus.REJECTED, ReturnRequestStatus.CANCELLED],
+  APPROVED: [ReturnRequestStatus.RECEIVED, ReturnRequestStatus.REJECTED, ReturnRequestStatus.CANCELLED],
+  RECEIVED: [],
+  REFUNDED: [],
+  EXCHANGED: [],
+  REJECTED: [],
+  CANCELLED: [],
+};
+
 const returnIssueSchema = z.object({
-  returnRequestId: z.string().min(1),
-  status: z.nativeEnum(ReturnRequestStatus),
-  resolution: z.string().optional(),
+  returnRequestId: z.string().min(1).max(100),
+  status: z.nativeEnum(ReturnRequestStatus).refine(
+    (status) => status !== ReturnRequestStatus.REFUNDED && status !== ReturnRequestStatus.EXCHANGED,
+    "Refunded and exchanged states require dedicated financial and stock workflows.",
+  ),
+  resolution: z.string().trim().max(1000).optional(),
 });
 
 export async function updateReturnIssueAction(formData: FormData) {
@@ -446,34 +331,48 @@ export async function updateReturnIssueAction(formData: FormData) {
     status: formData.get("status"),
     resolution: formData.get("resolution") || undefined,
   });
+  if (!parsed.success) redirect("/admin?error=return-workflow");
 
-  if (!parsed.success) redirect("/admin?error=issue");
+  const existing = await prisma.returnRequest.findUnique({ where: { id: parsed.data.returnRequestId } });
+  if (!existing) redirect("/admin?error=issue");
+  if (parsed.data.status !== existing.status && !allowedReturnTransitions[existing.status].includes(parsed.data.status)) {
+    redirect("/admin?error=return-transition");
+  }
 
-  const returnRequest = await prisma.returnRequest.update({
-    where: { id: parsed.data.returnRequestId },
+  const terminal = parsed.data.status === ReturnRequestStatus.REJECTED || parsed.data.status === ReturnRequestStatus.CANCELLED;
+  const changed = await prisma.returnRequest.updateMany({
+    where: { id: existing.id, status: existing.status },
     data: {
       status: parsed.data.status,
-      resolution: parsed.data.resolution,
-      resolvedAt: ["APPROVED", "REJECTED", "REFUNDED", "EXCHANGED", "CANCELLED"].includes(parsed.data.status) ? new Date() : undefined,
+      resolution: parsed.data.resolution ?? existing.resolution,
+      resolvedAt: terminal ? existing.resolvedAt ?? new Date() : null,
     },
   });
+  if (changed.count !== 1) redirect("/admin?error=issue-changed");
 
   await audit({
-    shopId: returnRequest.shopId,
+    shopId: existing.shopId,
     userId: session.id,
     action: "admin.return_issue_updated",
     entityType: "ReturnRequest",
-    entityId: returnRequest.id,
-    metadata: { status: returnRequest.status, resolution: returnRequest.resolution },
+    entityId: existing.id,
+    metadata: { from: existing.status, to: parsed.data.status, resolution: parsed.data.resolution },
   });
-
   revalidatePath("/admin");
 }
 
+const allowedAdminOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+  IN_PRODUCTION: [OrderStatus.READY, OrderStatus.CANCELLED],
+  READY: [OrderStatus.CANCELLED],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
 const orderIssueSchema = z.object({
-  orderId: z.string().min(1),
+  orderId: z.string().min(1).max(100),
   status: z.nativeEnum(OrderStatus),
-  notes: z.string().optional(),
+  notes: z.string().trim().max(1000).optional(),
 });
 
 export async function adminUpdateOrderStatusAction(formData: FormData) {
@@ -483,17 +382,42 @@ export async function adminUpdateOrderStatusAction(formData: FormData) {
     status: formData.get("status"),
     notes: formData.get("notes") || undefined,
   });
-
   if (!parsed.success) redirect("/admin?error=issue");
 
-  const order = await prisma.order.update({
+  const order = await prisma.order.findUnique({
     where: { id: parsed.data.orderId },
-    data: {
-      status: parsed.data.status,
-      notes: parsed.data.notes,
-      cancellationReason: parsed.data.status === OrderStatus.CANCELLED ? parsed.data.notes : undefined,
-    },
+    include: { payments: true },
   });
+  if (!order) redirect("/admin?error=issue");
+  if (parsed.data.status !== order.status && !allowedAdminOrderTransitions[order.status].includes(parsed.data.status)) {
+    redirect("/admin?error=order-transition");
+  }
+
+  if (parsed.data.status === OrderStatus.CANCELLED && parsed.data.status !== order.status) {
+    if (order.channel !== OrderChannel.ONLINE) redirect("/admin?error=refund-required");
+    const reason = parsed.data.notes || `Cancelled by platform support agent ${session.name} before confirmed payment.`;
+    const result = await releaseUnpaidOnlineReservation({ orderId: order.id, reason });
+    if (!result.released) redirect(`/admin?error=${result.reason === "paid" ? "refund-required" : "issue-changed"}`);
+    await audit({
+      shopId: order.shopId,
+      userId: session.id,
+      action: "admin.unpaid_order_cancelled",
+      entityType: "Order",
+      entityId: order.id,
+      metadata: { from: order.status, reason },
+    });
+    revalidatePath("/admin");
+    return;
+  }
+
+  if (parsed.data.status !== order.status && order.paystackReference && !order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS)) {
+    redirect("/admin?error=payment-pending");
+  }
+  const changed = await prisma.order.updateMany({
+    where: { id: order.id, status: order.status },
+    data: { status: parsed.data.status, notes: parsed.data.notes ?? order.notes },
+  });
+  if (changed.count !== 1) redirect("/admin?error=issue-changed");
 
   await audit({
     shopId: order.shopId,
@@ -501,9 +425,8 @@ export async function adminUpdateOrderStatusAction(formData: FormData) {
     action: "admin.order_issue_status_updated",
     entityType: "Order",
     entityId: order.id,
-    metadata: { status: order.status, notes: parsed.data.notes },
+    metadata: { from: order.status, to: parsed.data.status, notes: parsed.data.notes },
   });
-
   revalidatePath("/admin");
 }
 

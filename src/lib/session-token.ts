@@ -9,8 +9,8 @@ export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getSecret() {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 24) {
-    throw new Error("SESSION_SECRET must be set to a long random value.");
+  if (!secret || secret.length < 32) {
+    throw new Error("SESSION_SECRET must be set to a long random value of at least 32 characters.");
   }
   return new TextEncoder().encode(secret);
 }
@@ -23,6 +23,7 @@ export async function signSession(user: SessionUser) {
     name: user.name,
     role: user.role,
     sessionVersion: user.sessionVersion,
+    type: "staff",
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -32,8 +33,8 @@ export async function signSession(user: SessionUser) {
 
 export async function verifySessionToken(token: string): Promise<SessionUser | null> {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
-    if (!payload.id || !payload.email || !payload.name || !payload.role || typeof payload.sessionVersion !== "number") return null;
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
+    if (payload.type !== "staff" || !payload.id || !payload.email || !payload.name || !payload.role || typeof payload.sessionVersion !== "number") return null;
 
     return {
       id: String(payload.id),

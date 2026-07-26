@@ -51,7 +51,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         </div>
         <form className="flex w-full max-w-md gap-2 sm:w-auto">
           <input className="field" name="q" defaultValue={query} placeholder="Search receipt, customer, SKU or item" />
-          <button className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Search</button>
+          <button type="submit" className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Search</button>
         </form>
       </div>
       {query ? <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">Showing {orders.length} order(s) matching <strong>{query}</strong>.</p> : null}

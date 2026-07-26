@@ -192,7 +192,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
             </div>
             <form className="flex gap-2">
               <input className="field" name="q" placeholder="Search team, item, size, sport" defaultValue={query} />
-              <button className="rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white">Search</button>
+              <button type="submit" className="rounded-[8px] bg-[#111827] px-3 text-sm font-semibold text-white">Search</button>
             </form>
             {errorCode ? (
               <p className="mt-3 rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

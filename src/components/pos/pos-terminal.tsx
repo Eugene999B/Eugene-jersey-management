@@ -174,6 +174,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
           <div className="mt-4 flex flex-wrap gap-2">
             {categories.map((item) => (
               <button
+                type="button"
                 key={item}
                 onClick={() => setCategory(item)}
                 className={`rounded-[8px] px-3 py-2 text-sm font-semibold transition ${category === item ? "bg-[var(--shop-primary)] text-white" : "bg-white text-slate-600 hover:bg-[#f6f4ef]"}`}
@@ -193,6 +194,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
             const variant = product.variants[0];
             return (
               <button
+                type="button"
                 key={product.id}
                 className="min-h-40 rounded-[8px] border border-[#ded8cd] bg-white p-4 text-left transition hover:border-[var(--shop-primary)] hover:shadow-md"
                 onClick={() => {
@@ -251,15 +253,15 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
                     <p className="mt-1 text-xs text-orange-700">Print: {line.personalName} #{line.personalNumber}</p>
                   ) : null}
                 </div>
-                <button onClick={() => setCart((current) => current.filter((item) => item.key !== line.key))} className="rounded-[8px] p-2 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                <button type="button" onClick={() => setCart((current) => current.filter((item) => item.key !== line.key))} className="rounded-[8px] p-2 text-slate-400 hover:bg-red-50 hover:text-red-600">
                   <Trash2 size={16} />
                 </button>
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <button className="rounded-[8px] bg-[#f6f4ef] p-2" onClick={() => setCart((current) => current.map((item) => item.key === line.key ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}><Minus size={14} /></button>
+                  <button type="button" className="rounded-[8px] bg-[#f6f4ef] p-2" onClick={() => setCart((current) => current.map((item) => item.key === line.key ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}><Minus size={14} /></button>
                   <span className="w-8 text-center text-sm font-semibold">{line.quantity}</span>
-                  <button className="rounded-[8px] bg-[#f6f4ef] p-2" onClick={() => setCart((current) => current.map((item) => item.key === line.key ? { ...item, quantity: item.quantity + 1 } : item))}><Plus size={14} /></button>
+                  <button type="button" className="rounded-[8px] bg-[#f6f4ef] p-2" onClick={() => setCart((current) => current.map((item) => item.key === line.key ? { ...item, quantity: item.quantity + 1 } : item))}><Plus size={14} /></button>
                 </div>
                 <p className="font-semibold">{currency(line.unitPrice * line.quantity, currencyCode)}</p>
               </div>
@@ -279,6 +281,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
               ["STORE_CREDIT", Clock3],
             ].map(([method, Icon]) => (
               <button
+                type="button"
                 key={String(method)}
                 onClick={() => { setPaymentMethod(method as "CASH" | "CARD" | "MOMO" | "STORE_CREDIT"); setPaymentReference(""); setPaymentConfirmed(false); }}
                 className={`rounded-[8px] border px-2 py-3 text-sm font-semibold ${paymentMethod === method ? "border-[var(--shop-primary)] bg-[var(--shop-primary)] text-white" : "border-[#ded8cd] bg-white text-slate-700"}`}

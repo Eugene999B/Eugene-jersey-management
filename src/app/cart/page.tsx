@@ -134,7 +134,7 @@ export default async function CartPage({ searchParams }: Props) {
                             <input className="field" name="quantity" type="number" min="0" max="100" defaultValue={item.quantity} />
                             <div className="grid grid-cols-2 gap-2">
                               <Button variant="outline">Save</Button>
-                              <button className="inline-flex min-h-10 items-center justify-center rounded-[8px] border border-red-200 bg-red-50 text-red-700" name="quantity" value="0" title="Remove">
+                              <button type="submit" className="inline-flex min-h-10 items-center justify-center rounded-[8px] border border-red-200 bg-red-50 text-red-700" name="quantity" value="0" title="Remove">
                                 <Trash2 size={16} />
                               </button>
                             </div>

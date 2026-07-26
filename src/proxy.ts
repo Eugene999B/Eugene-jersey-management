@@ -1,46 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessDashboardPath } from "@/lib/dashboard-access";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
+import { SESSION_COOKIE } from "@/lib/session-token";
 
-export async function proxy(request: NextRequest) {
+const protectedPrefixes = ["/dashboard", "/admin", "/supplier"] as const;
+
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await verifySessionToken(token) : null;
-
+  const hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", pathname);
 
-  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/supplier")) && !session) {
+  // Proxy performs only the optimistic cookie-presence check. Authoritative JWT,
+  // database, tenant, session-version, and role checks stay in server layouts and
+  // actions, where false negatives cannot erase an otherwise valid session.
+  if (protectedPrefixes.some((prefix) => pathname.startsWith(prefix)) && !hasSessionCookie) {
     const url = new URL("/login", request.url);
     url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-    const response = NextResponse.redirect(url);
-    if (token) {
-      response.cookies.delete(SESSION_COOKIE);
-    }
-    return response;
-  }
-
-  if (pathname.startsWith("/admin") && session && session.role !== "SUPER_ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
-  }
-
-  if (pathname.startsWith("/dashboard") && session?.role === "SUPER_ADMIN") {
-    return NextResponse.redirect(new URL("/admin", request.url));
-  }
-
-  if (pathname.startsWith("/dashboard") && session?.role === "SUPPLIER") {
-    return NextResponse.redirect(new URL("/supplier", request.url));
-  }
-
-  if (pathname.startsWith("/dashboard") && !canAccessDashboardPath(pathname, session?.role)) {
-    const url = new URL("/dashboard", request.url);
-    url.searchParams.set("error", "permission");
-    url.searchParams.set("from", pathname);
     return NextResponse.redirect(url);
-  }
-
-  if (pathname.startsWith("/supplier") && session && session.role !== "SUPPLIER") {
-    return NextResponse.redirect(new URL("/dashboard?error=permission", request.url));
   }
 
   return NextResponse.next({

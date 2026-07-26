@@ -101,7 +101,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         <span className="text-sm font-semibold">Date range</span>
         <label className="text-xs font-semibold text-slate-600">From<input className="field mt-1" type="date" name="from" defaultValue={inputDate(start)} /></label>
         <label className="text-xs font-semibold text-slate-600">To<input className="field mt-1" type="date" name="to" defaultValue={inputDate(end)} /></label>
-        <button className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply</button>
+        <button type="submit" className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply</button>
       </form>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

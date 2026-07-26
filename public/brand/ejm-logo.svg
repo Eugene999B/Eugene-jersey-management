@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 210" role="img" aria-labelledby="title desc">
+  <title id="title">Eugene Jersey Management</title>
+  <desc id="desc">Official Eugene Jersey Management shield and wordmark.</desc>
+  <defs>
+    <linearGradient id="navy" x1="32" y1="18" x2="184" y2="196" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#153A69"/>
+      <stop offset="1" stop-color="#081A31"/>
+    </linearGradient>
+    <linearGradient id="red" x1="58" y1="48" x2="152" y2="158" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F04444"/>
+      <stop offset="1" stop-color="#B51220"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(8 4) scale(.78)">
+    <path d="M128 10 224 47v72c0 61-38 105-96 127-58-22-96-66-96-127V47l96-37Z" fill="url(#navy)"/>
+    <path d="M128 24 210 56v62c0 50-29 87-82 108-53-21-82-58-82-108V56l82-32Z" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="5"/>
+    <path d="m80 70 31-15 17 20 17-20 31 15-15 36v79H95v-79L80 70Z" fill="#FFFFFF"/>
+    <path d="M80 70 111 55l8 10-17 30-16 11-6-36Zm96 0-31-15-8 10 17 30 16 11 6-36Z" fill="url(#red)"/>
+    <path d="m111 55 17 20 17-20 11 5c-5 20-15 31-28 31s-23-11-28-31l11-5Z" fill="#F4B942"/>
+    <path d="M106 112h25v11h-14v9h12v11h-12v10h15v11h-26v-52Zm31 0h12l8 19 8-19h12v52h-11v-30l-6 16h-6l-6-16v30h-11v-52Z" fill="#0B1F3A"/>
+  </g>
+  <g transform="translate(225 42)">
+    <text x="0" y="48" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="900" letter-spacing="-1.8" fill="#0B1F3A">EUGENE JERSEY</text>
+    <text x="2" y="98" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="800" letter-spacing="7.2" fill="#E31B23">MANAGEMENT</text>
+    <path d="M2 119h542" stroke="#F4B942" stroke-width="8" stroke-linecap="round"/>
+    <text x="2" y="151" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" letter-spacing="2.5" fill="#526276">SELL • DESIGN • PRODUCE • CONTROL</text>
+  </g>
+</svg>

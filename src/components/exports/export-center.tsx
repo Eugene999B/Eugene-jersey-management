@@ -39,7 +39,7 @@ export function ExportCenter() {
           <label className="text-xs font-semibold text-slate-600"><span className="flex items-center gap-1"><CalendarRange size={14} /> From</span><input className="field mt-1" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
           <label className="text-xs font-semibold text-slate-600"><span className="flex items-center gap-1"><CalendarRange size={14} /> To</span><input className="field mt-1" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
           <label className="text-xs font-semibold text-slate-600"><span className="flex items-center gap-1"><Search size={14} /> Search within exported rows</span><input className="field mt-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Receipt, customer, product, status, staff…" /></label>
-          <button className="h-[43px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold" onClick={() => { setFrom(""); setTo(""); setQuery(""); }}>Clear</button>
+          <button type="button" className="h-[43px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold" onClick={() => { setFrom(""); setTo(""); setQuery(""); }}>Clear</button>
         </div>
         <p className="mt-3 text-xs text-slate-500">The selected range and search are applied to every download below. Empty dates mean all available records.</p>
       </section>

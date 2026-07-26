@@ -3,6 +3,8 @@ import "server-only";
 import { NotificationChannel, NotificationStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
+const PROVIDER_TIMEOUT_MS = Math.max(3_000, Math.min(30_000, Number(process.env.MESSAGE_PROVIDER_TIMEOUT_MS ?? 12_000)));
+
 type SendMessageInput = {
   shopId: string;
   customerId?: string | null;
@@ -29,7 +31,6 @@ function providerConfig(channel: NotificationChannel) {
       sender: process.env.SMS_SENDER_ID ?? process.env.ARKESEL_SENDER_ID ?? "Jersey",
     };
   }
-
   if (channel === NotificationChannel.WHATSAPP) {
     return {
       provider: process.env.WHATSAPP_PROVIDER ?? "console",
@@ -38,7 +39,6 @@ function providerConfig(channel: NotificationChannel) {
       sender: process.env.WHATSAPP_SENDER_ID,
     };
   }
-
   return { provider: "console", url: undefined, token: undefined, sender: undefined };
 }
 
@@ -51,63 +51,43 @@ export function isSmsDeliveryConfigured() {
 async function sendViaArkesel(input: ProviderMessageInput, token: string, sender: string) {
   const response = await fetch("https://sms.arkesel.com/api/v2/sms/send", {
     method: "POST",
-    headers: {
-      "api-key": token,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      sender,
-      message: input.body,
-      recipients: [input.recipientPhone],
-    }),
+    headers: { "api-key": token, "Content-Type": "application/json" },
+    body: JSON.stringify({ sender, message: input.body, recipients: [input.recipientPhone] }),
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    cache: "no-store",
   });
-
-  if (!response.ok) {
-    return { status: NotificationStatus.FAILED, providerReference: `ARKESEL-${response.status}` };
-  }
-
+  if (!response.ok) return { status: NotificationStatus.FAILED, providerReference: `ARKESEL-${response.status}` };
   const payload = await response.json().catch(() => null) as { data?: { id?: string }; id?: string; reference?: string } | null;
-  return {
-    status: NotificationStatus.SENT,
-    providerReference: payload?.data?.id ?? payload?.id ?? payload?.reference ?? "ARKESEL-SENT",
-  };
+  return { status: NotificationStatus.SENT, providerReference: payload?.data?.id ?? payload?.id ?? payload?.reference ?? "ARKESEL-SENT" };
 }
 
 async function sendViaGenericProvider(input: ProviderMessageInput) {
   const config = providerConfig(input.channel);
-  if (input.channel === NotificationChannel.SMS && config.provider.toLowerCase() === "arkesel" && config.token && input.recipientPhone) {
-    return sendViaArkesel(input, config.token, config.sender ?? "Jersey");
+  const recipient = input.recipientPhone ?? input.recipientEmail;
+  if (!recipient) return { status: NotificationStatus.FAILED, providerReference: "MISSING-RECIPIENT" };
+
+  try {
+    if (input.channel === NotificationChannel.SMS && config.provider.toLowerCase() === "arkesel" && config.token && input.recipientPhone) {
+      return await sendViaArkesel(input, config.token, config.sender ?? "Jersey");
+    }
+    if (!config.url || !config.token) {
+      console.warn(`[messaging] ${input.channel} provider is not configured; message queued without exposing recipient or content.`);
+      return { status: NotificationStatus.QUEUED, providerReference: "CONSOLE-QUEUE" };
+    }
+    const response = await fetch(config.url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ to: recipient, channel: input.channel, subject: input.subject, message: input.body, metadata: input.metadata }),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      cache: "no-store",
+    });
+    if (!response.ok) return { status: NotificationStatus.FAILED, providerReference: `HTTP-${response.status}` };
+    const payload = await response.json().catch(() => null) as { id?: string; reference?: string } | null;
+    return { status: NotificationStatus.SENT, providerReference: payload?.id ?? payload?.reference ?? "GENERIC-SENT" };
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return { status: NotificationStatus.FAILED, providerReference: timedOut ? "PROVIDER-TIMEOUT" : "PROVIDER-ERROR" };
   }
-
-  if (!config.url || !config.token) {
-    console.warn(`[messaging] ${input.channel} provider is not configured; message queued without exposing recipient or content.`);
-    return { status: NotificationStatus.QUEUED, providerReference: "CONSOLE-QUEUE" };
-  }
-
-  const response = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      to: input.recipientPhone ?? input.recipientEmail,
-      channel: input.channel,
-      subject: input.subject,
-      message: input.body,
-      metadata: input.metadata,
-    }),
-  });
-
-  if (!response.ok) {
-    return { status: NotificationStatus.FAILED, providerReference: `HTTP-${response.status}` };
-  }
-
-  const payload = await response.json().catch(() => null) as { id?: string; reference?: string } | null;
-  return {
-    status: NotificationStatus.SENT,
-    providerReference: payload?.id ?? payload?.reference ?? "GENERIC-SENT",
-  };
 }
 
 export async function sendCustomerMessage(input: SendMessageInput) {
@@ -129,6 +109,10 @@ export async function sendCustomerMessage(input: SendMessageInput) {
   });
 }
 
+export async function sendDirectMessage(input: ProviderMessageInput) {
+  return sendViaGenericProvider(input);
+}
+
 export async function sendDirectSms(input: {
   recipientPhone: string;
   recipientName?: string | null;
@@ -136,7 +120,7 @@ export async function sendDirectSms(input: {
   subject?: string | null;
   metadata?: Prisma.InputJsonValue;
 }) {
-  return sendViaGenericProvider({
+  return sendDirectMessage({
     channel: NotificationChannel.SMS,
     recipientPhone: input.recipientPhone,
     recipientName: input.recipientName,

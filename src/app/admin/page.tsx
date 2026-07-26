@@ -310,7 +310,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <form className="mt-4 grid gap-2 sm:grid-cols-[1fr_180px_auto]">
               <input className="field" name="q" defaultValue={params.q ?? ""} placeholder="Search shop, slug or network code" />
               <select className="field" name="shopStatus" defaultValue={shopStatus}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="past-due">Past due</option></select>
-              <button className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>
+              <button type="submit" className="rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>
             </form>
           </div>
           <div className="overflow-x-auto">
