@@ -1,0 +1,39 @@
+name: Remove legacy onboarding action
+
+on:
+  push:
+    branches:
+      - agent/full-system-hardening-and-brand
+    paths:
+      - .github/workflows/remove-legacy-onboarding.yml
+
+permissions:
+  contents: write
+
+jobs:
+  remove-legacy-action:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/full-system-hardening-and-brand
+      - name: Remove obsolete exported action
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("src/app/admin/actions.ts")
+          text = path.read_text(encoding="utf-8")
+          start = text.index("const createShopSchema = z.object({")
+          end = text.index("export async function verifyShopCredentialsAction", start)
+          replacement = "// Shop creation is implemented only in create-shop-action.ts so owner credentials\n// never pass through URLs, logs, or an obsolete generated-password action.\n\n"
+          path.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
+      - name: Commit removal
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/admin/actions.ts
+          git commit -m "Remove legacy URL credential onboarding action"
+          git push origin HEAD:agent/full-system-hardening-and-brand
