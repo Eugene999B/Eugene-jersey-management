@@ -33,27 +33,57 @@ describe("session navigation safety", () => {
 
   it("uses dedicated admin routes instead of one-page section anchors", () => {
     const navigation = source("components/admin/admin-navigation.tsx");
-    const routes = ["/admin", "/admin/shops", "/admin/staff", "/admin/support", "/admin/billing", "/admin/activity", "/admin/security", "/admin/settings"];
+    const routes = ["/admin", "/admin/shops", "/admin/staff", "/admin/support", "/admin/billing", "/admin/broadcast", "/admin/activity", "/admin/security", "/admin/settings"];
     for (const route of routes) expect(navigation).toContain(`href: "${route}"`);
     expect(navigation).not.toContain("/admin#");
     expect(source("app/admin/layout.tsx")).toContain('href="/admin/support"');
   });
 
-  it("gives every admin responsibility its own page and permission boundary", () => {
+  it("gives every admin responsibility its own independent permission boundary", () => {
     const pages = [
       ["app/admin/shops/page.tsx", 'requirePlatformPermission("shops")'],
       ["app/admin/staff/page.tsx", 'requirePlatformPermission("workers")'],
       ["app/admin/support/page.tsx", 'requirePlatformPermission("support")'],
       ["app/admin/billing/page.tsx", 'requirePlatformPermission("billing")'],
+      ["app/admin/broadcast/page.tsx", 'requirePlatformPermission("broadcast")'],
       ["app/admin/activity/page.tsx", 'requirePlatformPermission("activity")'],
-      ["app/admin/security/page.tsx", 'requirePlatformPermission("settings")'],
+      ["app/admin/security/page.tsx", 'requirePlatformPermission("security")'],
       ["app/admin/settings/page.tsx", 'requirePlatformPermission("settings")'],
     ] as const;
     for (const [path, guard] of pages) expect(source(path)).toContain(guard);
+    const platformAdmin = source("lib/platform-admin.ts");
+    expect(platformAdmin).toContain('["security", "Security"]');
+    expect(platformAdmin).not.toContain('"Settings and security"');
+  });
+
+  it("keeps global overview data away from scoped platform workers", () => {
     const overview = source("app/admin/page.tsx");
+    const navigation = source("components/admin/admin-navigation.tsx");
+    expect(overview).toContain("getAllowedPlatformPermissions");
+    expect(overview).toContain("redirect(platformAdminHomePath(allowedPermissions))");
+    expect(overview).toContain("Unrestricted platform overview");
+    expect(navigation).toContain("if (item.permission === null) return allowedPermissions === null");
     expect(overview).not.toContain("createPlatformWorkerAction");
     expect(overview).not.toContain("updateReturnIssueAction");
     expect(overview).not.toContain("updateShopSubscriptionAction");
+  });
+
+  it("keeps broadcast separate from shop administration", () => {
+    const shops = source("app/admin/shops/page.tsx");
+    const broadcast = source("app/admin/broadcast/page.tsx");
+    const actions = source("app/admin/actions.ts");
+    expect(shops).not.toContain("createGlobalAnnouncementAction");
+    expect(broadcast).toContain("createGlobalAnnouncementAction");
+    expect(actions).toContain('redirect("/admin/broadcast?error=announcement")');
+  });
+
+  it("allows worker permissions to be updated and revokes existing sessions", () => {
+    const staff = source("app/admin/staff/page.tsx");
+    const actions = source("app/admin/actions.ts");
+    expect(staff).toContain("updatePlatformWorkerPermissionsAction");
+    expect(actions).toContain("export async function updatePlatformWorkerPermissionsAction");
+    expect(actions).toContain("sessionVersion: { increment: 1 }");
+    expect(actions).toContain("admin.platform_worker_permissions_updated");
   });
 
   it("signs and verifies a staff session consistently across requests", async () => {
