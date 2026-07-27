@@ -158,6 +158,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      - name: Run two-shop tenant isolation verification
+        env:
+          NODE_ENV: test
+          TENANT_ISOLATION_TESTING: "true"
+        run: npm run test:tenant-isolation
+
       - name: Generate documentation
         run: npm run docs:generate
 
