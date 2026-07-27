@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PlanTier, PrismaClient, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { PlanTier, PrismaClient, Role, ShopVerificationStatus, SubscriptionStatus, SupplierOrderStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const prisma = new PrismaClient({
@@ -22,6 +22,10 @@ const identities = {
     email: "browser-owner@ejm.test",
     loginId: "EJM-E2E-OWNER",
     name: "EJM Browser Shop Owner",
+  },
+  supplier: {
+    email: "browser-supplier@ejm.test",
+    name: "EJM Browser Supplier User",
   },
 } as const;
 
@@ -116,7 +120,7 @@ async function main() {
     },
   });
 
-  await prisma.user.upsert({
+  const owner = await prisma.user.upsert({
     where: { email: identities.owner.email },
     update: {
       adminLoginId: identities.owner.loginId,
@@ -139,6 +143,87 @@ async function main() {
       shopId: shop.id,
       adminPermissions: [],
       isActive: true,
+    },
+  });
+
+  const supplierUser = await prisma.user.upsert({
+    where: { email: identities.supplier.email },
+    update: {
+      name: identities.supplier.name,
+      passwordHash,
+      role: Role.SUPPLIER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+      failedLoginCount: 0,
+      lockUntil: null,
+      sessionVersion: 0,
+    },
+    create: {
+      email: identities.supplier.email,
+      name: identities.supplier.name,
+      passwordHash,
+      role: Role.SUPPLIER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+    },
+  });
+
+  const supplier = await prisma.supplier.upsert({
+    where: { portalUserId: supplierUser.id },
+    update: {
+      shopId: shop.id,
+      name: "EJM Browser Supply Partner",
+      contactName: identities.supplier.name,
+      email: identities.supplier.email,
+      phone: "+233200000001",
+      categories: "Jerseys, vinyl and sports equipment",
+      paymentTerms: "Test terms",
+      leadTimeDays: 5,
+      rating: 5,
+      isActive: true,
+    },
+    create: {
+      shopId: shop.id,
+      portalUserId: supplierUser.id,
+      name: "EJM Browser Supply Partner",
+      contactName: identities.supplier.name,
+      email: identities.supplier.email,
+      phone: "+233200000001",
+      categories: "Jerseys, vinyl and sports equipment",
+      paymentTerms: "Test terms",
+      leadTimeDays: 5,
+      rating: 5,
+      isActive: true,
+    },
+  });
+
+  await prisma.supplierOrder.upsert({
+    where: { orderNumber: "EJM-E2E-PO-001" },
+    update: {
+      shopId: shop.id,
+      supplierId: supplier.id,
+      createdById: owner.id,
+      status: SupplierOrderStatus.SENT,
+      totalAmount: 250,
+      notes: "Disposable browser acceptance order.",
+    },
+    create: {
+      shopId: shop.id,
+      supplierId: supplier.id,
+      createdById: owner.id,
+      status: SupplierOrderStatus.SENT,
+      orderNumber: "EJM-E2E-PO-001",
+      totalAmount: 250,
+      notes: "Disposable browser acceptance order.",
+      items: {
+        create: {
+          description: "Twenty-five test jerseys",
+          quantity: 25,
+          unitCost: 10,
+        },
+      },
     },
   });
 

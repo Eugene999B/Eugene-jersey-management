@@ -36,20 +36,9 @@ export default async function ReportsPage({ searchParams }: Props) {
   const end = Number.isNaN(parsedTo.getTime()) || parsedTo < start ? new Date() : parsedTo;
   const createdAt = { gte: start, lte: end };
   const [orders, orderItems, variants, staff] = await Promise.all([
-    prisma.order.findMany({
-      where: { shopId: shop.id, createdAt, status: { not: "CANCELLED" } },
-      include: { processedBy: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.orderItem.findMany({
-      where: { order: { shopId: shop.id, createdAt, status: { not: "CANCELLED" } } },
-      include: { productVariant: { include: { product: true } } },
-    }),
-    prisma.productVariant.findMany({
-      where: { product: { shopId: shop.id } },
-      include: { product: true },
-      orderBy: { stockQty: "asc" },
-    }),
+    prisma.order.findMany({ where: { shopId: shop.id, createdAt, status: { not: "CANCELLED" } }, include: { processedBy: true }, orderBy: { createdAt: "asc" } }),
+    prisma.orderItem.findMany({ where: { order: { shopId: shop.id, createdAt, status: { not: "CANCELLED" } } }, include: { productVariant: { include: { product: true } } } }),
+    prisma.productVariant.findMany({ where: { product: { shopId: shop.id } }, include: { product: true }, orderBy: { stockQty: "asc" } }),
     prisma.user.findMany({ where: { shopId: shop.id }, orderBy: { name: "asc" } }),
   ]);
 
@@ -57,18 +46,13 @@ export default async function ReportsPage({ searchParams }: Props) {
   const averageOrder = orders.length ? revenue / orders.length : 0;
   const daily = new Map<string, number>();
   orders.forEach((order) => {
-    const label = order.createdAt.toLocaleDateString("en", { month: "short", day: "numeric" });
+    const label = order.createdAt.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
     daily.set(label, (daily.get(label) ?? 0) + Number(order.totalAmount));
   });
 
   const sellers = new Map<string, { name: string; sku: string; qty: number; revenue: number }>();
   orderItems.forEach((item) => {
-    const existing = sellers.get(item.productVariantId) ?? {
-      name: item.productVariant.product.name,
-      sku: item.productVariant.sku,
-      qty: 0,
-      revenue: 0,
-    };
+    const existing = sellers.get(item.productVariantId) ?? { name: item.productVariant.product.name, sku: item.productVariant.sku, qty: 0, revenue: 0 };
     existing.qty += item.quantity;
     existing.revenue += Number(item.unitPrice) * item.quantity;
     sellers.set(item.productVariantId, existing);
@@ -77,100 +61,48 @@ export default async function ReportsPage({ searchParams }: Props) {
   const staffSales = new Map<string, { name: string; orders: number; revenue: number }>();
   orders.forEach((order) => {
     const key = order.processedById ?? "unknown";
-    const existing = staffSales.get(key) ?? {
-      name: order.processedBy?.name ?? "Unassigned",
-      orders: 0,
-      revenue: 0,
-    };
+    const existing = staffSales.get(key) ?? { name: order.processedBy?.name ?? "Unassigned", orders: 0, revenue: 0 };
     existing.orders += 1;
     existing.revenue += Number(order.totalAmount);
     staffSales.set(key, existing);
   });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Reports</h1>
-          <p className="mt-2 text-sm text-slate-500">Sales, stock, best sellers, and staff performance.</p>
-        </div>
-        <ReportActions from={inputDate(start)} to={inputDate(end)} canDownload={hasRole(session, permissions.reports)} />
+        <div><h1 className="text-2xl font-semibold">Reports</h1><p className="mt-2 text-sm text-slate-500">Sales, stock, best sellers, and staff performance.</p></div>
+        <div className="w-full sm:w-auto"><ReportActions from={inputDate(start)} to={inputDate(end)} canDownload={hasRole(session, permissions.reports)} /></div>
       </div>
 
-      <form className="panel flex flex-wrap items-center gap-3 p-4">
-        <span className="text-sm font-semibold">Date range</span>
+      <form className="panel grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <label className="text-xs font-semibold text-slate-600">From<input className="field mt-1" type="date" name="from" defaultValue={inputDate(start)} /></label>
         <label className="text-xs font-semibold text-slate-600">To<input className="field mt-1" type="date" name="to" defaultValue={inputDate(end)} /></label>
-        <button type="submit" className="rounded-[8px] bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply</button>
+        <button type="submit" className="min-h-11 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply range</button>
       </form>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard label="Revenue" value={currency(revenue, shop.currency)} icon={<BarChart3 size={20} />} />
         <StatCard label="Orders" value={String(orders.length)} icon={<ReceiptText size={20} />} />
         <StatCard label="Average order" value={currency(averageOrder, shop.currency)} icon={<ShoppingBag size={20} />} />
         <StatCard label="Staff active" value={String(staff.length)} icon={<Users size={20} />} />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="panel p-5">
-          <h2 className="text-lg font-semibold">Sales over time</h2>
-          <SalesChart data={Array.from(daily.entries()).map(([label, sales]) => ({ label, sales }))} />
-        </div>
-        <div className="panel p-5">
-          <h2 className="text-lg font-semibold">Best sellers</h2>
-          <div className="mt-4 space-y-3">
-            {Array.from(sellers.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 6).map((item) => (
-              <div key={item.sku} className="flex items-center justify-between gap-3 rounded-[8px] bg-white p-3">
-                <div>
-                  <p className="font-semibold">{item.name}</p>
-                  <p className="text-sm text-slate-500">{item.sku} - {item.qty} sold</p>
-                </div>
-                <p className="font-semibold">{currency(item.revenue, shop.currency)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr] xl:gap-5">
+        <div className="panel min-w-0 p-4 sm:p-5"><h2 className="text-lg font-semibold">Sales over time</h2><div className="mt-2 overflow-hidden"><SalesChart data={Array.from(daily.entries()).map(([label, sales]) => ({ label, sales }))} /></div></div>
+        <div className="panel p-4 sm:p-5"><h2 className="text-lg font-semibold">Best sellers</h2><div className="mt-4 space-y-3">{Array.from(sellers.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 6).map((item) => <div key={item.sku} className="flex min-w-0 items-start justify-between gap-3 rounded-xl bg-white p-3"><div className="min-w-0"><p className="truncate font-semibold">{item.name}</p><p className="truncate text-sm text-slate-500">{item.sku} · {item.qty} sold</p></div><p className="shrink-0 font-semibold">{currency(item.revenue, shop.currency)}</p></div>)}</div></div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-2">
+      <section className="grid gap-4 xl:grid-cols-2 xl:gap-5">
         <div className="panel overflow-hidden">
-          <div className="border-b border-[#ded8cd] p-5">
-            <h2 className="text-lg font-semibold">Stock report</h2>
-          </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500">
-              <tr><th className="p-3">SKU</th><th className="p-3">Product</th><th className="p-3">Stock</th></tr>
-            </thead>
-            <tbody className="divide-y divide-[#ded8cd] bg-white">
-              {variants.slice(0, 10).map((variant) => (
-                <tr key={variant.id}>
-                  <td className="p-3 font-semibold">{variant.sku}</td>
-                  <td className="p-3">{variant.product.name}</td>
-                  <td className="p-3"><Badge tone={variant.stockQty <= variant.product.lowStockThreshold ? "orange" : "green"}>{variant.stockQty}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="text-lg font-semibold">Stock report</h2></div>
+          <div className="divide-y divide-[#ded8cd] bg-white md:hidden">{variants.slice(0, 10).map((variant) => <article key={variant.id} className="flex items-start justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-semibold">{variant.product.name}</p><p className="break-all text-sm text-slate-500">{variant.sku}</p></div><Badge className="shrink-0" tone={variant.stockQty <= variant.product.lowStockThreshold ? "orange" : "green"}>{variant.stockQty}</Badge></article>)}</div>
+          <table className="hidden w-full text-left text-sm md:table"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-3">SKU</th><th className="p-3">Product</th><th className="p-3">Stock</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{variants.slice(0, 10).map((variant) => <tr key={variant.id}><td className="p-3 font-semibold">{variant.sku}</td><td className="p-3">{variant.product.name}</td><td className="p-3"><Badge tone={variant.stockQty <= variant.product.lowStockThreshold ? "orange" : "green"}>{variant.stockQty}</Badge></td></tr>)}</tbody></table>
         </div>
 
         <div className="panel overflow-hidden">
-          <div className="border-b border-[#ded8cd] p-5">
-            <h2 className="text-lg font-semibold">Staff performance</h2>
-          </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500">
-              <tr><th className="p-3">Staff</th><th className="p-3">Orders</th><th className="p-3">Revenue</th></tr>
-            </thead>
-            <tbody className="divide-y divide-[#ded8cd] bg-white">
-              {Array.from(staffSales.values()).map((item) => (
-                <tr key={item.name}>
-                  <td className="p-3 font-semibold">{item.name}</td>
-                  <td className="p-3">{item.orders}</td>
-                  <td className="p-3">{currency(item.revenue, shop.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="text-lg font-semibold">Staff performance</h2></div>
+          <div className="divide-y divide-[#ded8cd] bg-white md:hidden">{Array.from(staffSales.values()).map((item) => <article key={item.name} className="flex items-start justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-semibold">{item.name}</p><p className="text-sm text-slate-500">{item.orders} order{item.orders === 1 ? "" : "s"}</p></div><p className="shrink-0 font-semibold">{currency(item.revenue, shop.currency)}</p></article>)}</div>
+          <table className="hidden w-full text-left text-sm md:table"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-3">Staff</th><th className="p-3">Orders</th><th className="p-3">Revenue</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{Array.from(staffSales.values()).map((item) => <tr key={item.name}><td className="p-3 font-semibold">{item.name}</td><td className="p-3">{item.orders}</td><td className="p-3">{currency(item.revenue, shop.currency)}</td></tr>)}</tbody></table>
         </div>
       </section>
     </div>
