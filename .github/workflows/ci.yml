@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -46,15 +46,20 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Upload temporary Release 20 studio source
-        uses: actions/upload-artifact@v4
         with:
-          name: release-20-studio-source
-          path: |
-            src/components/design/production-studio-advanced.tsx
-            e2e/tests/design-group-history.spec.ts
-          retention-days: 1
+          fetch-depth: 0
+
+      - name: Apply and commit Release 20 studio patch
+        shell: bash
+        run: |
+          python scripts/apply-release-20-studio.py
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          rm scripts/apply-release-20-studio.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/design/production-studio-advanced.tsx .github/workflows/ci.yml scripts/apply-release-20-studio.py
+          git commit -m "Add Design Studio transform handles and mobile inspector"
+          git push origin HEAD:agent/release-20-machine-profiles-cut-export
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
