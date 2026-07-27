@@ -124,8 +124,11 @@ async function main() {
     const foreignOrder = await tenantA.order.findUnique({ where: { id: tenantBData.order.id } });
     assert(ownOrder?.id === tenantAData.order.id && foreignOrder === null, "Order unique lookup crossed tenant scope.");
 
-    const foreignShop = await tenantA.shop.findUnique({ where: { id: tenantBData.shop.id } });
-    assert(foreignShop === null, "Tenant A accessed Tenant B shop record.");
+    await expectRejects(
+      TenantScopeMismatchError,
+      () => tenantA.shop.findUnique({ where: { id: tenantBData.shop.id } }),
+      "Tenant A accessed Tenant B shop record.",
+    );
 
     await expectRejects(
       TenantDatabaseAccessError,
