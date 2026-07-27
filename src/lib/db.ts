@@ -1,17 +1,33 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { platformDb } from "@/lib/platform-db";
+import { createTenantDb } from "@/lib/tenant-db";
+import { currentTenantShopId } from "@/lib/tenant-context";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
-};
+const tenantClients = new Map<string, ReturnType<typeof createTenantDb>>();
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter: new PrismaPg(process.env.DATABASE_URL ?? ""),
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
+function activeDatabaseClient() {
+  const shopId = currentTenantShopId();
+  if (!shopId) return platformDb;
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  const existing = tenantClients.get(shopId);
+  if (existing) return existing;
+
+  const scoped = createTenantDb(shopId);
+  tenantClients.set(shopId, scoped);
+  return scoped;
 }
+
+/**
+ * Context-aware compatibility client.
+ *
+ * Authentication binds a verified shop to the current async request. From
+ * that point, existing `prisma` imports automatically use a fail-closed,
+ * tenant-scoped client. Platform administration and infrastructure code run
+ * without tenant context and therefore use the explicit unrestricted client.
+ */
+export const prisma = new Proxy(platformDb, {
+  get(_target, property) {
+    const client = activeDatabaseClient();
+    const value = Reflect.get(client, property, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
