@@ -1,17 +1,8 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-
-const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
-};
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter: new PrismaPg(process.env.DATABASE_URL ?? ""),
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+/**
+ * Compatibility alias for unrestricted platform database access.
+ *
+ * New platform code should import `platformDb` from `@/lib/platform-db`.
+ * Tenant-facing routes, pages, and actions must use `createTenantDb()` from
+ * `@/lib/tenant-db` so shop scoping cannot be omitted accidentally.
+ */
+export { platformDb as prisma } from "@/lib/platform-db";
