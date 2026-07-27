@@ -17,14 +17,30 @@ export default async function TwoFactorLoginPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(TWO_FACTOR_CHALLENGE_COOKIE)?.value;
   const challenge = token ? await verifyTwoFactorChallenge(token) : null;
-  if (!challenge || challenge.accountKind !== AccountKind.USER) redirect("/login?error=invalid");
+  if (!challenge) redirect("/login?error=invalid");
 
-  const user = await platformDb.user.findUnique({
-    where: { id: challenge.accountId },
-    select: { name: true, isActive: true, sessionVersion: true, shop: { select: { isActive: true } } },
-  });
-  if (!user?.isActive || user.sessionVersion !== challenge.sessionVersion || (user.shop && !user.shop.isActive)) {
-    redirect("/login?error=invalid");
+  let accountName = "this account";
+  let accountType = "work account";
+
+  if (challenge.accountKind === AccountKind.USER) {
+    const user = await platformDb.user.findUnique({
+      where: { id: challenge.accountId },
+      select: { name: true, isActive: true, sessionVersion: true, shop: { select: { isActive: true } } },
+    });
+    if (!user?.isActive || user.sessionVersion !== challenge.sessionVersion || (user.shop && !user.shop.isActive)) {
+      redirect("/login?error=invalid");
+    }
+    accountName = user.name;
+  } else {
+    const buyer = await platformDb.buyerAccount.findUnique({
+      where: { id: challenge.accountId },
+      select: { name: true, isActive: true, updatedAt: true },
+    });
+    if (!buyer?.isActive || buyer.updatedAt.getTime() !== challenge.sessionVersion) {
+      redirect("/buyer/login?error=invalid");
+    }
+    accountName = buyer.name;
+    accountType = "buyer account";
   }
 
   return (
@@ -36,7 +52,7 @@ export default async function TwoFactorLoginPage() {
           <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={48} height={48} className="mx-auto" priority />
           <p className="mt-4 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">EJM · Secure sign in</p>
           <h1 className="mt-3 text-4xl font-black tracking-[-0.05em]">One more private check.</h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48">The password for <span className="font-bold text-white/75">{user.name}</span> was accepted. Two-factor authentication is enabled on this account.</p>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48">The password for <span className="font-bold text-white/75">{accountName}</span> was accepted. Optional two-factor authentication is enabled on this {accountType}.</p>
         </div>
         <TwoFactorLoginForm />
       </div>
