@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 
 const PAYSTACK_TIMEOUT_MS = Math.max(5_000, Math.min(30_000, Number(process.env.PAYSTACK_TIMEOUT_MS ?? 15_000)));
 
+export type PaystackChargeBearer = "account" | "subaccount";
+
 type PaystackInitInput = {
   email: string;
   amount: number;
@@ -15,7 +17,7 @@ type PaystackInitInput = {
   metadata?: Record<string, unknown>;
   subaccount?: string | null;
   transactionCharge?: number | null;
-  bearer?: "account" | "subaccount" | "all-proportional" | "all" | null;
+  bearer?: PaystackChargeBearer | null;
 };
 
 type PaystackInitResult = { authorizationUrl: string | null; reference: string; providerEnabled: boolean };
@@ -28,27 +30,48 @@ function secretKey() {
   return process.env.PAYSTACK_SECRET_KEY;
 }
 
+export function normalizePaystackChargeBearer(value: string | null | undefined): PaystackChargeBearer {
+  return value === "account" ? "account" : "subaccount";
+}
+
 export function isPaystackCheckoutReady(config?: { allowCard?: boolean | null; paystackSubaccountCode?: string | null } | null) {
-  return Boolean(secretKey() && config?.allowCard && config.paystackSubaccountCode);
+  const code = config?.paystackSubaccountCode?.trim();
+  return Boolean(secretKey() && config?.allowCard && code && /^ACCT_[A-Za-z0-9]+$/.test(code));
 }
 
 export async function initializePaystackTransaction(input: PaystackInitInput): Promise<PaystackInitResult> {
   const key = secretKey();
   if (!key) return { authorizationUrl: null, reference: input.reference, providerEnabled: false };
 
+  const amount = amountToSubunit(input.amount);
+  const subaccount = input.subaccount?.trim();
+  if (!subaccount || !/^ACCT_[A-Za-z0-9]+$/.test(subaccount)) {
+    throw new Error("A verified shop Paystack subaccount is required for store checkout.");
+  }
+  const transactionCharge = input.transactionCharge === null || input.transactionCharge === undefined
+    ? undefined
+    : Math.round(input.transactionCharge);
+  if (transactionCharge !== undefined && (transactionCharge < 0 || transactionCharge >= amount)) {
+    throw new Error("The EJM platform charge must be smaller than the customer payment amount.");
+  }
+
   const response = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       email: input.email,
-      amount: amountToSubunit(input.amount),
+      amount,
       currency: input.currency,
       reference: input.reference,
       callback_url: input.callbackUrl,
-      subaccount: input.subaccount || undefined,
-      transaction_charge: input.transactionCharge ?? undefined,
-      bearer: input.bearer || undefined,
-      metadata: input.metadata,
+      subaccount,
+      transaction_charge: transactionCharge,
+      bearer: normalizePaystackChargeBearer(input.bearer),
+      metadata: {
+        ...input.metadata,
+        settlement_owner: "shop_subaccount",
+        platform_account: "ejm_administrator",
+      },
     }),
     signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
     cache: "no-store",
