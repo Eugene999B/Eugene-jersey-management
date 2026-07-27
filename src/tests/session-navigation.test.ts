@@ -38,6 +38,17 @@ describe("session navigation safety", () => {
     }
   });
 
+  it("uses route-qualified admin sections from every nested admin page", () => {
+    const layout = source("app/admin/layout.tsx");
+    const sections = ["overview", "shops", "workers", "support", "billing", "activity", "security", "settings"];
+
+    for (const section of sections) {
+      expect(layout).toContain(`href: "/admin#${section}"`);
+    }
+    expect(layout).not.toContain('href="#');
+    expect(layout).toContain('href="/admin#support"');
+  });
+
   it("signs and verifies a staff session consistently across requests", async () => {
     const previous = process.env.SESSION_SECRET;
     process.env.SESSION_SECRET = "session-navigation-regression-secret-2026-long-value";
