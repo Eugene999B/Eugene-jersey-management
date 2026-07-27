@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 function password() {
   const value = process.env.E2E_PASSWORD;
@@ -6,7 +6,7 @@ function password() {
   return value;
 }
 
-async function signInAsAdministrator(page: Parameters<typeof test>[0] extends never ? never : import("@playwright/test").Page) {
+async function signInAsAdministrator(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
   const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
