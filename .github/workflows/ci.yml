@@ -55,10 +55,8 @@ jobs:
             package-lock.json
             e2e/package-lock.json
 
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix e2e ci
+      - name: Install application dependencies
+        run: npm ci
 
       - name: Audit high-severity dependencies
         shell: bash
@@ -68,9 +66,6 @@ jobs:
           exit_code=$?
           node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
           exit "$exit_code"
-
-      - name: Audit browser test dependencies
-        run: npm --prefix e2e audit --audit-level=high
 
       - name: Upload dependency audit diagnostics
         if: always()
@@ -129,7 +124,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-      - name: Type-check
+      - name: Type-check application
         shell: bash
         run: |
           set +e
@@ -166,8 +161,14 @@ jobs:
       - name: Generate documentation
         run: npm run docs:generate
 
-      - name: Build
+      - name: Build production application without browser test dependencies
         run: npm run build
+
+      - name: Install browser test dependencies
+        run: npm --prefix e2e ci
+
+      - name: Audit browser test dependencies
+        run: npm --prefix e2e audit --audit-level=high
 
       - name: Install Chromium for browser acceptance
         run: npm --prefix e2e run install:chromium
