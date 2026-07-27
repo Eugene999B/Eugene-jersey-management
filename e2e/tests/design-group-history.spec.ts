@@ -6,6 +6,10 @@ function password() {
   return value;
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function signInAsOwner(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
@@ -27,7 +31,7 @@ async function addTextLayer(page: Page, value: string) {
 }
 
 function layerListButton(page: Page, name: string) {
-  return page.getByRole("button", { name, exact: true });
+  return page.getByRole("button", { name: new RegExp(`^${escapeRegExp(name)}(?: Group)?$`) });
 }
 
 test("groups layers and reopens immutable shop versions", async ({ page }) => {
