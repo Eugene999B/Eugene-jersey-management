@@ -1,4 +1,4 @@
-export const DESIGN_PROJECT_VERSION = 4;
+export const DESIGN_PROJECT_VERSION = 5;
 export const DESIGN_RECOVERY_VERSION = 1;
 export const DESIGN_RECOVERY_MAX_BYTES = 1_800_000;
 export const DESIGN_RECOVERY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
