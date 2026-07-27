@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
 import { DesignJobStatus, Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
+import { ensureShopMachineProfiles, serializeMachineProfile } from "@/lib/design-machine-profile";
 import { prisma } from "@/lib/db";
 import { nextDesignVersionNumber } from "@/lib/design-history";
 import { permissions } from "@/lib/rbac";
@@ -12,7 +13,7 @@ const designSchema = z.object({
   id: z.string().min(1).optional(),
   title: z.string().trim().min(2).max(120),
   customer: z.string().trim().max(120).optional(),
-  machineProfile: z.enum(["Generic SVG", "HPGL / PLT cutter", "SignMaster", "VinylMaster", "Print/RIP"]),
+  machineProfile: z.string().trim().min(2).max(80).optional(),
   canvas: z.record(z.string(), z.unknown()),
 });
 
@@ -33,7 +34,31 @@ export async function POST(request: NextRequest) {
   const parsed = designSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Check the design name and project data." }, { status: 400 });
 
-  const serialized = JSON.stringify(parsed.data.canvas);
+  const availableProfiles = await ensureShopMachineProfiles(shopId);
+  const requestedProfileId = typeof parsed.data.canvas.machineProfileId === "string"
+    ? parsed.data.canvas.machineProfileId
+    : null;
+  const selectedSummary = requestedProfileId
+    ? availableProfiles.find((profile) => profile.id === requestedProfileId && profile.isActive)
+    : availableProfiles.find((profile) => profile.isDefault && profile.isActive) ?? availableProfiles.find((profile) => profile.isActive);
+  if (!selectedSummary) {
+    return NextResponse.json({ error: "Choose an active machine profile belonging to this shop." }, { status: 400 });
+  }
+  const selectedRecord = await prisma.shopMachineProfile.findFirst({
+    where: { id: selectedSummary.id, shopId, isActive: true },
+  });
+  if (!selectedRecord) {
+    return NextResponse.json({ error: "The selected machine profile is unavailable in this shop." }, { status: 400 });
+  }
+  const machineSnapshot = serializeMachineProfile(selectedRecord);
+  const canvas = {
+    ...parsed.data.canvas,
+    machineProfileId: selectedRecord.id,
+    machineProfile: selectedRecord.name,
+    machineSettings: machineSnapshot,
+  };
+
+  const serialized = JSON.stringify(canvas);
   if (serialized.length > 2_000_000) {
     return NextResponse.json({ error: "This project is too large to save. Upload raster artwork instead of embedding it." }, { status: 413 });
   }
@@ -51,9 +76,9 @@ export async function POST(request: NextRequest) {
   const data = {
     title: parsed.data.title,
     customerId,
-    machineProfile: parsed.data.machineProfile,
-    exportFormat: parsed.data.machineProfile === "HPGL / PLT cutter" ? "HPGL" : "SVG",
-    canvasJson: parsed.data.canvas as Prisma.InputJsonValue,
+    machineProfile: selectedRecord.name,
+    exportFormat: selectedRecord.outputFormat,
+    canvasJson: canvas as Prisma.InputJsonValue,
     status: DesignJobStatus.DRAFT,
   };
 
@@ -144,6 +169,8 @@ export async function POST(request: NextRequest) {
     metadata: {
       title: saved.design.title,
       machineProfile: saved.design.machineProfile,
+      machineProfileId: selectedRecord.id,
+      outputFormat: selectedRecord.outputFormat,
       versionNumber: saved.versionNumber,
     },
   });
@@ -154,6 +181,7 @@ export async function POST(request: NextRequest) {
       title: saved.design.title,
       updatedAt: saved.design.updatedAt.toISOString(),
       versionNumber: saved.versionNumber,
+      machineProfile: machineSnapshot,
     },
   });
 }
