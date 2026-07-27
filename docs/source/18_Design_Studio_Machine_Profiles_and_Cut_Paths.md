@@ -94,6 +94,7 @@ Registration marks remain print-alignment marks and are not silently added to cu
 - profile API role and shop filters
 - version 6 project migration and machine snapshot preservation
 - vector path parsing, transforms, curves, arcs, mirroring and origins
+- lint-safe deterministic parser iteration
 - SVG, HPGL and DXF output structure
 - fail-closed text/raster handling
 - production build
