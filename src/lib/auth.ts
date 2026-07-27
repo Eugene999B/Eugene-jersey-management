@@ -5,10 +5,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { platformDb } from "@/lib/platform-db";
 import { strongPasswordSchema } from "@/lib/password-policy";
 import { hasRole, type SessionUser } from "@/lib/rbac";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySessionToken } from "@/lib/session-token";
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
+import { bindTenantRequestContext } from "@/lib/tenant-context";
 
 export async function hashPassword(password: string) {
   const parsed = strongPasswordSchema.safeParse(password);
@@ -32,13 +34,14 @@ export async function clearSessionCookie() {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
+  bindTenantRequestContext(null);
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const tokenSession = await verifySessionToken(token);
   if (!tokenSession) return null;
 
-  const user = await prisma.user.findUnique({
+  const user = await platformDb.user.findUnique({
     where: { id: tokenSession.id },
     select: {
       id: true,
@@ -55,7 +58,7 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!user?.isActive || user.sessionVersion !== tokenSession.sessionVersion) return null;
   if (user.shopId && !user.shop?.isActive) return null;
 
-  return {
+  const session = {
     id: user.id,
     shopId: user.shopId,
     email: user.email,
@@ -63,6 +66,8 @@ export async function getSession(): Promise<SessionUser | null> {
     role: user.role,
     sessionVersion: user.sessionVersion,
   };
+  bindTenantRequestContext(session.shopId);
+  return session;
 }
 
 export async function requireSession() {
