@@ -16,10 +16,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -28,6 +35,18 @@ input,
 select,
 textarea {
   letter-spacing: 0;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 ::selection {
@@ -51,6 +70,7 @@ textarea {
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: 8px;
@@ -59,4 +79,90 @@ textarea {
 
 .scrollbar-thin {
   scrollbar-width: thin;
+}
+
+@media (max-width: 1199px) {
+  .mobile-design-studio > div > div.grid > main {
+    order: -1;
+  }
+
+  .mobile-design-studio > div > div.grid > aside,
+  .mobile-design-studio > div > div.grid > main {
+    min-width: 0;
+  }
+
+  .mobile-design-studio [aria-label="Production material canvas"] {
+    max-height: 68vh;
+  }
+}
+
+@media (max-width: 639px) {
+  .field,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .field {
+    min-height: 44px;
+  }
+
+  main .grid-cols-2,
+  main .grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  main .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  main article > .grid.grid-cols-2,
+  main .bg-slate-950 > .grid.grid-cols-2,
+  main .panel > .grid.grid-cols-2:has(> button) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  main table {
+    font-size: 0.8125rem;
+  }
+
+  main th,
+  main td {
+    white-space: nowrap;
+  }
+
+  input[type="file"] {
+    max-width: 100%;
+  }
+
+  .panel {
+    border-radius: 12px;
+  }
+
+  .mobile-design-studio > div > section:first-child {
+    padding: 1rem;
+  }
+
+  .mobile-design-studio > div > section:first-child > div > div:last-child {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobile-design-studio > div > section:first-child button {
+    min-width: 0;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
 }

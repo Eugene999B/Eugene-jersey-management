@@ -25,9 +25,9 @@ export default async function StaffPage({ searchParams }: Props) {
 
   return (
     <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
-      <section className="panel p-5">
-        {params.error === "email-exists" ? <div className="mb-4 rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">That email already belongs to an existing account and cannot be moved into this shop.</div> : null}
-        {params.invite ? <div className="mb-4 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><p className="font-semibold">Invite created</p><p className="mt-1 break-all">{`${process.env.APP_URL ?? "http://localhost:3000"}/invite/${params.invite}`}</p><p className="mt-1 text-xs">Copy this link now and send it through a trusted channel. The secret is shown only in this response.</p></div> : null}
+      <section className="panel p-4 sm:p-5">
+        {params.error === "email-exists" ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">That email already belongs to an existing account and cannot be moved into this shop.</div> : null}
+        {params.invite ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><p className="font-semibold">Invite created</p><p className="mt-1 break-all">{`${process.env.APP_URL ?? "http://localhost:3000"}/invite/${params.invite}`}</p><p className="mt-1 text-xs">Copy this link now and send it through a trusted channel. The secret is shown only in this response.</p></div> : null}
         <h1 className="text-xl font-semibold">Create staff login</h1>
         <p className="mt-2 text-sm text-slate-500">Create a working account immediately and choose the role that controls access.</p>
         <form action={createStaffAccountAction} className="mt-5 space-y-3">
@@ -36,9 +36,7 @@ export default async function StaffPage({ searchParams }: Props) {
           <input className="field" name="phone" placeholder="+233..." />
           <input className="field" name="password" type="password" minLength={8} autoComplete="new-password" placeholder="Temporary password (8+ characters)" required />
           <select className="field" name="role" defaultValue={Role.CASHIER}>
-            {staffRoles.map((role) => (
-              <option key={role} value={role}>{roleLabels[role]}</option>
-            ))}
+            {staffRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
           </select>
           <Button className="w-full">Create login</Button>
         </form>
@@ -47,9 +45,7 @@ export default async function StaffPage({ searchParams }: Props) {
         <form action={createInviteAction} className="mt-3 space-y-3">
           <input className="field" name="email" type="email" placeholder="staff@example.com" required />
           <select className="field" name="role" defaultValue={Role.CASHIER}>
-            {staffRoles.map((role) => (
-              <option key={role} value={role}>{roleLabels[role]}</option>
-            ))}
+            {staffRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
           </select>
           <Button className="w-full">Create invite</Button>
         </form>
@@ -57,45 +53,68 @@ export default async function StaffPage({ searchParams }: Props) {
         <h2 className="mt-6 text-sm font-semibold uppercase text-slate-500">Open invites</h2>
         <div className="mt-3 space-y-2">
           {invites.map((invite) => (
-            <div key={invite.id} className="rounded-[8px] bg-white p-3 text-sm">
-              <p className="font-semibold">{invite.email}</p>
+            <div key={invite.id} className="rounded-lg bg-white p-3 text-sm">
+              <p className="break-all font-semibold">{invite.email}</p>
               <p className="text-slate-500">{roleLabels[invite.role]} - expires {shortDate(invite.expiresAt)}</p>
             </div>
           ))}
+          {!invites.length ? <p className="rounded-lg bg-white p-3 text-sm text-slate-500">No open invites.</p> : null}
         </div>
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="border-b border-[#ded8cd] p-5">
+        <div className="border-b border-[#ded8cd] p-4 sm:p-5">
           <h1 className="text-xl font-semibold">Staff directory</h1>
           <p className="text-sm text-slate-500">Role-based access controls are enforced in middleware, pages, and API routes.</p>
         </div>
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500">
-            <tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Last login</th><th className="p-4">Action</th></tr>
-          </thead>
-          <tbody className="divide-y divide-[#ded8cd] bg-white">
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td className="p-4">
-                  <p className="font-semibold">{user.name}</p>
-                  <p className="text-slate-500">{user.email}</p>
-                </td>
-                <td className="p-4"><Badge>{roleLabels[user.role]}</Badge></td>
-                <td className="p-4"><Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge></td>
-                <td className="p-4 text-slate-500">{user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</td>
-                <td className="p-4">
-                  <form action={toggleStaffAccessAction}>
-                    <input type="hidden" name="userId" value={user.id} />
-                    <Button variant="outline" className="min-h-8 px-2 py-1 text-xs">
-                      {user.isActive ? "Disable" : "Enable"}
-                    </Button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+        <div className="space-y-3 p-3 sm:hidden">
+          {users.map((user) => (
+            <article key={user.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{user.name}</p>
+                  <p className="break-all text-sm text-slate-500">{user.email}</p>
+                </div>
+                <Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <Badge>{roleLabels[user.role]}</Badge>
+                <span className="text-slate-500">Last login: {user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</span>
+              </div>
+              <form action={toggleStaffAccessAction} className="mt-4">
+                <input type="hidden" name="userId" value={user.id} />
+                <Button variant="outline" className="w-full">
+                  {user.isActive ? "Disable access" : "Enable access"}
+                </Button>
+              </form>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500">
+              <tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Last login</th><th className="p-4">Action</th></tr>
+            </thead>
+            <tbody className="divide-y divide-[#ded8cd] bg-white">
+              {users.map((user) => (
+                <tr key={user.id}>
+                  <td className="p-4"><p className="font-semibold">{user.name}</p><p className="text-slate-500">{user.email}</p></td>
+                  <td className="p-4"><Badge>{roleLabels[user.role]}</Badge></td>
+                  <td className="p-4"><Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge></td>
+                  <td className="p-4 text-slate-500">{user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</td>
+                  <td className="p-4">
+                    <form action={toggleStaffAccessAction}>
+                      <input type="hidden" name="userId" value={user.id} />
+                      <Button variant="outline" className="min-h-8 px-2 py-1 text-xs">{user.isActive ? "Disable" : "Enable"}</Button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

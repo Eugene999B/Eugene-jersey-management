@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { currency, titleCase } from "@/lib/format";
 
-type BoardOrder = {
+ type BoardOrder = {
   id: string;
   receiptNumber: string;
   customerName: string;
@@ -45,6 +45,7 @@ function nextStatuses(status: OrderStatus, role: Role) {
 
 export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[]; role: Role; currencyCode: string }) {
   const [localOrders, setLocalOrders] = useState(orders);
+  const [activeColumn, setActiveColumn] = useState<OrderStatus>(() => columns.find((column) => orders.some((order) => order.status === column)) ?? "PENDING");
   const [message, setMessage] = useState<string | null>(null);
   const [pickupDetails, setPickupDetails] = useState<Record<string, { phone: string; code: string; cashCollected: boolean }>>({});
   const [isPending, startTransition] = useTransition();
@@ -63,6 +64,7 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
         return;
       }
       setLocalOrders((current) => current.map((order) => order.id === orderId ? { ...order, status } : order));
+      setActiveColumn(status);
     });
   }
 
@@ -89,43 +91,65 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
       }
       setLocalOrders((current) => current.map((item) => item.id === order.id ? { ...item, status: "COMPLETED", fulfillmentVerified: true, hasPendingCash: false } : item));
       setPickupDetails((current) => { const next = { ...current }; delete next[order.id]; return next; });
+      setActiveColumn("COMPLETED");
       setMessage(`Pickup ${order.receiptNumber} verified and released.`);
     });
   }
 
   return (
     <div className="space-y-4">
-      {message ? <div className="rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</div> : null}
+      {message ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</div> : null}
+
+      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 xl:hidden" role="tablist" aria-label="Order status">
+        {columns.map((column) => {
+          const count = localOrders.filter((order) => order.status === column).length;
+          const active = column === activeColumn;
+          return (
+            <button
+              key={column}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveColumn(column)}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-semibold ${active ? "bg-[var(--shop-primary)] text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+            >
+              {titleCase(column)}
+              <span className={`rounded-full px-2 py-0.5 text-xs ${active ? "bg-white/20" : "bg-slate-100"}`}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-5">
         {columns.map((column) => {
           const columnOrders = localOrders
             .filter((order) => order.status === column)
             .sort((a, b) => Number(b.rush) - Number(a.rush));
           return (
-            <section key={column} className="panel min-h-[480px] p-3">
+            <section key={column} className={`panel min-h-0 p-3 xl:min-h-[480px] ${column === activeColumn ? "block" : "hidden xl:block"}`}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">{titleCase(column)}</h2>
                 <Badge>{columnOrders.length}</Badge>
               </div>
               <div className="space-y-3">
                 {columnOrders.map((order) => (
-                  <article key={order.id} className={`rounded-[8px] border bg-white p-3 ${order.rush ? "border-red-300 shadow-[0_0_0_3px_rgba(248,113,113,0.12)]" : "border-[#ded8cd]"}`}>
+                  <article key={order.id} className={`rounded-lg border bg-white p-3 ${order.rush ? "border-red-300 shadow-[0_0_0_3px_rgba(248,113,113,0.12)]" : "border-[#ded8cd]"}`}>
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">{order.receiptNumber}</p>
-                        <p className="text-sm text-slate-500">{order.customerName}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{order.receiptNumber}</p>
+                        <p className="truncate text-sm text-slate-500">{order.customerName}</p>
                       </div>
                       {order.rush ? (
-                        <span title="Rush order" className="rounded-[8px] bg-red-50 p-2 text-red-600">
+                        <span title="Rush order" className="shrink-0 rounded-lg bg-red-50 p-2 text-red-600">
                           <AlertTriangle size={16} />
                         </span>
                       ) : null}
                     </div>
                     <div className="mt-3 space-y-2">
                       {order.items.map((item) => (
-                        <div key={`${order.id}-${item.sku}`} className="rounded-[8px] bg-[#f6f4ef] p-2 text-xs">
+                        <div key={`${order.id}-${item.sku}`} className="rounded-lg bg-[#f6f4ef] p-2 text-xs">
                           <p className="font-semibold">{item.quantity}x {item.name}</p>
-                          <p className="text-slate-500">{item.sku}</p>
+                          <p className="break-all text-slate-500">{item.sku}</p>
                           {item.personalizationData ? (
                             <p className="mt-1 text-orange-700">Personalized: {String(item.personalizationData.name ?? "")} #{String(item.personalizationData.number ?? "")}</p>
                           ) : null}
@@ -135,26 +159,27 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
                     <p className="mt-3 text-sm font-semibold">{currency(order.totalAmount, currencyCode)}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {nextStatuses(order.status, role).map((status) => (
-                        <Button key={status} variant={status === "CANCELLED" ? "danger" : "outline"} className="min-h-8 px-2 py-1 text-xs" disabled={isPending} onClick={() => updateOrder(order.id, status)}>
+                        <Button key={status} variant={status === "CANCELLED" ? "danger" : "outline"} className="min-h-10 flex-1 px-2 py-1 text-xs sm:flex-none" disabled={isPending} onClick={() => updateOrder(order.id, status)}>
                           {status === "COMPLETED" ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
                           {titleCase(status)}
                         </Button>
                       ))}
                     </div>
                     {order.status === "READY" && order.fulfillmentType === "PICKUP" && !order.fulfillmentVerified && (["OWNER", "MANAGER", "CASHIER"] as Role[]).includes(role) ? (
-                      <div className="mt-3 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3">
+                      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                         <p className="text-xs font-semibold text-emerald-900">Verify customer before release</p>
                         {order.hasPendingOnlinePayment ? <p className="mt-1 text-xs text-red-700">Online payment is still pending.</p> : null}
                         <div className="mt-2 grid gap-2">
                           <input className="field" aria-label="Customer phone" placeholder="Customer phone" value={pickupDetails[order.id]?.phone ?? ""} onChange={(event) => updatePickup(order.id, { phone: event.target.value })} />
                           <input className="field tracking-[0.15em]" aria-label="Pickup code" inputMode="numeric" maxLength={6} placeholder="6-digit pickup code" value={pickupDetails[order.id]?.code ?? ""} onChange={(event) => updatePickup(order.id, { code: event.target.value.replace(/\D/g, "") })} />
-                          {order.hasPendingCash ? <label className="flex items-start gap-2 text-xs font-semibold text-emerald-900"><input className="mt-0.5" type="checkbox" checked={pickupDetails[order.id]?.cashCollected ?? false} onChange={(event) => updatePickup(order.id, { cashCollected: event.target.checked })} />Cash has been collected</label> : null}
+                          {order.hasPendingCash ? <label className="flex items-start gap-2 text-xs font-semibold text-emerald-900"><input className="mt-0.5 h-5 w-5" type="checkbox" checked={pickupDetails[order.id]?.cashCollected ?? false} onChange={(event) => updatePickup(order.id, { cashCollected: event.target.checked })} />Cash has been collected</label> : null}
                           <Button className="w-full" disabled={isPending || order.hasPendingOnlinePayment} onClick={() => verifyPickup(order)}><CheckCircle2 size={14} /> Verify & release</Button>
                         </div>
                       </div>
                     ) : null}
                   </article>
                 ))}
+                {!columnOrders.length ? <p className="rounded-lg bg-white p-5 text-center text-sm text-slate-500">No {titleCase(column).toLowerCase()} orders.</p> : null}
               </div>
             </section>
           );
