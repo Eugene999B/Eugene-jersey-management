@@ -69,14 +69,19 @@ describe("session navigation safety", () => {
     }
   });
 
-  it("keeps staff credential inputs controlled, empty and out of URLs", () => {
+  it("keeps staff credential inputs absent until deliberate user action", () => {
     const form = source("components/auth/staff-login-form.tsx");
     const page = source("app/login/page.tsx");
     const route = source("app/api/auth/login/route.ts");
 
-    expect(form).toContain('useState("")');
-    expect(form).toContain('window.addEventListener("pageshow"');
-    expect(form).toContain('autoComplete="off"');
+    expect(form).toContain("credentialsOpen");
+    expect(form).toContain("Enter credentials");
+    expect(form).toContain("if (!credentialsOpen)");
+    expect(form).toContain("readOnly={!identifierUnlocked}");
+    expect(form).toContain("readOnly={!passwordUnlocked}");
+    expect(form).toContain("userInteractedRef");
+    expect(form).toContain("window.setTimeout(clearInjectedValues, 450)");
+    expect(form).toContain('autoComplete="new-password"');
     expect(form).not.toContain('autoComplete="username"');
     expect(form).not.toContain('autoComplete="current-password"');
     expect(page).not.toContain("defaultLoginId");
