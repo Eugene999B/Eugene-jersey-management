@@ -123,10 +123,12 @@ export function resizeLayerFromHandle<T extends ProductionLayer>(input: {
 export function rotateLayerToPoint<T extends ProductionLayer>(input: {
   layer: T;
   point: TransformPoint;
+  sheet?: TransformSheet;
   snapDegrees?: number;
 }): T {
   const raw = Math.atan2(input.point.y - input.layer.y, input.point.x - input.layer.x) * 180 / Math.PI + 90;
   const snap = input.snapDegrees && input.snapDegrees > 0 ? input.snapDegrees : 0;
   const rotation = snap ? Math.round(raw / snap) * snap : raw;
-  return { ...input.layer, rotation: normalizeDegrees(rotation) };
+  const rotated = { ...input.layer, rotation: normalizeDegrees(rotation) };
+  return input.sheet ? clampLayerToSheet(rotated, input.sheet) : rotated;
 }
