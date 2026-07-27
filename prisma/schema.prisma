@@ -273,6 +273,7 @@ model Shop {
   customerMessages      CustomerMessage[]
   customerThreads       CustomerThread[]
   designJobs            DesignJob[]
+  machineProfiles       ShopMachineProfile[]
   suppliers             Supplier[]
   supplierOrders        SupplierOrder[]
   dailyClosings         DailyClosing[]

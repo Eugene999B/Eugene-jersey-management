@@ -37,6 +37,7 @@ const directTenantModels = new Set([
   "CustomerMessage",
   "CustomerThread",
   "DesignJob",
+  "ShopMachineProfile",
   "Supplier",
   "SupplierOrder",
   "ShopPaymentConfig",
@@ -95,6 +96,7 @@ const modelPropertyNames: Record<string, string> = {
   chatMessage: "ChatMessage",
   designJob: "DesignJob",
   designJobVersion: "DesignJobVersion",
+  shopMachineProfile: "ShopMachineProfile",
   supplier: "Supplier",
   supplierOrder: "SupplierOrder",
   supplierOrderItem: "SupplierOrderItem",
@@ -238,15 +240,15 @@ function scopeMultiData(model: string, policy: Extract<TenantPolicy, { kind: "mu
 function protectUpdateData(model: string, policy: TenantPolicy, dataValue: unknown, shopId: string) {
   if (!isRecord(dataValue)) return dataValue;
   if (policy.kind === "direct" || policy.kind === "globalRead") {
-    if (Object.prototype.hasOwnProperty.call(dataValue, "shopId") && dataValue.shopId !== shopId) {
+    if (Object.hasOwn(dataValue, "shopId") && dataValue.shopId !== shopId) {
       throw new TenantScopeMismatchError(model);
     }
-    return { ...dataValue, ...(Object.prototype.hasOwnProperty.call(dataValue, "shopId") ? { shopId } : {}) };
+    return { ...dataValue, ...(Object.hasOwn(dataValue, "shopId") ? { shopId } : {}) };
   }
-  if (policy.kind === "shop" && Object.prototype.hasOwnProperty.call(dataValue, "id")) {
+  if (policy.kind === "shop" && Object.hasOwn(dataValue, "id")) {
     throw new TenantDatabaseAccessError("Tenant code cannot change a shop primary key.");
   }
-  if (policy.kind === "multi" && policy.immutableFields.some((field) => Object.prototype.hasOwnProperty.call(dataValue, field))) {
+  if (policy.kind === "multi" && policy.immutableFields.some((field) => Object.hasOwn(dataValue, field))) {
     throw new TenantDatabaseAccessError(`${model} ownership fields cannot be changed by tenant code.`);
   }
   return dataValue;

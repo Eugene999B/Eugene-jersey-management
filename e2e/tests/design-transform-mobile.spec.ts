@@ -6,13 +6,13 @@ function password() {
   return value;
 }
 
-async function signInAsOwner(page: Page) {
+async function signIn(page: Page, loginIdValue: string) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
   const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
   const passwordField = page.getByPlaceholder("Click, then enter password");
   await loginId.click();
-  await loginId.fill("EJM-E2E-OWNER");
+  await loginId.fill(loginIdValue);
   await passwordField.click();
   await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
@@ -25,7 +25,7 @@ async function addRectangle(page: Page) {
 }
 
 test("resizes and rotates one unlocked layer with canvas handles", async ({ page }) => {
-  await signInAsOwner(page);
+  await signIn(page, "EJM-E2E-OWNER");
   await page.goto("/dashboard/designs");
   await addRectangle(page);
 
@@ -56,7 +56,7 @@ test("resizes and rotates one unlocked layer with canvas handles", async ({ page
 
 test("mobile inspector exposes exact layer controls without overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signInAsOwner(page);
+  await signIn(page, "EJM-E2E-DESIGNER");
   await page.goto("/dashboard/designs");
   await addRectangle(page);
 

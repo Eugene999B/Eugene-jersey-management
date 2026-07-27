@@ -1,0 +1,22 @@
+model ShopMachineProfile {
+  id            String   @id @default(cuid())
+  shopId        String
+  name          String
+  outputFormat  String   @default("SVG_CUT")
+  bedWidthMm    Float    @default(305)
+  bedHeightMm   Float    @default(508)
+  unitsPerMm    Int      @default(40)
+  baudRate      Int      @default(9600)
+  origin        String   @default("BOTTOM_LEFT")
+  mirrorDefault Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, name])
+  @@index([shopId, isActive])
+  @@index([shopId, isDefault])
+}
