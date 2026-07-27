@@ -1,6 +1,15 @@
 import "dotenv/config";
+import { createCipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { PlanTier, PrismaClient, Role, ShopVerificationStatus, SubscriptionStatus, SupplierOrderStatus } from "@prisma/client";
+import {
+  AccountKind,
+  PlanTier,
+  PrismaClient,
+  Role,
+  ShopVerificationStatus,
+  SubscriptionStatus,
+  SupplierOrderStatus,
+} from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const prisma = new PrismaClient({
@@ -23,11 +32,67 @@ const identities = {
     loginId: "EJM-E2E-OWNER",
     name: "EJM Browser Shop Owner",
   },
+  twoFactorOwner: {
+    email: "browser-2fa-owner@ejm.test",
+    loginId: "EJM-E2E-2FA-OWNER",
+    name: "EJM Browser Protected Owner",
+    secret: "JBSWY3DPEHPK3PXP",
+  },
+  twoFactorBuyer: {
+    email: "browser-2fa-buyer@ejm.test",
+    phone: "+233200000099",
+    name: "EJM Browser Protected Buyer",
+    secret: "KRSXG5DSNFXGOIDB",
+  },
   supplier: {
     email: "browser-supplier@ejm.test",
     name: "EJM Browser Supplier User",
   },
 } as const;
+
+function twoFactorKey() {
+  const configured = process.env.TWO_FACTOR_ENCRYPTION_KEY;
+  if (!configured || configured.length < 32) {
+    throw new Error("Set TWO_FACTOR_ENCRYPTION_KEY to a disposable value of at least 32 characters.");
+  }
+  return createHash("sha256").update(configured, "utf8").digest();
+}
+
+function encryptTwoFactorSecret(secret: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", twoFactorKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v1.${iv.toString("base64url")}.${tag.toString("base64url")}.${encrypted.toString("base64url")}`;
+}
+
+function hashRecoveryCode(value: string) {
+  const normalized = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return createHmac("sha256", twoFactorKey()).update(`ejm-recovery:${normalized}`, "utf8").digest("hex");
+}
+
+async function setProtectedAccount(accountKind: AccountKind, accountId: string, secret: string, recoveryCode: string) {
+  await prisma.accountTwoFactor.upsert({
+    where: { accountKind_accountId: { accountKind, accountId } },
+    update: {
+      enabled: true,
+      encryptedSecret: encryptTwoFactorSecret(secret),
+      recoveryCodeHashes: [hashRecoveryCode(recoveryCode)],
+      pendingEncryptedSecret: null,
+      pendingRecoveryCodeHashes: [],
+      pendingExpiresAt: null,
+      enabledAt: new Date(),
+    },
+    create: {
+      accountKind,
+      accountId,
+      enabled: true,
+      encryptedSecret: encryptTwoFactorSecret(secret),
+      recoveryCodeHashes: [hashRecoveryCode(recoveryCode)],
+      enabledAt: new Date(),
+    },
+  });
+}
 
 async function main() {
   if (process.env.E2E_TESTING !== "true" || process.env.NODE_ENV === "production") {
@@ -145,6 +210,53 @@ async function main() {
       isActive: true,
     },
   });
+
+  const twoFactorOwner = await prisma.user.upsert({
+    where: { email: identities.twoFactorOwner.email },
+    update: {
+      adminLoginId: identities.twoFactorOwner.loginId,
+      name: identities.twoFactorOwner.name,
+      passwordHash,
+      role: Role.OWNER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+      failedLoginCount: 0,
+      lockUntil: null,
+      sessionVersion: 0,
+    },
+    create: {
+      adminLoginId: identities.twoFactorOwner.loginId,
+      email: identities.twoFactorOwner.email,
+      name: identities.twoFactorOwner.name,
+      passwordHash,
+      role: Role.OWNER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+    },
+  });
+  await setProtectedAccount(AccountKind.USER, twoFactorOwner.id, identities.twoFactorOwner.secret, "EJM2-FA01");
+
+  const twoFactorBuyer = await prisma.buyerAccount.upsert({
+    where: { phone: identities.twoFactorBuyer.phone },
+    update: {
+      email: identities.twoFactorBuyer.email,
+      name: identities.twoFactorBuyer.name,
+      passwordHash,
+      phoneVerifiedAt: new Date(),
+      isActive: true,
+    },
+    create: {
+      email: identities.twoFactorBuyer.email,
+      phone: identities.twoFactorBuyer.phone,
+      name: identities.twoFactorBuyer.name,
+      passwordHash,
+      phoneVerifiedAt: new Date(),
+      isActive: true,
+    },
+  });
+  await setProtectedAccount(AccountKind.BUYER, twoFactorBuyer.id, identities.twoFactorBuyer.secret, "BUY2-FA01");
 
   const supplierUser = await prisma.user.upsert({
     where: { email: identities.supplier.email },

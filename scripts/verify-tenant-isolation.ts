@@ -120,6 +120,12 @@ async function main() {
     }));
     assert(transactionResult.count === 0, "Interactive transaction bypassed tenant scope.");
 
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.accountTwoFactor.findMany()),
+      "Interactive transaction accessed platform-global two-factor records.",
+    );
+
     const ownOrder = await tenantA.order.findUnique({ where: { id: tenantAData.order.id } });
     const foreignOrder = await tenantA.order.findUnique({ where: { id: tenantBData.order.id } });
     assert(ownOrder?.id === tenantAData.order.id && foreignOrder === null, "Order unique lookup crossed tenant scope.");
@@ -145,7 +151,7 @@ async function main() {
     const tenantBCustomerAfter = await platformDb.customer.findUniqueOrThrow({ where: { id: tenantBData.customer.id } });
     assert(tenantBCustomerAfter.name === "Isolation Shop B customer" && tenantBCustomerAfter.notes === null, "Tenant B data changed during negative tests.");
 
-    console.log("Tenant isolation verification passed for direct models, child relations, transactions, global-model denial, and raw SQL denial.");
+    console.log("Tenant isolation verification passed for direct models, child relations, transactions, two-factor global-model denial, and raw SQL denial.");
   } finally {
     await deleteFixtures();
     await platformDb.$disconnect();

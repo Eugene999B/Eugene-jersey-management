@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BUYER_SESSION_COOKIE } from "@/lib/buyer-session";
 import { isTrustedApplicationOrigin, publicRequestOrigin } from "@/lib/request-origin";
+import { TWO_FACTOR_CHALLENGE_COOKIE } from "@/lib/two-factor-challenge";
 
 export async function GET(request: NextRequest) {
   return NextResponse.redirect(new URL("/shops", publicRequestOrigin(request)), 303);
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest) {
 
   const response = NextResponse.redirect(new URL("/shops?loggedOut=1", publicRequestOrigin(request)), 303);
   response.cookies.delete(BUYER_SESSION_COOKIE);
+  response.cookies.delete(TWO_FACTOR_CHALLENGE_COOKIE);
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("Clear-Site-Data", '"cache", "storage"');
   return response;

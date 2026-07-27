@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/session-token";
+import { TWO_FACTOR_CHALLENGE_COOKIE } from "@/lib/two-factor-challenge";
 import { isTrustedApplicationOrigin, publicRequestOrigin } from "@/lib/request-origin";
 
 function sessionHome(role: Role | undefined) {
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
 
   const response = NextResponse.redirect(new URL("/login?loggedOut=1", publicRequestOrigin(request)), 303);
   response.cookies.delete(SESSION_COOKIE);
+  response.cookies.delete(TWO_FACTOR_CHALLENGE_COOKIE);
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("Clear-Site-Data", '"cache", "storage"');
   return response;

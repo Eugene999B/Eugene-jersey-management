@@ -7,7 +7,7 @@ import { isSmsDeliveryConfigured } from "@/lib/messaging";
 import { PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 type Props = {
-  searchParams?: Promise<{ sent?: string; phone?: string; next?: string; error?: string }>;
+  searchParams?: Promise<{ sent?: string; phone?: string; next?: string; error?: string; securityChanged?: string }>;
 };
 
 const errors: Record<string, string> = {
@@ -17,6 +17,7 @@ const errors: Record<string, string> = {
   email: "That email already belongs to another buyer account.",
   "login-required": "Login first to continue.",
   sms: "SMS verification is temporarily unavailable. Existing buyers can still use phone and password.",
+  security: "Two-factor verification is temporarily unavailable for this protected account. Contact platform support rather than bypassing the security check.",
 };
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
           <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.17em] text-violet-600">Customer gateway</p><h2 className="mt-2 text-3xl font-black tracking-[-0.04em]">Continue to the marketplace.</h2><p className="mt-2 text-sm leading-6 text-slate-600">Credentials are cleared when this page opens and are never placed in the URL.</p></div>
           {params.error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{errors[params.error] ?? errors.invalid}</div> : null}
           {params.sent ? <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Code sent. Enter it below to continue.</div> : null}
+          {params.securityChanged ? <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Your two-factor preference changed successfully. Every previous buyer session was signed out; continue with your current security setting.</div> : null}
 
           <BuyerPasswordLoginForm nextPath={next} />
 

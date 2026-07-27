@@ -1,0 +1,22 @@
+enum AccountKind {
+  USER
+  BUYER
+}
+
+model AccountTwoFactor {
+  id                        String      @id @default(cuid())
+  accountKind               AccountKind
+  accountId                 String
+  enabled                   Boolean     @default(false)
+  encryptedSecret           String?
+  recoveryCodeHashes        Json        @default("[]")
+  pendingEncryptedSecret    String?
+  pendingRecoveryCodeHashes Json        @default("[]")
+  pendingExpiresAt          DateTime?
+  enabledAt                 DateTime?
+  createdAt                 DateTime    @default(now())
+  updatedAt                 DateTime    @updatedAt
+
+  @@unique([accountKind, accountId])
+  @@index([enabled, updatedAt])
+}

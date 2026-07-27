@@ -1,17 +1,27 @@
 "use server";
 
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { PhoneVerificationPurpose } from "@prisma/client";
+import { AccountKind, PhoneVerificationPurpose } from "@prisma/client";
 import { z } from "zod";
+import { audit } from "@/lib/audit";
+import { hashPassword, verifyPassword } from "@/lib/auth";
+import {
+  BUYER_SESSION_COOKIE,
+  setBuyerSessionCookie,
+} from "@/lib/buyer-session";
 import { prisma } from "@/lib/db";
-import { createPhoneCode, consumePhoneCode } from "@/lib/phone-codes";
-import { setBuyerSessionCookie } from "@/lib/buyer-session";
+import { isSmsDeliveryConfigured } from "@/lib/messaging";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { normalizePhone, phoneRateKey } from "@/lib/phone";
-import { hashPassword, verifyPassword } from "@/lib/auth";
-import { isSmsDeliveryConfigured } from "@/lib/messaging";
+import { createPhoneCode, consumePhoneCode } from "@/lib/phone-codes";
 import { strongPasswordSchema } from "@/lib/password-policy";
+import { accountRequiresTwoFactor } from "@/lib/two-factor-account";
+import {
+  signTwoFactorChallenge,
+  TWO_FACTOR_CHALLENGE_COOKIE,
+  twoFactorChallengeCookieOptions,
+} from "@/lib/two-factor-challenge";
 
 const DUMMY_PASSWORD_HASH = "$2b$12$94A4bgZTq1kkieE.ysBmou2Q7M1Q7es6ib1sj4arKxG9fsC2iDZ3W";
 
@@ -39,11 +49,75 @@ const passwordLoginSchema = z.object({
   next: z.string().max(500).optional(),
 });
 
+type AuthenticatedBuyer = {
+  id: string;
+  phone: string;
+  email: string | null;
+  name: string;
+  isActive: boolean;
+  updatedAt: Date;
+};
+
 async function requestIp() {
   const requestHeaders = await headers();
   return requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim()
     || requestHeaders.get("x-real-ip")
     || "unknown";
+}
+
+async function completeBuyerLogin(buyer: AuthenticatedBuyer, destinationValue: string | null | undefined) {
+  const destination = nextPath(destinationValue);
+  let requiresTwoFactor = false;
+  try {
+    requiresTwoFactor = await accountRequiresTwoFactor({
+      accountKind: AccountKind.BUYER,
+      accountId: buyer.id,
+    });
+  } catch {
+    await audit({
+      action: "auth.two_factor_configuration_unavailable",
+      entityType: "BuyerAccount",
+      entityId: buyer.id,
+    });
+    redirect(`/buyer/login?error=security&next=${encodeURIComponent(destination)}`);
+  }
+
+  if (requiresTwoFactor) {
+    const challengeToken = await signTwoFactorChallenge({
+      accountKind: AccountKind.BUYER,
+      accountId: buyer.id,
+      sessionVersion: buyer.updatedAt.getTime(),
+      redirectPath: destination,
+    });
+    const cookieStore = await cookies();
+    cookieStore.delete(BUYER_SESSION_COOKIE);
+    cookieStore.set(TWO_FACTOR_CHALLENGE_COOKIE, challengeToken, twoFactorChallengeCookieOptions());
+    await audit({
+      action: "auth.two_factor_challenge_issued",
+      entityType: "BuyerAccount",
+      entityId: buyer.id,
+    });
+    redirect(`/login/two-factor?next=${encodeURIComponent(destination)}`);
+  }
+
+  const updated = await prisma.buyerAccount.update({
+    where: { id: buyer.id },
+    data: { lastLoginAt: new Date() },
+  });
+  await setBuyerSessionCookie({
+    id: updated.id,
+    phone: updated.phone,
+    email: updated.email,
+    name: updated.name,
+    sessionVersion: updated.updatedAt.getTime(),
+  });
+  await audit({
+    action: "auth.login",
+    entityType: "BuyerAccount",
+    entityId: updated.id,
+    metadata: { twoFactor: false },
+  });
+  redirect(destination);
 }
 
 export async function requestBuyerLoginCodeAction(formData: FormData) {
@@ -112,15 +186,7 @@ export async function buyerPasswordLoginAction(formData: FormData) {
     redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
-  const updated = await prisma.buyerAccount.update({ where: { id: buyer.id }, data: { lastLoginAt: new Date() } });
-  await setBuyerSessionCookie({
-    id: updated.id,
-    phone: updated.phone,
-    email: updated.email,
-    name: updated.name,
-    sessionVersion: updated.updatedAt.getTime(),
-  });
-  redirect(nextPath(parsed.data.next));
+  await completeBuyerLogin(buyer, parsed.data.next);
 }
 
 export async function verifyBuyerLoginCodeAction(formData: FormData) {
@@ -163,7 +229,6 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
           email: consumed.pendingEmail,
           passwordHash: consumed.pendingPasswordHash,
           phoneVerifiedAt: new Date(),
-          lastLoginAt: new Date(),
         },
       })
     : await prisma.buyerAccount.create({
@@ -173,16 +238,8 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
           email: consumed.pendingEmail,
           passwordHash: consumed.pendingPasswordHash,
           phoneVerifiedAt: new Date(),
-          lastLoginAt: new Date(),
         },
       });
 
-  await setBuyerSessionCookie({
-    id: updated.id,
-    phone: updated.phone,
-    email: updated.email,
-    name: updated.name,
-    sessionVersion: updated.updatedAt.getTime(),
-  });
-  redirect(nextPath(parsed.data.next));
+  await completeBuyerLogin(updated, parsed.data.next);
 }

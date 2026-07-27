@@ -1,4 +1,5 @@
-import { PackageCheck, Truck } from "lucide-react";
+import Link from "next/link";
+import { PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { Role } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,10 @@ export default async function SupplierPortalPage() {
             <div className="shrink-0 rounded-xl bg-[var(--shop-primary)] p-2.5 text-white sm:p-3"><Truck size={21} /></div>
             <div className="min-w-0"><p className="truncate text-xs text-slate-500 sm:text-sm">Supplier portal for {supplier.shop.name}</p><h1 className="truncate text-lg font-semibold sm:text-2xl">{supplier.name}</h1></div>
           </div>
-          <LogoutButton className="shrink-0 border border-slate-200 bg-white px-3 text-slate-800 hover:bg-red-50 hover:text-red-700" label="Sign out" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/account/security" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:text-[var(--shop-primary)]" title="Personal account security" aria-label="Open personal account security"><ShieldCheck size={17} /></Link>
+            <LogoutButton className="shrink-0 border border-slate-200 bg-white px-3 text-slate-800 hover:bg-red-50 hover:text-red-700" label="Sign out" />
+          </div>
         </div>
       </header>
 
