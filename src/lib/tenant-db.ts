@@ -116,6 +116,7 @@ const readOperations = new Set([
 const createOperations = new Set(["create", "createMany", "createManyAndReturn"]);
 const updateOperations = new Set(["update", "updateMany", "updateManyAndReturn"]);
 const deleteOperations = new Set(["delete", "deleteMany"]);
+const uniqueWhereOperations = new Set(["findUnique", "findUniqueOrThrow", "update", "delete", "upsert"]);
 const blockedClientMethods = new Set([
   "$queryRaw",
   "$queryRawUnsafe",
@@ -180,30 +181,48 @@ function policyFor(model: string): TenantPolicy {
   );
 }
 
+function combineWhere(where: UnknownRecord, ownershipWhere: UnknownRecord, preserveUniqueShape: boolean) {
+  if (!preserveUniqueShape) return { AND: [where, ownershipWhere] };
+
+  const existingAnd = where.AND;
+  const topLevelWhere = { ...where };
+  delete topLevelWhere.AND;
+  const existingConditions = Array.isArray(existingAnd)
+    ? existingAnd
+    : existingAnd === undefined
+      ? []
+      : [existingAnd];
+
+  return {
+    ...topLevelWhere,
+    AND: [...existingConditions, ownershipWhere],
+  };
+}
+
 function scopeWhere(
   model: string,
   policy: TenantPolicy,
   whereValue: unknown,
   shopId: string,
   allowGlobalRead = false,
+  preserveUniqueShape = false,
 ) {
   const where = isRecord(whereValue) ? whereValue : {};
   if (policy.kind === "direct") {
     if (typeof where.shopId === "string" && where.shopId !== shopId) throw new TenantScopeMismatchError(model);
-    return { AND: [where, { shopId }] };
+    return combineWhere(where, { shopId }, preserveUniqueShape);
   }
   if (policy.kind === "globalRead") {
     if (typeof where.shopId === "string" && where.shopId !== shopId) throw new TenantScopeMismatchError(model);
-    return allowGlobalRead
-      ? { AND: [where, { OR: [{ shopId }, { isGlobal: true }] }] }
-      : { AND: [where, { shopId }] };
+    const ownershipWhere = allowGlobalRead ? { OR: [{ shopId }, { isGlobal: true }] } : { shopId };
+    return combineWhere(where, ownershipWhere, preserveUniqueShape);
   }
   if (policy.kind === "shop") {
     if (typeof where.id === "string" && where.id !== shopId) throw new TenantScopeMismatchError(model);
-    return { AND: [where, { id: shopId }] };
+    return combineWhere(where, { id: shopId }, preserveUniqueShape);
   }
-  if (policy.kind === "multi") return { AND: [where, policy.accessWhere(shopId)] };
-  return { AND: [where, policy.relationWhere(shopId)] };
+  if (policy.kind === "multi") return combineWhere(where, policy.accessWhere(shopId), preserveUniqueShape);
+  return combineWhere(where, policy.relationWhere(shopId), preserveUniqueShape);
 }
 
 function scopeDirectData(model: string, dataValue: unknown, shopId: string) {
@@ -296,18 +315,19 @@ async function scopeCreatePayload(model: string, policy: TenantPolicy, dataValue
 async function scopeOperationArguments(model: string, operation: string, argsValue: unknown, shopId: string) {
   const policy = policyFor(model);
   const scopedArgs: UnknownRecord = isRecord(argsValue) ? { ...argsValue } : {};
+  const preserveUniqueShape = uniqueWhereOperations.has(operation);
 
   if (readOperations.has(operation)) {
-    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId, true);
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId, true, preserveUniqueShape);
   } else if (createOperations.has(operation)) {
     scopedArgs.data = await scopeCreatePayload(model, policy, scopedArgs.data, shopId);
   } else if (updateOperations.has(operation)) {
-    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId, false, preserveUniqueShape);
     scopedArgs.data = protectUpdateData(model, policy, scopedArgs.data, shopId);
   } else if (deleteOperations.has(operation)) {
-    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId, false, preserveUniqueShape);
   } else if (operation === "upsert") {
-    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId, false, preserveUniqueShape);
     scopedArgs.create = await scopeCreateData(model, policy, scopedArgs.create, shopId);
     scopedArgs.update = protectUpdateData(model, policy, scopedArgs.update, shopId);
   } else {
