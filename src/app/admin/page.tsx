@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { OrderStatus, ReturnRequestStatus } from "@prisma/client";
-import { Activity, AlertTriangle, Banknote, CheckCircle2, CreditCard, LifeBuoy, Plus, Shield, Store, TrendingUp, UserCog } from "lucide-react";
+import { Activity, AlertTriangle, Banknote, CheckCircle2, CreditCard, LifeBuoy, Megaphone, Plus, Settings, Shield, Store, TrendingUp, UserCog } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { prisma } from "@/lib/db";
 import { compactNumber, currency, shortDate } from "@/lib/format";
-import { requirePlatformPermission } from "@/lib/platform-admin";
+import { getAllowedPlatformPermissions, platformAdminHomePath, requirePlatformPermission } from "@/lib/platform-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,15 +16,29 @@ const destinations = [
   { href: "/admin/staff", title: "Admin staff", text: "Create platform workers and control their access.", icon: UserCog },
   { href: "/admin/support", title: "Support", text: "Resolve returns, conversations and delayed orders.", icon: LifeBuoy },
   { href: "/admin/billing", title: "Billing", text: "Manage subscriptions, renewals and payment status.", icon: CreditCard },
+  { href: "/admin/broadcast", title: "Broadcast", text: "Publish platform-wide announcements to tenant teams.", icon: Megaphone },
   { href: "/admin/security", title: "Security", text: "Review failed sign-ins, sessions and safeguards.", icon: Shield },
   { href: "/admin/activity", title: "Activity", text: "Trace platform and tenant administrative actions.", icon: Activity },
+  { href: "/admin/settings", title: "Settings", text: "Review integration readiness and platform configuration.", icon: Settings },
 ] as const;
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = (await searchParams) ?? {};
-  await requirePlatformPermission();
-  const staleOrderDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const session = await requirePlatformPermission();
+  const allowedPermissions = await getAllowedPlatformPermissions(session.id);
 
+  if (allowedPermissions && allowedPermissions.length > 0) redirect(platformAdminHomePath(allowedPermissions));
+  if (allowedPermissions?.length === 0) {
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Access needs review</p>
+        <h1 className="mt-2 text-2xl font-semibold text-amber-950">No recognised admin responsibility is assigned.</h1>
+        <p className="mt-3 text-sm leading-6 text-amber-900">Ask an unrestricted platform administrator to assign at least one valid permission before this account continues.</p>
+      </div>
+    );
+  }
+
+  const staleOrderDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [shops, shopCount, userCount, buyerCount, orderAggregate, debtAggregate, recentLogs, returnCount, openThreadCount, stuckOrderCount, failedMessages] = await Promise.all([
     prisma.shop.findMany({ select: { isActive: true, subscriptionStatus: true, billingCycle: true, monthlyPrice: true, yearlyPrice: true }, orderBy: { createdAt: "desc" } }),
     prisma.shop.count(),
@@ -51,7 +66,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     <div className="space-y-6">
       {params.error === "permission" ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Your platform role does not include access to that admin page.</div> : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Platform overview</p><h1 className="mt-2 text-3xl font-semibold">Command centre</h1><p className="mt-2 text-sm text-slate-600">A summary only. Detailed work now lives on its own dedicated admin page.</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Unrestricted platform overview</p><h1 className="mt-2 text-3xl font-semibold">Command centre</h1><p className="mt-2 text-sm text-slate-600">Global financial, tenant and audit information is visible only to unrestricted platform administrators.</p></div>
         <Link href="/admin/shops/new" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16} /> Create shop</Link>
       </div>
 
@@ -68,7 +83,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <StatCard label="Past due shops" value={compactNumber(pastDueShops)} icon={<AlertTriangle size={20} />} />
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {destinations.map(({ href, title, text, icon: Icon }) => (
           <Link key={href} href={href} prefetch={false} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md">
             <span className="grid h-11 w-11 place-items-center rounded-xl bg-slate-950 text-cyan-300"><Icon size={20} /></span>
