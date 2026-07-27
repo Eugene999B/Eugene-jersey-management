@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BadgeCheck, Boxes, CreditCard, Palette, ShieldCheck, ShoppingBag, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, CircleCheck, Palette, ShieldCheck, ShoppingBag, Store, Workflow } from "lucide-react";
 import { StaffLoginForm } from "@/components/auth/staff-login-form";
 
-export const metadata: Metadata = { title: "Secure workspace access" };
+export const metadata: Metadata = { title: "EJM Control Room" };
 export const dynamic = "force-dynamic";
 
 const errorCopy: Record<string, string> = {
@@ -24,53 +24,55 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const error = params.error ? errorCopy[params.error] ?? errorCopy.invalid : null;
 
   return (
-    <main className="h-[100dvh] overflow-hidden bg-[#07111f] text-white">
-      <div className="grid h-full lg:grid-cols-[minmax(0,1.08fr)_minmax(480px,0.92fr)]">
-        <section className="relative hidden overflow-hidden border-r border-white/10 lg:flex lg:flex-col lg:justify-between lg:p-9 xl:p-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_10%,rgba(0,212,255,0.2),transparent_30%),radial-gradient(circle_at_85%_80%,rgba(139,92,246,0.22),transparent_35%),linear-gradient(145deg,#07111f_0%,#0b1930_55%,#07111f_100%)]" />
-          <div className="absolute -right-28 top-20 h-72 w-72 rounded-full border border-cyan-300/15" /><div className="absolute -right-10 top-36 h-44 w-44 rounded-full border border-violet-300/15" />
-          <Link href="/" className="relative inline-flex w-fit items-center"><Image src="/brand/ejm-logo.svg" alt="Eugene Jersey Management" width={340} height={82} priority /></Link>
+    <main className="relative h-[100dvh] overflow-hidden bg-[#02050a] text-white">
+      <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/[0.08] blur-[120px]" />
+      <div className="pointer-events-none absolute bottom-[-10%] right-[-5%] h-[480px] w-[480px] rounded-full bg-violet-500/[0.1] blur-[120px]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-[-3vw] text-center text-[28vw] font-black leading-none tracking-[-0.09em] text-white/[0.018]">EJM</div>
 
-          <div className="relative max-w-3xl py-8">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em] text-cyan-200"><Sparkles size={14} /> Private operations access</div>
-            <h1 className="mt-7 text-[clamp(3.6rem,6vw,6.4rem)] font-black leading-[0.89] tracking-[-0.065em]">Your business.<br /><span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">Fully in control.</span></h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-white/58 xl:text-lg">Enter the workspace for sales, customers, production, stock, finance and management—without changing tools or losing accountability.</p>
-            <div className="mt-8 grid max-w-2xl grid-cols-2 gap-3">
-              {[{ icon: CreditCard, title: "Commerce", text: "POS, online orders and payments" }, { icon: Palette, title: "Production", text: "Design and machine-ready handoff" }, { icon: Boxes, title: "Inventory", text: "Stock, purchasing and suppliers" }, { icon: ShieldCheck, title: "Control", text: "Roles, audit and tenant isolation" }].map(({ icon: Icon, title, text }) => <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4 backdrop-blur"><Icon size={19} className="text-cyan-300" /><p className="mt-4 text-sm font-bold">{title}</p><p className="mt-1 text-xs leading-5 text-white/45">{text}</p></div>)}
-            </div>
+      <header className="absolute inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.07] px-4 sm:h-20 sm:px-7 lg:px-10">
+        <Link href="/" className="inline-flex items-center gap-3" aria-label="Back to Eugene Jersey Management home">
+          <Image src="/brand/ejm-mark.svg" alt="" width={40} height={40} priority />
+          <div className="hidden sm:block"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">Eugene Jersey Management</p><p className="mt-0.5 text-sm font-semibold text-white/72">Operations access</p></div>
+        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/shops" className="hidden min-h-10 items-center gap-2 rounded-full border border-white/10 px-4 text-xs font-bold text-white/65 transition hover:border-white/25 hover:text-white sm:inline-flex"><Store size={15} /> Marketplace</Link>
+          <Link href="/buyer/login" className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white px-4 text-xs font-black text-[#02050a] transition hover:bg-cyan-200"><ShoppingBag size={15} /> Buyer access</Link>
+        </div>
+      </header>
+
+      <aside className="pointer-events-none absolute left-[6%] top-[28%] hidden w-56 rounded-3xl border border-white/[0.08] bg-white/[0.035] p-4 backdrop-blur-xl xl:block">
+        <div className="flex items-center gap-3"><span className="rounded-2xl bg-cyan-300/10 p-3 text-cyan-300"><Workflow size={19} /></span><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Live workflow</p><p className="mt-1 text-sm font-bold">One operating system</p></div></div>
+        <div className="mt-4 space-y-2 text-xs text-white/48"><p className="flex items-center gap-2"><CircleCheck size={13} className="text-cyan-300" /> Sales and payments</p><p className="flex items-center gap-2"><CircleCheck size={13} className="text-cyan-300" /> Production and design</p><p className="flex items-center gap-2"><CircleCheck size={13} className="text-cyan-300" /> Stock and accountability</p></div>
+      </aside>
+
+      <aside className="pointer-events-none absolute right-[6%] top-[36%] hidden w-56 rounded-3xl border border-white/[0.08] bg-white/[0.035] p-4 backdrop-blur-xl xl:block">
+        <div className="grid grid-cols-3 gap-2"><span className="grid aspect-square place-items-center rounded-2xl bg-white/[0.05] text-cyan-300"><Boxes size={19} /></span><span className="grid aspect-square place-items-center rounded-2xl bg-white/[0.05] text-violet-300"><Palette size={19} /></span><span className="grid aspect-square place-items-center rounded-2xl bg-white/[0.05] text-emerald-300"><ShieldCheck size={19} /></span></div>
+        <p className="mt-4 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Platform status</p><p className="mt-1 text-sm font-bold">Protected and ready</p><p className="mt-2 text-xs leading-5 text-white/45">Tenant-aware access with server-verified sessions and recorded activity.</p>
+      </aside>
+
+      <section className="relative z-10 flex h-full items-center justify-center px-4 pb-3 pt-20 sm:px-6 sm:pb-5 sm:pt-24">
+        <div className="w-full max-w-[520px] origin-center [@media(max-height:700px)]:scale-[0.91] [@media(max-height:610px)]:scale-[0.82]">
+          <div className="mb-4 text-center sm:mb-5">
+            <Link href="/" className="mb-3 inline-flex items-center gap-2 text-xs font-bold text-white/45 transition hover:text-white sm:hidden"><ArrowLeft size={15} /> Return home</Link>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">EJM // Control room</p>
+            <h1 className="mt-3 text-4xl font-black tracking-[-0.055em] sm:text-5xl">Access your operation.</h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48 [@media(max-height:690px)]:hidden">A focused entry point for platform administrators, shop owners, managers and authorised staff.</p>
           </div>
 
-          <div className="relative flex items-center justify-between border-t border-white/10 pt-5 text-xs font-semibold text-white/38"><span>Secure sessions</span><span>Role-aware access</span><span>Audit recorded</span></div>
-        </section>
+          {error ? <div className="mb-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100" role="alert">{error}</div> : null}
+          {params.reset ? <div className="mb-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-100">Password updated. Sign in with the new password.</div> : null}
+          {params.loggedOut ? <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100">You have signed out securely.</div> : null}
 
-        <section className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-3 text-[#07111f] sm:px-7 sm:py-5 lg:px-10 xl:px-16">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_5%,rgba(0,212,255,0.11),transparent_28%),radial-gradient(circle_at_95%_90%,rgba(139,92,246,0.11),transparent_30%)]" />
-          <div className="relative w-full max-w-[520px] [@media(max-height:650px)]:scale-[0.92]">
-            <div className="mb-3 flex items-center justify-between lg:hidden">
-              <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600"><ArrowLeft size={16} /> Home</Link>
-              <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={46} height={46} priority />
-            </div>
+          <StaffLoginForm nextPath={params.next} />
 
-            <div className="mb-4 sm:mb-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-600 sm:text-xs">Secure workspace</p>
-              <h2 className="mt-2 text-3xl font-black tracking-[-0.045em] sm:text-4xl">Sign in and continue.</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600 [@media(max-height:650px)]:hidden">Each team member uses a private access ID. Credentials are never displayed in the URL or retained by the application.</p>
-            </div>
-
-            {error ? <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">{error}</div> : null}
-            {params.reset ? <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">Password updated. Sign in with the new password.</div> : null}
-            {params.loggedOut ? <div className="mb-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900">You have signed out securely.</div> : null}
-
-            <StaffLoginForm nextPath={params.next} />
-
-            <div className="mt-3 grid grid-cols-2 gap-2 [@media(max-height:650px)]:hidden">
-              <Link href="/buyer/login" className="inline-flex min-h-11 items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm"><span className="flex items-center gap-2"><ShoppingBag size={15} /> Buyer access</span><ArrowRight size={15} /></Link>
-              <Link href="/shops" className="inline-flex min-h-11 items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm"><span className="flex items-center gap-2"><BadgeCheck size={15} /> Marketplace</span><ArrowRight size={15} /></Link>
-            </div>
-            <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 [@media(max-height:650px)]:hidden">EJM secure access gateway</p>
+          <div className="mt-3 flex items-center justify-center gap-5 text-xs font-bold text-white/46 [@media(max-height:650px)]:hidden">
+            <Link href="/shops" className="inline-flex items-center gap-2 transition hover:text-cyan-300"><Store size={14} /> Browse shops <ArrowRight size={13} /></Link>
+            <span className="h-3 w-px bg-white/15" />
+            <Link href="/buyer/login" className="inline-flex items-center gap-2 transition hover:text-cyan-300"><ShoppingBag size={14} /> Customer portal <ArrowRight size={13} /></Link>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }
