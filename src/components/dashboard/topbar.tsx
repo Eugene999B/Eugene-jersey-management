@@ -3,7 +3,7 @@ import { Bell, CircleUserRound, Search } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { hasRole, permissions, type SessionUser } from "@/lib/rbac";
 
- type TopbarProps = {
+type TopbarProps = {
   session: SessionUser;
   shopId: string;
 };
@@ -42,14 +42,14 @@ export async function DashboardTopbar({ session, shopId }: TopbarProps) {
           <Link href="/dashboard/orders" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[#ded8cd] bg-white text-slate-700 md:hidden" title="Search orders" aria-label="Search orders">
             <Search size={18} />
           </Link>
-          <div className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[#ded8cd] bg-white text-slate-700" title="Notifications" aria-label={`${unreadNotifications} unread notifications`}>
+          <span role="status" className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[#ded8cd] bg-white text-slate-700" title="Notifications" aria-label={`${unreadNotifications} unread notifications`}>
             <Bell size={18} />
             {unreadNotifications > 0 ? (
               <span className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">
                 {unreadNotifications}
               </span>
             ) : null}
-          </div>
+          </span>
           {hasRole(session, permissions.settings) ? <Link href="/dashboard/settings" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[#ded8cd] bg-white text-[var(--shop-primary)]" title="Shop settings" aria-label="Open shop settings"><CircleUserRound size={18} /></Link> : <span className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[#ded8cd] bg-white text-slate-400" title={session.role.replaceAll("_", " ")}><CircleUserRound size={18} /></span>}
         </div>
       </div>
