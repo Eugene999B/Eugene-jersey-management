@@ -17,6 +17,7 @@ import {
   MonitorCog,
   Printer,
   Redo2,
+  RotateCcw,
   Save,
   Scissors,
   Send,
@@ -27,9 +28,11 @@ import {
   Unlock,
   Upload,
   Usb,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -39,6 +42,16 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DESIGN_PROJECT_VERSION,
+  designRecoveryStorageKey,
+  isMeaningfulDesignProject,
+  isRecoveryNewerThanSaved,
+  migrateDesignProject,
+  parseDesignRecoveryDraft,
+  serializeDesignRecoveryDraft,
+  type DesignRecoveryDraft,
+} from "@/lib/design-recovery";
 import {
   buildHpgl,
   buildPrintDocument,
@@ -53,7 +66,12 @@ type Sheet = "a4" | "a3" | "12x20" | "15x20" | "custom";
 type DeviceState = "not-configured" | "unsupported" | "selecting" | "connected" | "error";
 type LayerKind = ProductionLayer["kind"];
 type MachineProfile = ProductionMachineProfile;
-type SavedDesign = { id: string; title: string; canvas: Record<string, unknown> };
+type SavedDesign = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  canvas: Record<string, unknown>;
+};
 type DesignLayer = ProductionLayer & {
   content?: string;
   url?: string;
@@ -164,12 +182,26 @@ function imageDimensions(url: string) {
   });
 }
 
-export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign[] }) {
+function recoveryTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+export function DesignStudio({
+  savedDesigns = [],
+  recoveryScope,
+}: {
+  savedDesigns?: SavedDesign[];
+  recoveryScope: string;
+}) {
   const router = useRouter();
   const gridId = `design-grid-${useId().replace(/:/g, "")}`;
+  const recoveryKey = useMemo(() => designRecoveryStorageKey(recoveryScope), [recoveryScope]);
   const [designJobId, setDesignJobId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState("Not saved yet");
+  const [recoveryMessage, setRecoveryMessage] = useState("Local recovery is starting…");
+  const [recoveryDraft, setRecoveryDraft] = useState<DesignRecoveryDraft | null>(null);
+  const [recoveryReady, setRecoveryReady] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [jobName, setJobName] = useState("New design job");
   const [customer, setCustomer] = useState("");
@@ -201,6 +233,24 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
 
   const size = sheet === "custom" ? { label: "Custom", width: customWidth, height: customHeight } : sheets[sheet];
   const selected = layers.find((layer) => layer.id === selectedId) ?? null;
+  const projectSnapshot = useMemo(() => ({
+    version: DESIGN_PROJECT_VERSION,
+    jobName,
+    customer,
+    material,
+    sheet,
+    customWidth,
+    customHeight,
+    copies,
+    mirror,
+    showGrid,
+    snap,
+    weedBox,
+    registrationMarks,
+    contourOffset,
+    machineProfile,
+    layers,
+  }), [jobName, customer, material, sheet, customWidth, customHeight, copies, mirror, showGrid, snap, weedBox, registrationMarks, contourOffset, machineProfile, layers]);
   const productionCheck = useMemo(() => checkProductionDesign({
     layers,
     sheet: size,
@@ -211,6 +261,80 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
     copies,
   }), [layers, size.width, size.height, machineProfile, material, mirror, registrationMarks, copies]);
   const productionBlocked = productionCheck.errors.length > 0;
+
+  useEffect(() => {
+    try {
+      const stored = parseDesignRecoveryDraft({ raw: window.localStorage.getItem(recoveryKey) });
+      if (!stored) {
+        window.localStorage.removeItem(recoveryKey);
+        setRecoveryMessage("Local recovery is ready");
+        setRecoveryReady(true);
+        return;
+      }
+
+      const serverCopy = stored.designJobId
+        ? savedDesigns.find((design) => design.id === stored.designJobId)
+        : null;
+      if (serverCopy && !isRecoveryNewerThanSaved({ draft: stored, savedDesignUpdatedAt: serverCopy.updatedAt })) {
+        window.localStorage.removeItem(recoveryKey);
+        setRecoveryMessage("The shop copy is newer; stale recovery was cleared");
+      } else {
+        setRecoveryDraft(stored);
+        setRecoveryMessage("Recovered work is waiting for your decision");
+      }
+    } catch {
+      setRecoveryMessage("Local recovery is unavailable in this browser");
+    } finally {
+      setRecoveryReady(true);
+    }
+  }, [recoveryKey, savedDesigns]);
+
+  useEffect(() => {
+    if (!recoveryReady || recoveryDraft) return;
+    if (!isMeaningfulDesignProject(projectSnapshot)) {
+      try {
+        window.localStorage.removeItem(recoveryKey);
+      } catch {
+        // Private browsing or disabled storage may reject writes.
+      }
+      setRecoveryMessage("No recovery draft needed");
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const serialized = serializeDesignRecoveryDraft({ project: projectSnapshot, designJobId });
+      if (!serialized.ok) {
+        setRecoveryMessage(serialized.reason === "too-large"
+          ? "Recovery draft is too large; download a backup before leaving"
+          : "This project could not be prepared for recovery");
+        return;
+      }
+      try {
+        window.localStorage.setItem(recoveryKey, serialized.value);
+        setRecoveryMessage(`Recovery draft saved at ${new Date(serialized.draft.savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`);
+      } catch {
+        setRecoveryMessage("Browser storage is full; download a backup before leaving");
+      }
+    }, 1_200);
+
+    return () => window.clearTimeout(timer);
+  }, [projectSnapshot, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
+
+  useEffect(() => {
+    if (!recoveryReady || recoveryDraft) return;
+    const persistBeforeExit = () => {
+      if (!isMeaningfulDesignProject(projectSnapshot)) return;
+      const serialized = serializeDesignRecoveryDraft({ project: projectSnapshot, designJobId });
+      if (!serialized.ok) return;
+      try {
+        window.localStorage.setItem(recoveryKey, serialized.value);
+      } catch {
+        // The normal status message already explains unavailable storage.
+      }
+    };
+    window.addEventListener("pagehide", persistBeforeExit);
+    return () => window.removeEventListener("pagehide", persistBeforeExit);
+  }, [projectSnapshot, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
 
   function checkpoint(next: DesignLayer[]) {
     setPast((items) => [...items.slice(-39), layers]);
@@ -419,8 +543,14 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}mm" height="${size.height}mm" viewBox="0 0 ${size.width} ${size.height}"><title>${escapeXml(jobName)}</title>${artwork}</svg>`;
   }
 
-  function projectCanvas() {
-    return { version: 3, jobName, customer, material, sheet, customWidth, customHeight, copies, mirror, showGrid, snap, weedBox, registrationMarks, contourOffset, machineProfile, layers };
+  function clearRecovery(message: string) {
+    try {
+      window.localStorage.removeItem(recoveryKey);
+    } catch {
+      // Saving to the shop remains authoritative even when local storage is unavailable.
+    }
+    setRecoveryDraft(null);
+    setRecoveryMessage(message);
   }
 
   async function saveProject() {
@@ -430,13 +560,14 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
       const response = await fetch("/api/designs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: designJobId ?? undefined, title: jobName, customer: customer || undefined, machineProfile, canvas: projectCanvas() }),
+        body: JSON.stringify({ id: designJobId ?? undefined, title: jobName, customer: customer || undefined, machineProfile, canvas: projectSnapshot }),
       });
       const result = await response.json() as { design?: { id: string }; error?: string };
       if (!response.ok || !result.design) throw new Error(result.error ?? "Could not save this project.");
       setDesignJobId(result.design.id);
       setSaveStatus("saved");
       setSaveMessage("Saved to this shop");
+      clearRecovery("Shop save complete; local recovery draft cleared");
       router.refresh();
     } catch (error) {
       setSaveStatus("error");
@@ -445,33 +576,50 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
   }
 
   function downloadBackup() {
-    download(`${safeName(jobName)}.design.json`, JSON.stringify(projectCanvas(), null, 2), "application/json");
+    download(`${safeName(jobName)}.design.json`, JSON.stringify(projectSnapshot, null, 2), "application/json");
   }
 
-  function applyProject(project: Record<string, unknown>, projectId: string | null = null) {
-    if (!Array.isArray(project.layers)) throw new Error("This file has no design layers.");
+  function applyProject(rawProject: Record<string, unknown>, projectId: string | null = null) {
+    const project = migrateDesignProject(rawProject);
     const nextSheet = typeof project.sheet === "string" && (project.sheet === "custom" || project.sheet in sheets) ? project.sheet as Sheet : "a3";
     const nextWidth = nextSheet === "custom" ? finiteNumber(project.customWidth, 300, 20, 2_000) : sheets[nextSheet].width;
     const nextHeight = nextSheet === "custom" ? finiteNumber(project.customHeight, 500, 20, 5_000) : sheets[nextSheet].height;
-    checkpoint(normalizedLayers(project.layers, { width: nextWidth, height: nextHeight }));
+    setPast([]);
+    setFuture([]);
+    setLayers(normalizedLayers(project.layers as unknown[], { width: nextWidth, height: nextHeight }));
     setSheet(nextSheet);
     setCustomWidth(nextWidth);
     setCustomHeight(nextHeight);
-    if (typeof project.jobName === "string") setJobName(project.jobName.slice(0, 120));
-    if (typeof project.customer === "string") setCustomer(project.customer.slice(0, 120));
-    if (typeof project.material === "string" && project.material in materialDetails) setMaterial(project.material as Material);
+    setJobName(typeof project.jobName === "string" ? project.jobName.slice(0, 120) : "New design job");
+    setCustomer(typeof project.customer === "string" ? project.customer.slice(0, 120) : "");
+    setMaterial(typeof project.material === "string" && project.material in materialDetails ? project.material as Material : "htv");
     setCopies(Math.round(finiteNumber(project.copies, 1, 1, 100)));
-    if (typeof project.mirror === "boolean") setMirror(project.mirror);
-    if (typeof project.showGrid === "boolean") setShowGrid(project.showGrid);
-    if (typeof project.snap === "boolean") setSnap(project.snap);
-    if (typeof project.weedBox === "boolean") setWeedBox(project.weedBox);
-    if (typeof project.registrationMarks === "boolean") setRegistrationMarks(project.registrationMarks);
+    setMirror(typeof project.mirror === "boolean" ? project.mirror : true);
+    setShowGrid(typeof project.showGrid === "boolean" ? project.showGrid : true);
+    setSnap(typeof project.snap === "boolean" ? project.snap : true);
+    setWeedBox(typeof project.weedBox === "boolean" ? project.weedBox : true);
+    setRegistrationMarks(typeof project.registrationMarks === "boolean" ? project.registrationMarks : false);
     setContourOffset(finiteNumber(project.contourOffset, 0, 0, 50));
-    if (typeof project.machineProfile === "string" && machineProfiles.includes(project.machineProfile as MachineProfile)) setMachineProfile(project.machineProfile as MachineProfile);
+    setMachineProfile(typeof project.machineProfile === "string" && machineProfiles.includes(project.machineProfile as MachineProfile) ? project.machineProfile as MachineProfile : "Generic SVG");
     setDesignJobId(projectId);
     setSelectedId(null);
     setSaveStatus(projectId ? "saved" : "idle");
     setSaveMessage(projectId ? "Saved project opened" : "Backup opened; save it to this shop");
+  }
+
+  function restoreRecovery() {
+    if (!recoveryDraft) return;
+    try {
+      applyProject(recoveryDraft.project, recoveryDraft.designJobId);
+      setRecoveryDraft(null);
+      setRecoveryMessage("Recovered draft restored; local autosave remains active");
+    } catch (error) {
+      setRecoveryMessage(error instanceof Error ? error.message : "Could not restore this recovered draft");
+    }
+  }
+
+  function discardRecovery() {
+    clearRecovery("Recovered draft discarded; local autosave remains active");
   }
 
   async function loadProject(event: ChangeEvent<HTMLInputElement>) {
@@ -480,6 +628,8 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
     try {
       if (file.size > 2_000_000) throw new Error("Design backup must be smaller than 2 MB.");
       applyProject(JSON.parse(await file.text()) as Record<string, unknown>);
+      setRecoveryDraft(null);
+      setRecoveryMessage("Backup opened; local autosave remains active");
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not open this design project.");
     }
@@ -491,6 +641,7 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
       jobName,
       customer: customer || null,
       createdAt: new Date().toISOString(),
+      projectVersion: DESIGN_PROJECT_VERSION,
       material,
       sheet: { preset: sheet, widthMm: size.width, heightMm: size.height },
       output: { copies, mirror, weedBox, registrationMarks, contourOffsetMm: contourOffset },
@@ -601,23 +752,39 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
             <h2 className="mt-2 text-xl font-semibold sm:text-2xl">Design on the transfer material—not on a jersey mockup.</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-300">Every coordinate is stored in millimetres. Prepare artwork, validate the output, then print, export SVG, or send a supported HPGL vector job.</p>
             <p className={`mt-2 text-xs font-semibold ${saveStatus === "error" ? "text-red-300" : saveStatus === "saved" ? "text-emerald-300" : "text-slate-400"}`}>{saveMessage}</p>
+            <p className="mt-1 text-xs font-medium text-cyan-200">{recoveryMessage}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={undo} disabled={!past.length}><Undo2 size={16} /> Undo</Button>
             <Button variant="outline" onClick={redo} disabled={!future.length}><Redo2 size={16} /> Redo</Button>
-            <Button variant="outline" onClick={saveProject} disabled={saveStatus === "saving"}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : designJobId ? "Save changes" : "Save project"}</Button>
+            <Button variant="outline" onClick={saveProject} disabled={saveStatus === "saving" || Boolean(recoveryDraft)}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : designJobId ? "Save changes" : "Save project"}</Button>
             <Button variant="outline" onClick={downloadBackup}><Download size={16} /> Backup</Button>
-            <Button variant="outline" onClick={() => projectInputRef.current?.click()}><Upload size={16} /> Open backup</Button>
+            <Button variant="outline" onClick={() => projectInputRef.current?.click()} disabled={Boolean(recoveryDraft)}><Upload size={16} /> Open backup</Button>
             <input ref={projectInputRef} className="hidden" type="file" accept="application/json,.json" onChange={loadProject} />
           </div>
         </div>
       </section>
 
+      {recoveryDraft ? (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-sm" role="alert">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2"><RotateCcw size={19} /><h3 className="font-semibold">Recovered work found</h3></div>
+              <p className="mt-2 text-sm leading-6">A local draft from {recoveryTime(recoveryDraft.savedAt)} is newer than the shop copy. Restore it before editing, or discard it and continue from the current blank workspace.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={restoreRecovery}><RotateCcw size={16} /> Restore recovered draft</Button>
+              <Button variant="outline" onClick={discardRecovery}><X size={16} /> Discard</Button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_330px]">
         <aside className="space-y-4">
           <section className="panel p-4">
             <h3 className="font-semibold">Job details</h3>
-            {savedDesigns.length ? <label className="mt-3 block text-xs font-semibold text-slate-600">Open shop project<select className="field mt-1" value="" onChange={(event) => { const saved = savedDesigns.find((item) => item.id === event.target.value); if (saved) applyProject(saved.canvas, saved.id); }}><option value="">Select a saved project</option>{savedDesigns.map((design) => <option key={design.id} value={design.id}>{design.title}</option>)}</select></label> : null}
+            {savedDesigns.length ? <label className="mt-3 block text-xs font-semibold text-slate-600">Open shop project<select className="field mt-1" value="" disabled={Boolean(recoveryDraft)} onChange={(event) => { const saved = savedDesigns.find((item) => item.id === event.target.value); if (saved) applyProject(saved.canvas, saved.id); }}><option value="">Select a saved project</option>{savedDesigns.map((design) => <option key={design.id} value={design.id}>{design.title}</option>)}</select></label> : null}
             <label className="mt-3 block text-xs font-semibold text-slate-600">Job name<input className="field mt-1" maxLength={120} value={jobName} onChange={(event) => setJobName(event.target.value)} /></label>
             <label className="mt-3 block text-xs font-semibold text-slate-600">Customer or team<input className="field mt-1" maxLength={120} value={customer} onChange={(event) => setCustomer(event.target.value)} placeholder="Links on one exact customer match" /></label>
           </section>
@@ -702,7 +869,7 @@ export function DesignStudio({ savedDesigns = [] }: { savedDesigns?: SavedDesign
             <h3 className="font-semibold">Selected layer</h3>
             {selected ? <div className="mt-3 space-y-2">
               <input className="field" maxLength={120} value={selected.name} onChange={(event) => updateLayer(selected.id, { name: event.target.value })} aria-label="Layer name" />
-              {selected.kind === "text" ? <><textarea className="field min-h-16" maxLength={500} value={selected.content} onChange={(event) => updateLayer(selected.id, { content: event.target.value, name: event.target.value.slice(0, 24) || "Text" })} /><select className="field" value={selected.fontFamily} onChange={(event) => updateLayer(selected.id, { fontFamily: event.target.value })}>{allowedFonts.map((font) => <option key={font}>{font}</option>)}</select></> : null}
+              {selected.kind === "text" ? <><textarea className="field min-h-16" maxLength={500} value={selected.content ?? ""} onChange={(event) => updateLayer(selected.id, { content: event.target.value, name: event.target.value.slice(0, 24) || "Text" })} /><select className="field" value={selected.fontFamily ?? "Arial"} onChange={(event) => updateLayer(selected.id, { fontFamily: event.target.value })}>{allowedFonts.map((font) => <option key={font}>{font}</option>)}</select></> : null}
               <div className="grid grid-cols-2 gap-2"><NumberField label="X (mm)" value={selected.x} min={0} max={size.width} onChange={(x) => updateLayer(selected.id, { x: snapValue(x) })} /><NumberField label="Y (mm)" value={selected.y} min={0} max={size.height} onChange={(y) => updateLayer(selected.id, { y: snapValue(y) })} /><NumberField label="Width (mm)" value={selected.width} min={1} max={size.width} onChange={(width) => updateLayer(selected.id, { width })} /><NumberField label="Height (mm)" value={selected.height} min={1} max={size.height} onChange={(height) => updateLayer(selected.id, { height })} /></div>
               <NumberField label="Rotation (degrees)" value={selected.rotation} min={-360} max={360} onChange={(rotation) => updateLayer(selected.id, { rotation })} />
               {selected.kind !== "image" ? <label className="block text-xs font-semibold text-slate-600">Colour<input className="mt-1 h-10 w-full rounded border border-[#ded8cd]" type="color" value={selected.color} onChange={(event) => updateLayer(selected.id, { color: event.target.value })} /></label> : null}
