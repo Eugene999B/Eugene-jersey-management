@@ -26,6 +26,10 @@ async function addTextLayer(page: Page, value: string) {
   await expect(page.getByRole("button", { name: `Select and move ${value}` })).toBeVisible();
 }
 
+function layerListButton(page: Page, name: string) {
+  return page.getByRole("button", { name, exact: true });
+}
+
 test("groups layers and reopens immutable shop versions", async ({ page }) => {
   await signInAsOwner(page);
   await page.goto("/dashboard/designs");
@@ -35,9 +39,9 @@ test("groups layers and reopens immutable shop versions", async ({ page }) => {
   await addTextLayer(page, "EUGENE");
   await addTextLayer(page, "10");
 
-  await page.getByRole("button", { name: "Select and move EUGENE" }).click();
+  await layerListButton(page, "EUGENE").click();
   await page.keyboard.down("Shift");
-  await page.getByRole("button", { name: "Select and move 10" }).click();
+  await layerListButton(page, "10").click();
   await page.keyboard.up("Shift");
   await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
 
@@ -56,7 +60,7 @@ test("groups layers and reopens immutable shop versions", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Open version 1" })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Open version 2" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Select and move EUGENE" }).click();
+  await layerListButton(page, "EUGENE").click();
   await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Open version 1" }).click();
