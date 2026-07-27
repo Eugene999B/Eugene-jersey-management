@@ -77,7 +77,7 @@ test("keeps an unrestricted administrator signed in across refresh and route nav
   }
 
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?loggedOut=1$/);
   await expect(page.locator("input")).toHaveCount(0);
 });
 
