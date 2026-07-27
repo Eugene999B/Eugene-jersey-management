@@ -53,7 +53,7 @@ The database `DesignJob` remains the current authoritative project. Every succes
 - embedded SVG rectangles, circles, ellipses, lines, polylines and polygons
 - nested SVG groups with translate, scale, rotate, skew and matrix transforms
 
-Curves and arcs are flattened into sufficiently dense polylines before HPGL or DXF output.
+Curves and arcs are flattened into sufficiently dense polylines before HPGL or DXF output. Parser iteration is deterministic and does not rely on assignment side effects inside loop conditions.
 
 ### Fail closed
 
