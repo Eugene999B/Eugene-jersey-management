@@ -4,6 +4,7 @@ const accounts = {
   unrestrictedAdmin: "EJM-E2E-ADMIN",
   supportWorker: "EJM-E2E-SUPPORT",
   owner: "EJM-E2E-OWNER",
+  supplier: "browser-supplier@ejm.test",
 } as const;
 
 function password() {
@@ -131,7 +132,7 @@ test("keeps the login control usable without horizontal overflow on a mobile vie
   await expect(page.getByRole("button", { name: "Open control room" })).toBeVisible();
 });
 
-test("keeps the complete owner workspace usable on a mobile viewport", async ({ page }, testInfo) => {
+test("keeps the primary owner workspace usable on a mobile viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, accounts.owner);
   await expect(page.getByRole("button", { name: "Open all shop tools" })).toBeVisible();
@@ -176,4 +177,89 @@ test("keeps the complete owner workspace usable on a mobile viewport", async ({ 
   const canvasBox = await canvas.boundingBox();
   const jobDetailsBox = await page.getByRole("heading", { name: "Job details" }).boundingBox();
   expect(canvasBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(jobDetailsBox?.y ?? Number.NEGATIVE_INFINITY);
+});
+
+test("keeps the remaining owner controls usable on a mobile viewport", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, accounts.owner);
+
+  const routes = [
+    ["debts", "/dashboard/debts", "Debts and installments"],
+    ["messages", "/dashboard/messages", "Send customer message"],
+    ["suppliers", "/dashboard/suppliers", "Suppliers"],
+    ["network", "/dashboard/network", "Shop network"],
+    ["closing", "/dashboard/closing", "Daily closing"],
+    ["commerce", "/dashboard/commerce", "Commerce control centre"],
+    ["reports", "/dashboard/reports", "Reports"],
+    ["exports", "/dashboard/exports", "Reports and exports"],
+  ] as const;
+
+  for (const [screenshotName, path, heading] of routes) {
+    await page.goto(path);
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Quick shop navigation" })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`mobile-owner-secondary-${screenshotName}.png`), fullPage: false });
+  }
+});
+
+test("keeps public marketplace and storefront browsing mobile-safe", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const routes = [
+    ["marketplace", "/shops", "EJM Marketplace"],
+    ["storefront", "/shop/ejm-browser-test-shop", "EJM Browser Test Shop"],
+  ] as const;
+
+  for (const [name, path, heading] of routes) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`mobile-public-${name}.png`), fullPage: false });
+  }
+});
+
+test("keeps the supplier portal usable on a mobile viewport", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, accounts.supplier);
+  await expect(page).toHaveURL(/\/supplier$/);
+  await expect(page.getByRole("heading", { name: "EJM Browser Supply Partner" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Purchase orders from EJM Browser Test Shop/ })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("mobile-supplier-portal.png"), fullPage: false });
+});
+
+test("keeps platform administration usable on a mobile viewport", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, accounts.unrestrictedAdmin);
+  await expect(page.getByRole("button", { name: "Open platform tools" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Quick admin navigation" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("button", { name: "Open platform tools" }).click();
+  await expect(page.getByRole("dialog", { name: "All platform tools" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Shops", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Security", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close all platform tools" }).click();
+
+  const routes = [
+    ["overview", "/admin"],
+    ["shops", "/admin/shops"],
+    ["staff", "/admin/staff"],
+    ["support", "/admin/support"],
+    ["billing", "/admin/billing"],
+    ["broadcast", "/admin/broadcast"],
+    ["activity", "/admin/activity"],
+    ["security", "/admin/security"],
+    ["settings", "/admin/settings"],
+  ] as const;
+
+  for (const [name, path] of routes) {
+    await page.goto(path);
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole("navigation", { name: "Quick admin navigation" })).toBeVisible();
+    await expect(page.locator("main h1, main h2").first()).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`mobile-admin-${name}.png`), fullPage: false });
+  }
 });
