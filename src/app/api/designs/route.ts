@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DesignJobStatus, type Prisma } from "@prisma/client";
+import { DesignJobStatus, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { nextDesignVersionNumber } from "@/lib/design-history";
 import { permissions } from "@/lib/rbac";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
@@ -14,6 +15,11 @@ const designSchema = z.object({
   machineProfile: z.enum(["Generic SVG", "HPGL / PLT cutter", "SignMaster", "VinylMaster", "Print/RIP"]),
   canvas: z.record(z.string(), z.unknown()),
 });
+
+function retryableVersionConflict(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError
+    && (error.code === "P2034" || error.code === "P2002");
+}
 
 export async function POST(request: NextRequest) {
   const session = await requireRole(permissions.designs);
@@ -50,23 +56,103 @@ export async function POST(request: NextRequest) {
     status: DesignJobStatus.DRAFT,
   };
 
-  let design;
-  if (parsed.data.id) {
-    const existing = await prisma.designJob.findFirst({ where: { id: parsed.data.id, shopId: session.shopId }, select: { id: true } });
-    if (!existing) return NextResponse.json({ error: "Design project not found." }, { status: 404 });
-    design = await prisma.designJob.update({ where: { id: existing.id }, data });
-  } else {
-    design = await prisma.designJob.create({ data: { ...data, shopId: session.shopId } });
+  let saved: { design: { id: string; title: string; machineProfile: string | null; canvasJson: Prisma.JsonValue; updatedAt: Date }; versionNumber: number } | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      saved = await prisma.$transaction(async (transaction) => {
+        if (parsed.data.id) {
+          const existing = await transaction.designJob.findFirst({
+            where: { id: parsed.data.id, shopId: session.shopId },
+            select: { id: true, title: true, canvasJson: true, machineProfile: true },
+          });
+          if (!existing) return null;
+
+          const maximum = await transaction.designJobVersion.aggregate({
+            where: { shopId: session.shopId, designJobId: existing.id },
+            _max: { versionNumber: true },
+          });
+          let currentMaximum = maximum._max.versionNumber;
+
+          if (!currentMaximum) {
+            await transaction.designJobVersion.create({
+              data: {
+                shopId: session.shopId,
+                designJobId: existing.id,
+                versionNumber: 1,
+                title: existing.title,
+                canvasJson: existing.canvasJson as Prisma.InputJsonValue,
+                machineProfile: existing.machineProfile,
+                source: "BASELINE",
+                createdById: session.id,
+              },
+            });
+            currentMaximum = 1;
+          }
+
+          const design = await transaction.designJob.update({ where: { id: existing.id }, data });
+          const versionNumber = nextDesignVersionNumber(currentMaximum);
+          await transaction.designJobVersion.create({
+            data: {
+              shopId: session.shopId,
+              designJobId: design.id,
+              versionNumber,
+              title: design.title,
+              canvasJson: design.canvasJson as Prisma.InputJsonValue,
+              machineProfile: design.machineProfile,
+              source: "SAVE",
+              createdById: session.id,
+            },
+          });
+          return { design, versionNumber };
+        }
+
+        const design = await transaction.designJob.create({ data: { ...data, shopId: session.shopId } });
+        const versionNumber = 1;
+        await transaction.designJobVersion.create({
+          data: {
+            shopId: session.shopId,
+            designJobId: design.id,
+            versionNumber,
+            title: design.title,
+            canvasJson: design.canvasJson as Prisma.InputJsonValue,
+            machineProfile: design.machineProfile,
+            source: "CREATE",
+            createdById: session.id,
+          },
+        });
+        return { design, versionNumber };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      break;
+    } catch (error) {
+      if (attempt === 0 && retryableVersionConflict(error)) continue;
+      if (retryableVersionConflict(error)) {
+        return NextResponse.json({ error: "This project changed in another session. Reload it and save again." }, { status: 409 });
+      }
+      throw error;
+    }
   }
+
+  if (!saved) return NextResponse.json({ error: "Design project not found." }, { status: 404 });
 
   await audit({
     shopId: session.shopId,
     userId: session.id,
     action: parsed.data.id ? "design.updated" : "design.created",
     entityType: "DesignJob",
-    entityId: design.id,
-    metadata: { title: design.title, machineProfile: design.machineProfile },
+    entityId: saved.design.id,
+    metadata: {
+      title: saved.design.title,
+      machineProfile: saved.design.machineProfile,
+      versionNumber: saved.versionNumber,
+    },
   });
 
-  return NextResponse.json({ design: { id: design.id, title: design.title, updatedAt: design.updatedAt.toISOString() } });
+  return NextResponse.json({
+    design: {
+      id: saved.design.id,
+      title: saved.design.title,
+      updatedAt: saved.design.updatedAt.toISOString(),
+      versionNumber: saved.versionNumber,
+    },
+  });
 }
