@@ -140,8 +140,8 @@ test("keeps the complete owner workspace usable on a mobile viewport", async ({ 
 
   await page.getByRole("button", { name: "Open all shop tools" }).click();
   await expect(page.getByRole("dialog", { name: "All shop tools" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Staff & permissions" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Shop settings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Staff & permissions", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Shop settings", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close all shop tools" }).click();
 
   const routes = [
