@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { AccountKind, Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -8,6 +8,12 @@ import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from "@/lib/session-
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { isTrustedApplicationOrigin, publicRequestOrigin } from "@/lib/request-origin";
+import { accountRequiresTwoFactor } from "@/lib/two-factor-account";
+import {
+  signTwoFactorChallenge,
+  TWO_FACTOR_CHALLENGE_COOKIE,
+  twoFactorChallengeCookieOptions,
+} from "@/lib/two-factor-challenge";
 
 const DUMMY_PASSWORD_HASH = "$2b$12$94A4bgZTq1kkieE.ysBmou2Q7M1Q7es6ib1sj4arKxG9fsC2iDZ3W";
 const MAX_FAILED_LOGINS = 5;
@@ -47,6 +53,7 @@ function loginFailure(
       { status: options.status ?? (error === "rate" ? 429 : 401), headers: { "Cache-Control": "no-store" } },
     );
     response.cookies.delete(SESSION_COOKIE);
+    response.cookies.delete(TWO_FACTOR_CHALLENGE_COOKIE);
     return response;
   }
 
@@ -57,6 +64,7 @@ function loginFailure(
   }
   const response = NextResponse.redirect(url, 303);
   response.cookies.delete(SESSION_COOKIE);
+  response.cookies.delete(TWO_FACTOR_CHALLENGE_COOKIE);
   response.headers.set("Cache-Control", "no-store");
   return response;
 }
@@ -135,7 +143,48 @@ export async function POST(request: NextRequest) {
     return loginFailure(request, lockUntil ? "rate" : "invalid", { next: parsed.data.next, status: lockUntil ? 429 : 401 });
   }
 
-  await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockUntil: null, lastLoginAt: now } });
+  await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockUntil: null } });
+  const redirectPath = safeNext(parsed.data.next, user.role);
+
+  let requiresTwoFactor = false;
+  try {
+    requiresTwoFactor = await accountRequiresTwoFactor({ accountKind: AccountKind.USER, accountId: user.id });
+  } catch {
+    await audit({
+      shopId: user.shopId,
+      userId: user.id,
+      action: "auth.two_factor_configuration_unavailable",
+      entityType: "User",
+      entityId: user.id,
+    });
+    return loginFailure(request, "security", { next: parsed.data.next, status: 503 });
+  }
+
+  if (requiresTwoFactor) {
+    const challengeToken = await signTwoFactorChallenge({
+      accountKind: AccountKind.USER,
+      accountId: user.id,
+      sessionVersion: user.sessionVersion,
+      redirectPath,
+    });
+    await audit({
+      shopId: user.shopId,
+      userId: user.id,
+      action: "auth.two_factor_challenge_issued",
+      entityType: "User",
+      entityId: user.id,
+    });
+
+    const challengePath = `/login/two-factor?next=${encodeURIComponent(redirectPath)}`;
+    const response = wantsJson(request)
+      ? NextResponse.json({ ok: true, twoFactorRequired: true, redirectPath: challengePath }, { headers: { "Cache-Control": "no-store" } })
+      : NextResponse.redirect(new URL(challengePath, publicRequestOrigin(request)), 303);
+    response.cookies.delete(SESSION_COOKIE);
+    response.cookies.set(TWO_FACTOR_CHALLENGE_COOKIE, challengeToken, twoFactorChallengeCookieOptions());
+    return response;
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
   await audit({ shopId: user.shopId, userId: user.id, action: "auth.login", entityType: "User", entityId: user.id });
 
   const token = await signSession({
@@ -146,10 +195,10 @@ export async function POST(request: NextRequest) {
     role: user.role,
     sessionVersion: user.sessionVersion,
   });
-  const redirectPath = safeNext(parsed.data.next, user.role);
   const response = wantsJson(request)
     ? NextResponse.json({ ok: true, redirectPath }, { headers: { "Cache-Control": "no-store" } })
     : NextResponse.redirect(new URL(redirectPath, publicRequestOrigin(request)), 303);
+  response.cookies.delete(TWO_FACTOR_CHALLENGE_COOKIE);
   response.cookies.set(SESSION_COOKIE, token, persistentSessionCookieOptions(SESSION_TTL_SECONDS));
   return response;
 }
