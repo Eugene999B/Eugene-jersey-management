@@ -1,16 +1,50 @@
+import { createHmac } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
 
 const accounts = {
   unrestrictedAdmin: "EJM-E2E-ADMIN",
   supportWorker: "EJM-E2E-SUPPORT",
   owner: "EJM-E2E-OWNER",
+  twoFactorOwner: "EJM-E2E-2FA-OWNER",
+  twoFactorOwnerSecret: "JBSWY3DPEHPK3PXP",
+  twoFactorBuyerPhone: "+233200000099",
+  twoFactorBuyerSecret: "KRSXG5DSNFXGOIDB",
   supplier: "browser-supplier@ejm.test",
 } as const;
+
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 function password() {
   const value = process.env.E2E_PASSWORD;
   if (!value) throw new Error("E2E_PASSWORD is required for browser acceptance tests.");
   return value;
+}
+
+function decodeBase32(value: string) {
+  let bits = "";
+  for (const character of value.toUpperCase().replace(/[^A-Z2-7]/g, "")) {
+    const index = BASE32_ALPHABET.indexOf(character);
+    if (index < 0) throw new Error("Invalid disposable TOTP secret.");
+    bits += index.toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let index = 0; index + 8 <= bits.length; index += 8) {
+    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function currentTotp(secret: string) {
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", decodeBase32(secret)).update(counterBuffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
 }
 
 async function revealCredentials(page: Page) {
@@ -34,6 +68,13 @@ async function signIn(page: Page, loginIdValue: string) {
   await fields.passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await page.waitForURL((url) => url.pathname !== "/login", { timeout: 30_000 });
+}
+
+async function finishTwoFactor(page: Page, secret: string) {
+  await expect(page).toHaveURL(/\/login\/two-factor(?:\?|$)/);
+  await expect(page.getByRole("heading", { name: "Confirm it is you" })).toBeVisible();
+  await page.getByPlaceholder("123456 or XXXX-XXXX").fill(currentTotp(secret));
+  await page.getByRole("button", { name: "Complete sign in" }).click();
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -118,6 +159,26 @@ test("keeps a tenant owner inside the tenant dashboard across refresh", async ({
   await page.reload();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText("Tenant filtered", { exact: true })).toBeVisible();
+});
+
+test("requires the optional challenge only for a protected shop account", async ({ page }) => {
+  const fields = await revealCredentials(page);
+  await fields.loginId.fill(accounts.twoFactorOwner);
+  await fields.passwordField.fill(password());
+  await page.getByRole("button", { name: "Open control room" }).click();
+  await finishTwoFactor(page, accounts.twoFactorOwnerSecret);
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("heading", { name: /What needs attention at EJM Browser Test Shop/ })).toBeVisible();
+});
+
+test("requires the optional challenge for a protected buyer account", async ({ page }) => {
+  await page.goto("/buyer/login?next=/shops");
+  await page.getByPlaceholder("Phone number").first().fill(accounts.twoFactorBuyerPhone);
+  await page.getByPlaceholder("Password").fill(password());
+  await page.getByRole("button", { name: "Continue securely" }).click();
+  await finishTwoFactor(page, accounts.twoFactorBuyerSecret);
+  await expect(page).toHaveURL(/\/shops$/);
+  await expect(page.getByText("EJM Browser Protected Buyer", { exact: true })).toBeVisible();
 });
 
 test("keeps the login control usable without horizontal overflow on a mobile viewport", async ({ page }) => {
