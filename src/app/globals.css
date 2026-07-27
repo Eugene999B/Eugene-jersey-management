@@ -117,9 +117,9 @@ canvas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  main .panel > .grid.grid-cols-2:has(> button),
+  main article > .grid.grid-cols-2,
   main .bg-slate-950 > .grid.grid-cols-2,
-  main article > .grid.grid-cols-2 {
+  main .panel > .grid.grid-cols-2:has(> button) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -160,9 +160,9 @@ canvas {
   *,
   *::before,
   *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
   }
 }
