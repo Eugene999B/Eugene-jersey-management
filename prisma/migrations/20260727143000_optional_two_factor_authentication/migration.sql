@@ -11,6 +11,7 @@ CREATE TABLE "AccountTwoFactor" (
     "recoveryCodeHashes" JSONB NOT NULL DEFAULT '[]',
     "pendingEncryptedSecret" TEXT,
     "pendingRecoveryCodeHashes" JSONB NOT NULL DEFAULT '[]',
+    "pendingExpiresAt" TIMESTAMP(3),
     "enabledAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
