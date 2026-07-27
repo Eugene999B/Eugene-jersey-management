@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/release-21-shop-machine-profiles-cut-paths
+  pull_request:
 
 permissions:
   contents: read
