@@ -24,17 +24,28 @@ test.describe.serial("shop machine profiles and cut-path export", () => {
     await signIn(page, "EJM-E2E-OWNER");
     await page.goto("/dashboard/designs");
 
-    await page.getByRole("button", { name: "Add machine profile" }).click();
-    await page.getByLabel("Profile name").fill("E2E Browser Cutter");
-    await page.getByLabel("Output format").selectOption("HPGL");
-    await page.getByLabel("Bed width mm").fill("320");
-    await page.getByLabel("Bed height mm").fill("500");
-    await page.getByLabel("Units per mm").fill("40");
-    await page.getByLabel("Serial baud").fill("19200");
-    await page.getByLabel("Shop default").check();
-    await page.getByRole("button", { name: "Save profile" }).click();
-    await expect(page.getByText("Machine profile saved")).toBeVisible();
-    await expect(page.getByText(/E2E Browser Cutter/).first()).toBeVisible();
+    const profileSelect = page.getByLabel("Active machine");
+    let browserCutterOption = profileSelect.locator("option", { hasText: "E2E Browser Cutter" });
+
+    if (await browserCutterOption.count() === 0) {
+      await page.getByRole("button", { name: "Add machine profile" }).click();
+      await page.getByLabel("Profile name").fill("E2E Browser Cutter");
+      await page.getByLabel("Output format").selectOption("HPGL");
+      await page.getByLabel("Bed width mm").fill("320");
+      await page.getByLabel("Bed height mm").fill("500");
+      await page.getByLabel("Units per mm").fill("40");
+      await page.getByLabel("Serial baud").fill("19200");
+      await page.getByLabel("Shop default").check();
+      await page.getByRole("button", { name: "Save profile" }).click();
+      await expect(page.getByText("Machine profile saved")).toBeVisible();
+      browserCutterOption = profileSelect.locator("option", { hasText: "E2E Browser Cutter" });
+    }
+
+    await expect(browserCutterOption).toHaveCount(1);
+    const browserCutterValue = await browserCutterOption.getAttribute("value");
+    expect(browserCutterValue).toBeTruthy();
+    await profileSelect.selectOption(browserCutterValue ?? "");
+    await expect(profileSelect.locator("option:checked")).toHaveText(/E2E Browser Cutter/);
 
     await page.getByRole("button", { name: "Use machine bed" }).click();
     await expect(page.getByLabel("Width mm")).toHaveValue("320");
