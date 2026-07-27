@@ -36,7 +36,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </div>
         </aside>
         <div className="min-w-0 pb-20 lg:pb-0">
-          <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-sm backdrop-blur sm:px-4 lg:px-6">
+          <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4 lg:px-6">
             <div className="flex items-center justify-between gap-3">
               <Link href={homePath} prefetch={false} className="flex min-w-0 items-center gap-3">
                 <Image className="shrink-0 lg:hidden" src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={38} height={38} />
