@@ -163,7 +163,9 @@ test("keeps a tenant owner inside the tenant dashboard across refresh", async ({
 
 test("requires the optional challenge only for a protected shop account", async ({ page }) => {
   const fields = await revealCredentials(page);
+  await fields.loginId.click();
   await fields.loginId.fill(accounts.twoFactorOwner);
+  await fields.passwordField.click();
   await fields.passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await finishTwoFactor(page, accounts.twoFactorOwnerSecret);
@@ -174,7 +176,7 @@ test("requires the optional challenge only for a protected shop account", async 
 test("requires the optional challenge for a protected buyer account", async ({ page }) => {
   await page.goto("/buyer/login?next=/shops");
   await page.getByPlaceholder("Phone number").first().fill(accounts.twoFactorBuyerPhone);
-  await page.getByPlaceholder("Password").fill(password());
+  await page.getByRole("textbox", { name: "Password", exact: true }).fill(password());
   await page.getByRole("button", { name: "Continue securely" }).click();
   await finishTwoFactor(page, accounts.twoFactorBuyerSecret);
   await expect(page).toHaveURL(/\/shops$/);
