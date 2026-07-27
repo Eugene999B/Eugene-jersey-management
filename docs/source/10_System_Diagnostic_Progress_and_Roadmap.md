@@ -10,7 +10,7 @@ Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc
 
 ## Status summary
 
-The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, design studio, suppliers, network, admin, Paystack settlement routing, messaging hooks, structural tenant isolation, desktop/mobile browser acceptance, optional personal two-factor authentication, and read-only production integration health checks.
+The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, a production Design Studio, suppliers, network, admin, Paystack settlement routing, messaging hooks, structural tenant isolation, desktop/mobile browser acceptance, optional personal two-factor authentication, read-only production integration health checks, and interruption-safe local design recovery.
 
 Production account activation is repository-controlled: Railway migrations are followed by `production:activate`, which creates the real administrator from Railway variables and retires seeded demo access.
 
@@ -24,17 +24,19 @@ Production account activation is repository-controlled: Railway migrations are f
 4. **Dashboard page-level RBAC** — `src/lib/dashboard-access.ts` is used by `src/proxy.ts`, with a server layout second layer via `x-pathname`.
 5. **Structural tenant database isolation** — authenticated shop workspaces use a shop-scoped Prisma client, including protected interactive transactions and permanent two-shop attack verification.
 6. **Transaction-safe stock decrement** — POS, cart, and public order use guarded `updateMany` with `stockQty >= quantity`.
-7. **Design studio** — production sheet workspace, undo/redo, delete, duplicate, save to `DesignJob`, upload via `/api/uploads`, SVG/print/manifest, and device readiness checks.
-8. **Buyer SMS pending password** — password hash is stored on `PhoneVerificationCode.pendingPasswordHash` until verification succeeds.
-9. **Paystack callback** — verifies transactions before settlement. Webhooks verify HMAC signatures and record `PaymentProviderEvent`.
-10. **Paystack mismatch handling** — amount/currency mismatch updates the Payment row to `FAILED`.
-11. **Complete mobile hardening** — shop-owner, public marketplace/storefront, supplier and platform-admin surfaces have 390 × 844 Chromium overflow and navigation coverage.
-12. **Optional personal 2FA** — buyers, shop workers, owners, suppliers and platform administrators may individually enable or disable authenticator-based 2FA. It is off by default, uses encrypted secrets and one-time recovery codes, and never allows one administrator to toggle another person's preference.
-13. **Production Integration Health control centre** — `/admin/integrations` performs read-only checks for PostgreSQL, the EJM Paystack account, Arkesel, WhatsApp health, S3/R2 storage and the reservation-release scheduler.
-14. **Store-owned payment settlement** — every card-enabled store must use its own Paystack subaccount and settlement destination. EJM platform charges remain with the administrator main account.
-15. **Administrator-controlled payment routing** — stores may update their settlement details and accepted methods, but only a platform administrator with Billing permission can assign the subaccount, EJM flat charge or Paystack fee bearer.
-16. **Scheduled-job monitoring** — reservation-release runs are bearer-token protected and record started, successful and failed heartbeats in the platform audit log.
-17. **GitHub validation** — pull requests run dependency audit, Prisma generation and migrations, guarded lifecycle checks, lint, TypeScript, the complete unit suite, tenant-isolation attacks, production build and Chromium journeys.
+7. **Design Studio production workflow** — production sheet workspace, undo/redo, delete, duplicate, save to `DesignJob`, upload via `/api/uploads`, SVG/print/manifest, and device readiness checks.
+8. **Design Studio interruption recovery** — meaningful unsaved work is copied to a shop-worker-scoped browser draft, offered explicitly after a reload, and cleared after a successful authoritative shop save.
+9. **Versioned design projects** — older supported projects migrate to version 4; malformed, oversized, expired and future-version recovery data is rejected safely.
+10. **Buyer SMS pending password** — password hash is stored on `PhoneVerificationCode.pendingPasswordHash` until verification succeeds.
+11. **Paystack callback** — verifies transactions before settlement. Webhooks verify HMAC signatures and record `PaymentProviderEvent`.
+12. **Paystack mismatch handling** — amount/currency mismatch updates the Payment row to `FAILED`.
+13. **Complete mobile hardening** — shop-owner, public marketplace/storefront, supplier and platform-admin surfaces have 390 × 844 Chromium overflow and navigation coverage.
+14. **Optional personal 2FA** — buyers, shop workers, owners, suppliers and platform administrators may individually enable or disable authenticator-based 2FA. It is off by default, uses encrypted secrets and one-time recovery codes, and never allows one administrator to toggle another person's preference.
+15. **Production Integration Health control centre** — `/admin/integrations` performs read-only checks for PostgreSQL, the EJM Paystack account, Arkesel, WhatsApp health, S3/R2 storage and the reservation-release scheduler.
+16. **Store-owned payment settlement** — every card-enabled store must use its own Paystack subaccount and settlement destination. EJM platform charges remain with the administrator main account.
+17. **Administrator-controlled payment routing** — stores may update their settlement details and accepted methods, but only a platform administrator with Billing permission can assign the subaccount, EJM flat charge or Paystack fee bearer.
+18. **Scheduled-job monitoring** — reservation-release runs are bearer-token protected and record started, successful and failed heartbeats in the platform audit log.
+19. **GitHub validation** — pull requests run dependency audit, Prisma generation and migrations, guarded lifecycle checks, lint, TypeScript, the complete unit suite, tenant-isolation attacks, production build and Chromium journeys.
 
 ## Optional two-factor operating rules
 
@@ -62,27 +64,40 @@ Production account activation is repository-controlled: Railway migrations are f
 10. Full settlement account numbers must not be displayed or written to audit metadata.
 11. One store's funds must never be represented as another tenant's money.
 
+## Design recovery operating rules
+
+1. The database `DesignJob` remains the authoritative shared shop project.
+2. Browser recovery is a temporary safety net on one browser profile and device.
+3. Recovery is scoped to the exact shop and worker account.
+4. A newer draft is never opened silently; the operator must restore or discard it.
+5. A stale draft is removed when the database copy is newer.
+6. A successful shop save clears the browser recovery draft.
+7. Recovery data older than 14 days or larger than 1,800,000 bytes is rejected.
+8. Projects from a future unsupported studio version are rejected rather than partially loaded.
+9. Recovery storage never contains passwords, sessions, payment credentials or provider keys.
+10. Operators should still download a `.design.json` backup before major production changes.
+
 ## Still required before selling broadly to shops
 
-1. Deploy Release #17 and verify `/admin/integrations` against real Railway Paystack, Arkesel, WhatsApp, storage and scheduler configuration.
+1. Verify `/admin/integrations` against real Railway Paystack, Arkesel, WhatsApp, storage and scheduler configuration.
 2. Complete a controlled Paystack test transaction for a verified store subaccount and confirm webhook settlement end to end.
 3. Paystack: refunds UI, real POS gateway charge, settlement reconciliation and webhook retry dashboard.
 4. Arkesel: controlled delivery test, delivery status storage, retry queue, templates, consent/opt-out and provider-cost reconciliation.
 5. WhatsApp: approved templates, consent, delivery status, failure handling and a provider-specific read-only health endpoint.
 6. Schedule `POST /api/jobs/release-reservations` with `JOBS_API_TOKEN` and confirm recurring successful heartbeats.
 7. Add an account session list, device history and per-session forced logout.
-8. Design Studio reliability: autosave recovery, versioned canvas data, multi-select, group/ungroup, true SVG-to-cut-path HPGL/DXF, per-shop machine profiles and mobile inspector.
+8. Design Studio remaining work: multi-select, group/ungroup, database version history, true SVG-to-cut-path HPGL/DXF, per-shop machine profiles and a richer mobile inspector.
 9. Complete CEO-level settings, communication-credit packages, support investigations, public business applications and location-aware marketplace work.
 10. Clean the Turbopack media-storage NFT warning.
 11. Refresh Google Drive docs after each major merge so they match repository source documentation.
 
 ## Recommended implementation order
 
-1. Deploy and verify Release #17 production integration health.
+1. Verify Release #17 production integrations when provider accounts are ready.
 2. Complete controlled Paystack subaccount settlement and webhook reconciliation testing.
-3. Add Paystack refunds, POS gateway payments and settlement/retry operations.
-4. Build SMS and WhatsApp credit packages using the EJM administrator payment account.
-5. Complete Design Studio reliability before adding the remaining machine-production tools.
+3. Continue Design Studio production tooling with multi-select, grouping and database version history.
+4. Add Paystack refunds, POS gateway payments and settlement/retry operations.
+5. Build SMS and WhatsApp credit packages using the EJM administrator payment account.
 6. Build CEO settings, the admin investigation centre and public shop/supplier application pipeline.
 7. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
 8. Complete commercial launch hardening and a controlled real-shop pilot.
@@ -102,7 +117,7 @@ npm.cmd run build
 
 ## AI handoff rules
 
-1. Read `README.md`, this diagnostic, `docs/source/11_Production_Activation.md`, and `docs/source/14_Production_Integration_Health.md` before production changes.
+1. Read `README.md`, this diagnostic, `docs/source/11_Production_Activation.md`, `docs/source/14_Production_Integration_Health.md`, and `docs/source/15_Design_Studio_Reliability.md` before production changes.
 2. Never touch Chalin projects.
 3. Keep frontend/backend together in this Next.js app unless deliberately splitting later.
 4. Prisma migrations are required for schema changes.
@@ -111,5 +126,6 @@ npm.cmd run build
 7. Never replace store-owned settlement with a shared tenant balance. Customer store payments must retain their store subaccount assignment.
 8. Never let a store user change the EJM platform fee or Paystack fee bearer.
 9. Provider health checks must remain read-only and must not create transactions, send messages, upload files or release stock.
-10. Design changes must test selection, movement, mirror, zoom, save, reload and mobile layout.
-11. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.
+10. Browser design recovery must remain scoped to the current shop and worker and must never silently overwrite the database copy.
+11. Design changes must test selection, movement, mirror, zoom, save, reload, recovery and mobile layout.
+12. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.
