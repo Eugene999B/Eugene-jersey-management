@@ -54,7 +54,7 @@ export default async function TwoFactorLoginPage() {
           <h1 className="mt-3 text-4xl font-black tracking-[-0.05em]">One more private check.</h1>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48">The password for <span className="font-bold text-white/75">{accountName}</span> was accepted. Optional two-factor authentication is enabled on this {accountType}.</p>
         </div>
-        <TwoFactorLoginForm />
+        <TwoFactorLoginForm cancelPath={challenge.accountKind === AccountKind.BUYER ? "/buyer/logout" : "/logout"} />
       </div>
     </main>
   );
