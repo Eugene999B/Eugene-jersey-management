@@ -27,12 +27,23 @@ describe("design recovery", () => {
     expect(migrated.jobName).toBe("Team finals");
     expect(migrated.mirror).toBe(false);
     expect(migrated.snap).toBe(true);
-    expect(migrated.machineProfile).toBe("Generic SVG");
+    expect(migrated.machineProfile).toBe("Generic SVG cutter");
+    expect(migrated.machineProfileId).toBeNull();
+    expect(migrated.machineSettings).toBeNull();
   });
 
-  it("preserves grouped layer metadata in current projects", () => {
+  it("preserves grouped layer and machine snapshot metadata in current projects", () => {
+    const machineSettings = {
+      name: "Shop cutter",
+      outputFormat: "HPGL",
+      unitsPerMm: 40,
+      origin: "BOTTOM_LEFT",
+    };
     const migrated = migrateDesignProject(project({
       version: DESIGN_PROJECT_VERSION,
+      machineProfile: "Shop cutter",
+      machineProfileId: "machine-1",
+      machineSettings,
       layers: [
         { id: "layer-1", kind: "text", name: "Name", groupId: "group-1" },
         { id: "layer-2", kind: "text", name: "Number", groupId: "group-1" },
@@ -41,6 +52,8 @@ describe("design recovery", () => {
 
     expect((migrated.layers as Array<Record<string, unknown>>)[0].groupId).toBe("group-1");
     expect((migrated.layers as Array<Record<string, unknown>>)[1].groupId).toBe("group-1");
+    expect(migrated.machineProfileId).toBe("machine-1");
+    expect(migrated.machineSettings).toEqual(machineSettings);
   });
 
   it("rejects projects created by a newer unsupported studio", () => {
