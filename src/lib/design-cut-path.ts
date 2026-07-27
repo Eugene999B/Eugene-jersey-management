@@ -298,7 +298,7 @@ function parsePathData(value: string): Array<{ points: CutPoint[]; closed: boole
       }
     } else if (upper === "T") {
       while (hasNumbers()) {
-        const control = lastQuadratic ? { x: current.x * 2 - lastQuadratic.x, y: current.y * 2 - lastQuadratic.y } : current;
+        const control: CutPoint = lastQuadratic ? { x: current.x * 2 - lastQuadratic.x, y: current.y * 2 - lastQuadratic.y } : current;
         const end = coordinate(read(), read());
         const segmentStart = current;
         for (let step = 1; step <= 16; step += 1) lineTo(quadraticPoint(segmentStart, control, end, step / 16));
