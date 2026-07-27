@@ -213,7 +213,7 @@ test("keeps public marketplace and storefront browsing mobile-safe", async ({ pa
 
   for (const [name, path, heading] of routes) {
     await page.goto(path);
-    await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`mobile-public-${name}.png`), fullPage: false });
   }
@@ -232,11 +232,18 @@ test("keeps the supplier portal usable on a mobile viewport", async ({ page }, t
 test("keeps platform administration usable on a mobile viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, accounts.unrestrictedAdmin);
-  await expect(page.getByRole("button", { name: "Open platform tools" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Quick admin navigation" })).toBeVisible();
+  const toolsButton = page.getByRole("button", { name: "Open platform tools" });
+  const quickNavigation = page.getByRole("navigation", { name: "Quick admin navigation" });
+  await expect(toolsButton).toBeVisible();
+  await expect(quickNavigation).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole("button", { name: "Open platform tools" }).click();
+  const toolsBox = await toolsButton.boundingBox();
+  const quickNavigationBox = await quickNavigation.boundingBox();
+  expect(toolsBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(120);
+  expect(quickNavigationBox?.y ?? Number.NEGATIVE_INFINITY).toBeGreaterThan(700);
+
+  await toolsButton.click();
   await expect(page.getByRole("dialog", { name: "All platform tools" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Shops", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Security", exact: true })).toBeVisible();
