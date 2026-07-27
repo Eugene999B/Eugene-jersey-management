@@ -37,12 +37,13 @@ export async function getTwoFactorStatus(account: TwoFactorAccount) {
 }
 
 export async function accountRequiresTwoFactor(account: TwoFactorAccount) {
-  if (!isTwoFactorConfigured()) return false;
   const record = await platformDb.accountTwoFactor.findUnique({
     where: { accountKind_accountId: account },
     select: { enabled: true, encryptedSecret: true },
   });
-  return record?.enabled === true && Boolean(record.encryptedSecret);
+  if (!record?.enabled || !record.encryptedSecret) return false;
+  if (!isTwoFactorConfigured()) throw new Error("TWO_FACTOR_NOT_CONFIGURED");
+  return true;
 }
 
 export async function beginTwoFactorSetup(account: TwoFactorAccount, accountLabel: string) {
