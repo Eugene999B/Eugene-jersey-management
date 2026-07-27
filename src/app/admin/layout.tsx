@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Building2, MessageCircle, UsersRound } from "lucide-react";
+import { Building2, MessageCircle, ShieldCheck, UsersRound } from "lucide-react";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireRole } from "@/lib/auth";
@@ -31,6 +31,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <AdminNavigation allowedPermissions={allowedPermissions} />
             <div className="mt-auto border-t border-white/10 p-4">
               <div className="rounded-xl bg-white/[0.07] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">Signed in as</p><p className="mt-1 truncate text-sm font-semibold">{session.name}</p><p className="mt-1 truncate text-xs text-white/55">{session.email}</p></div>
+              <Link href="/account/security" className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/10"><ShieldCheck size={17} />Personal security</Link>
               <LogoutButton className="mt-3 w-full bg-white text-slate-950 hover:bg-slate-100" />
             </div>
           </div>
@@ -44,6 +45,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </Link>
               <div className="flex shrink-0 items-center gap-2">
                 <AdminNavigation allowedPermissions={allowedPermissions} variant="mobile" />
+                <Link className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700" href="/account/security" prefetch={false} title="Personal account security" aria-label="Open personal account security"><ShieldCheck size={17} /></Link>
                 <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold sm:inline-flex" href="/shops" prefetch={false}><UsersRound size={16} /> Marketplace</Link>
                 {canManageShops ? <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold md:inline-flex" href="/admin/shops/new" prefetch={false}><Building2 size={16} /> New shop</Link> : null}
                 {canSupport ? <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl bg-[#081528] px-3 text-sm font-semibold text-white md:inline-flex" href="/admin/support" prefetch={false}><MessageCircle size={16} /> Issues</Link> : null}
