@@ -81,6 +81,21 @@ canvas {
   scrollbar-width: thin;
 }
 
+@media (max-width: 1199px) {
+  .mobile-design-studio > div > div.grid > main {
+    order: -1;
+  }
+
+  .mobile-design-studio > div > div.grid > aside,
+  .mobile-design-studio > div > div.grid > main {
+    min-width: 0;
+  }
+
+  .mobile-design-studio [aria-label="Production material canvas"] {
+    max-height: 68vh;
+  }
+}
+
 @media (max-width: 639px) {
   .field,
   input,
@@ -117,6 +132,21 @@ canvas {
 
   .panel {
     border-radius: 12px;
+  }
+
+  .mobile-design-studio > div > section:first-child {
+    padding: 1rem;
+  }
+
+  .mobile-design-studio > div > section:first-child > div > div:last-child {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobile-design-studio > div > section:first-child button {
+    min-width: 0;
+    justify-content: center;
   }
 }
 
