@@ -1,0 +1,17 @@
+model DesignJobVersion {
+  id             String   @id @default(cuid())
+  shopId         String
+  designJobId    String
+  versionNumber  Int
+  title          String
+  canvasJson     Json
+  machineProfile String?
+  source         String   @default("SAVE")
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([designJobId, versionNumber])
+  @@index([shopId, createdAt])
+  @@index([designJobId, createdAt])
+  @@index([createdById, createdAt])
+}
