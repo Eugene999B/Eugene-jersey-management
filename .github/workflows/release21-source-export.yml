@@ -1,0 +1,25 @@
+name: Export Release 21 Source
+
+on:
+  push:
+    branches:
+      - agent/release-21-shop-machine-profiles-cut-paths
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-21-source
+          path: |
+            prisma/schema.prisma
+            src/lib/tenant-db.ts
+            scripts/verify-tenant-isolation.ts
+            src/components/design/production-studio-advanced.tsx
+          retention-days: 1
