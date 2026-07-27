@@ -54,8 +54,10 @@ export async function accountRequiresTwoFactor(account: TwoFactorAccount) {
     where: { accountKind_accountId: account },
     select: { enabled: true, encryptedSecret: true },
   });
-  if (!record?.enabled || !record.encryptedSecret) return false;
-  if (!isTwoFactorConfigured()) throw new Error("TWO_FACTOR_NOT_CONFIGURED");
+  if (!record?.enabled) return false;
+  if (!record.encryptedSecret || !isTwoFactorConfigured()) {
+    throw new Error("TWO_FACTOR_NOT_CONFIGURED");
+  }
   return true;
 }
 
