@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { platformDb } from "@/lib/platform-db";
 import { MissingTenantScopeError } from "@/lib/tenant-scope";
 
@@ -61,6 +60,14 @@ const readOperations = new Set([
 const createOperations = new Set(["create", "createMany", "createManyAndReturn"]);
 const updateOperations = new Set(["update", "updateMany"]);
 const deleteOperations = new Set(["delete", "deleteMany"]);
+const blockedClientMethods = new Set([
+  "$queryRaw",
+  "$queryRawUnsafe",
+  "$executeRaw",
+  "$executeRawUnsafe",
+  "$runCommandRaw",
+  "$extends",
+]);
 
 export class TenantDatabaseAccessError extends Error {
   constructor(message: string) {
@@ -179,8 +186,7 @@ async function scopeCreatePayload(model: string, policy: TenantPolicy, dataValue
 
 export function createTenantDb(shopIdValue: string) {
   const shopId = requireShopId(shopIdValue);
-
-  return platformDb.$extends({
+  const tenantClient = platformDb.$extends({
     name: `tenant-scope:${shopId}`,
     query: {
       $allModels: {
@@ -208,10 +214,17 @@ export function createTenantDb(shopIdValue: string) {
           return query(scopedArgs as typeof args);
         },
       },
-      $allOperations({ model, operation }) {
-        if (!model) throw new TenantDatabaseAccessError(`Raw database operation ${operation} is not allowed through the tenant client.`);
-        throw new TenantDatabaseAccessError(`Unrecognised tenant operation ${model}.${operation}.`);
-      },
+    },
+  });
+
+  return new Proxy(tenantClient, {
+    get(target, property, receiver) {
+      if (typeof property === "string" && blockedClientMethods.has(property)) {
+        return () => {
+          throw new TenantDatabaseAccessError(`${property} is not allowed through the tenant client.`);
+        };
+      }
+      return Reflect.get(target, property, receiver);
     },
   });
 }
@@ -223,5 +236,3 @@ export const tenantScopedModelNames = Object.freeze([
   ...directTenantModels,
   ...Object.keys(childTenantPolicies),
 ]);
-
-export const tenantIsolationExtension = Prisma.defineExtension((client) => client);
