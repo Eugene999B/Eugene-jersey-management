@@ -80,8 +80,9 @@ Release #18 recovery rules remain unchanged:
 - `DesignJob` is the authoritative shared current project;
 - `DesignJobVersion` is the immutable authoritative save history;
 - browser recovery is a temporary shop-worker-scoped interruption safety net;
-- a recovery draft never silently overwrites the database; and
-- successful shop saves clear the browser recovery draft.
+- a recovery draft never silently overwrites the database;
+- successful shop saves clear the browser recovery draft; and
+- debounce and page-exit recovery writers compare the working-project fingerprint with the last authoritative shop save, so unchanged saved work cannot recreate a false recovery prompt after reload.
 
 ## Production-output compatibility
 
@@ -107,7 +108,8 @@ Release #19 adds automated checks for:
 - version-number validation and labels;
 - project version 5 group persistence;
 - denial of version-history access through normal and interactive tenant clients;
-- browser grouping, version 1 save, version 2 save and version 1 reopen; and
+- browser grouping, version 1 save, version 2 save and version 1 reopen;
+- confirmation that a current authoritative save does not create a recovery prompt on reload; and
 - 390 × 844 Design Studio horizontal-overflow protection.
 
 The full repository validation suite still covers dependency safety, Prisma migrations, lifecycle guards, TypeScript, unit tests, tenant isolation, production build and all existing desktop/mobile journeys.
