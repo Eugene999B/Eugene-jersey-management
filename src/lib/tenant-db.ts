@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { platformDb } from "@/lib/platform-db";
 import { MissingTenantScopeError } from "@/lib/tenant-scope";
 
@@ -47,6 +48,52 @@ const childTenantPolicies: Record<string, (shopId: string) => UnknownRecord> = {
   AnnouncementDismissal: (shopId) => ({ user: { shopId } }),
 };
 
+const modelPropertyNames: Record<string, string> = {
+  shop: "Shop",
+  user: "User",
+  category: "Category",
+  attributeTemplate: "AttributeTemplate",
+  attributeField: "AttributeField",
+  product: "Product",
+  productVariant: "ProductVariant",
+  customer: "Customer",
+  buyerAccount: "BuyerAccount",
+  order: "Order",
+  orderItem: "OrderItem",
+  payment: "Payment",
+  mediaAsset: "MediaAsset",
+  buyerCartItem: "BuyerCartItem",
+  coupon: "Coupon",
+  deliveryZone: "DeliveryZone",
+  returnRequest: "ReturnRequest",
+  paymentProviderEvent: "PaymentProviderEvent",
+  rateLimitBucket: "RateLimitBucket",
+  inviteToken: "InviteToken",
+  passwordResetToken: "PasswordResetToken",
+  phoneVerificationCode: "PhoneVerificationCode",
+  productReview: "ProductReview",
+  announcement: "Announcement",
+  announcementDismissal: "AnnouncementDismissal",
+  saleHold: "SaleHold",
+  notification: "Notification",
+  debt: "Debt",
+  debtInstallment: "DebtInstallment",
+  debtPayment: "DebtPayment",
+  dailyClosing: "DailyClosing",
+  customerMessage: "CustomerMessage",
+  customerThread: "CustomerThread",
+  chatMessage: "ChatMessage",
+  designJob: "DesignJob",
+  supplier: "Supplier",
+  supplierOrder: "SupplierOrder",
+  supplierOrderItem: "SupplierOrderItem",
+  shopNetworkLink: "ShopNetworkLink",
+  shopNetworkOrder: "ShopNetworkOrder",
+  shopNetworkOrderItem: "ShopNetworkOrderItem",
+  shopPaymentConfig: "ShopPaymentConfig",
+  auditLog: "AuditLog",
+};
+
 const readOperations = new Set([
   "findUnique",
   "findUniqueOrThrow",
@@ -58,7 +105,7 @@ const readOperations = new Set([
   "groupBy",
 ]);
 const createOperations = new Set(["create", "createMany", "createManyAndReturn"]);
-const updateOperations = new Set(["update", "updateMany"]);
+const updateOperations = new Set(["update", "updateMany", "updateManyAndReturn"]);
 const deleteOperations = new Set(["delete", "deleteMany"]);
 const blockedClientMethods = new Set([
   "$queryRaw",
@@ -67,6 +114,10 @@ const blockedClientMethods = new Set([
   "$executeRawUnsafe",
   "$runCommandRaw",
   "$extends",
+  "$connect",
+  "$disconnect",
+  "$on",
+  "$use",
 ]);
 
 export class TenantDatabaseAccessError extends Error {
@@ -184,6 +235,59 @@ async function scopeCreatePayload(model: string, policy: TenantPolicy, dataValue
   return scopeCreateData(model, policy, dataValue, shopId);
 }
 
+async function scopeOperationArguments(model: string, operation: string, argsValue: unknown, shopId: string) {
+  const policy = policyFor(model);
+  const scopedArgs: UnknownRecord = isRecord(argsValue) ? { ...argsValue } : {};
+
+  if (readOperations.has(operation)) {
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+  } else if (createOperations.has(operation)) {
+    scopedArgs.data = await scopeCreatePayload(model, policy, scopedArgs.data, shopId);
+  } else if (updateOperations.has(operation)) {
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+    scopedArgs.data = protectUpdateData(model, policy, scopedArgs.data, shopId);
+  } else if (deleteOperations.has(operation)) {
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+  } else if (operation === "upsert") {
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+    scopedArgs.create = await scopeCreateData(model, policy, scopedArgs.create, shopId);
+    scopedArgs.update = protectUpdateData(model, policy, scopedArgs.update, shopId);
+  } else {
+    throw new TenantDatabaseAccessError(`${model}.${operation} is not allowed through the tenant client.`);
+  }
+
+  return scopedArgs;
+}
+
+function createTenantTransactionDb(transaction: Prisma.TransactionClient, shopId: string) {
+  return new Proxy(transaction, {
+    get(target, property, receiver) {
+      if (typeof property !== "string") return Reflect.get(target, property, receiver);
+      if (blockedClientMethods.has(property) || property === "$transaction") {
+        return () => {
+          throw new TenantDatabaseAccessError(`${property} is not allowed inside a tenant transaction.`);
+        };
+      }
+
+      const model = modelPropertyNames[property];
+      if (!model) return Reflect.get(target, property, receiver);
+      const delegate = Reflect.get(target, property, target);
+      if (typeof delegate !== "object" || delegate === null) return delegate;
+
+      return new Proxy(delegate, {
+        get(delegateTarget, operation, delegateReceiver) {
+          const method = Reflect.get(delegateTarget, operation, delegateReceiver);
+          if (typeof operation !== "string" || typeof method !== "function") return method;
+          return async (...input: unknown[]) => {
+            const scopedArgs = await scopeOperationArguments(model, operation, input[0], shopId);
+            return Reflect.apply(method, delegateTarget, [scopedArgs, ...input.slice(1)]);
+          };
+        },
+      });
+    },
+  }) as Prisma.TransactionClient;
+}
+
 export function createTenantDb(shopIdValue: string) {
   const shopId = requireShopId(shopIdValue);
   const tenantClient = platformDb.$extends({
@@ -191,26 +295,7 @@ export function createTenantDb(shopIdValue: string) {
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          const policy = policyFor(model);
-          const scopedArgs: UnknownRecord = { ...(args as UnknownRecord) };
-
-          if (readOperations.has(operation)) {
-            scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
-          } else if (createOperations.has(operation)) {
-            scopedArgs.data = await scopeCreatePayload(model, policy, scopedArgs.data, shopId);
-          } else if (updateOperations.has(operation)) {
-            scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
-            scopedArgs.data = protectUpdateData(model, policy, scopedArgs.data, shopId);
-          } else if (deleteOperations.has(operation)) {
-            scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
-          } else if (operation === "upsert") {
-            scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
-            scopedArgs.create = await scopeCreateData(model, policy, scopedArgs.create, shopId);
-            scopedArgs.update = protectUpdateData(model, policy, scopedArgs.update, shopId);
-          } else {
-            throw new TenantDatabaseAccessError(`${model}.${operation} is not allowed through the tenant client.`);
-          }
-
+          const scopedArgs = await scopeOperationArguments(model, operation, args, shopId);
           return query(scopedArgs as typeof args);
         },
       },
@@ -219,6 +304,19 @@ export function createTenantDb(shopIdValue: string) {
 
   return new Proxy(tenantClient, {
     get(target, property, receiver) {
+      if (property === "$transaction") {
+        return (input: unknown, options?: unknown) => {
+          if (typeof input === "function") {
+            const callback = input as (transaction: Prisma.TransactionClient) => unknown;
+            return platformDb.$transaction(
+              (transaction) => callback(createTenantTransactionDb(transaction, shopId)),
+              options as never,
+            );
+          }
+          const transactionMethod = Reflect.get(target, property, target);
+          return Reflect.apply(transactionMethod, target, options === undefined ? [input] : [input, options]);
+        };
+      }
       if (typeof property === "string" && blockedClientMethods.has(property)) {
         return () => {
           throw new TenantDatabaseAccessError(`${property} is not allowed through the tenant client.`);
