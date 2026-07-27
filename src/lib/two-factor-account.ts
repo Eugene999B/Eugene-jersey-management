@@ -110,7 +110,7 @@ export async function confirmTwoFactorSetup(account: TwoFactorAccount, code: str
     data: {
       enabled: true,
       encryptedSecret: record.pendingEncryptedSecret,
-      recoveryCodeHashes: record.pendingRecoveryCodeHashes,
+      recoveryCodeHashes: stringArray(record.pendingRecoveryCodeHashes),
       pendingEncryptedSecret: null,
       pendingRecoveryCodeHashes: [],
       pendingExpiresAt: null,
