@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 const errorCopy: Record<string, string> = {
   invalid: "The Login ID or password is not correct.",
   rate: "Too many sign-in attempts. Wait a few minutes before trying again.",
+  security: "Two-factor verification is temporarily unavailable for this protected account. Contact platform support rather than bypassing the security check.",
   "shop-not-found": "The shop connected to this account could not be found.",
   "shop-suspended": "This shop workspace is suspended. Contact the platform administrator.",
   "missing-shop": "This account is missing its shop assignment.",
@@ -17,7 +18,7 @@ const errorCopy: Record<string, string> = {
   "invalid-invite": "That staff invitation is invalid, expired, or already belongs to an account.",
 };
 
-type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; reset?: string; loggedOut?: string }> };
+type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; reset?: string; loggedOut?: string; securityChanged?: string }> };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = (await searchParams) ?? {};
@@ -63,6 +64,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {error ? <div className="mb-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100" role="alert">{error}</div> : null}
           {params.reset ? <div className="mb-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-100">Password updated. Sign in with the new password.</div> : null}
           {params.loggedOut ? <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100">You have signed out securely.</div> : null}
+          {params.securityChanged ? <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100">Your optional two-factor setting changed successfully. Every previous session was signed out; continue with your current security setting.</div> : null}
 
           <StaffLoginForm nextPath={params.next} />
 
