@@ -37,6 +37,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sports_shop_platform?schema=public
       SESSION_SECRET: github-actions-validation-secret-at-least-32-characters
+      TWO_FACTOR_ENCRYPTION_KEY: github-actions-two-factor-encryption-key-at-least-32-characters
       APP_URL: http://localhost:3000
       MEDIA_STORAGE_PROVIDER: local
       SMS_PROVIDER: console
