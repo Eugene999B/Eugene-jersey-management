@@ -49,7 +49,7 @@ test("groups layers and reopens immutable shop versions", async ({ page }) => {
   await page.keyboard.up("Shift");
   await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Group selected" }).click();
+  await page.getByRole("button", { name: "Group selected", exact: true }).click();
   await expect(page.getByText("Group", { exact: true })).toHaveCount(2);
 
   await page.getByRole("button", { name: "Save project" }).click();
