@@ -9,7 +9,7 @@ import { requirePlatformPermission } from "@/lib/platform-admin";
 export const dynamic = "force-dynamic";
 
 export default async function SecurityPage() {
-  const session = await requirePlatformPermission("settings");
+  const session = await requirePlatformPermission("security");
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [currentAdmin, failedLoginEvents, failedLoginLogs, activeAdmins, suspendedAdmins] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.id } }),
