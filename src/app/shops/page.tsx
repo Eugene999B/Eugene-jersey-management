@@ -29,7 +29,7 @@ export default async function ShopsPage({ searchParams }: Props) {
             { city: { contains: q, mode: "insensitive" } },
             { country: { contains: q, mode: "insensitive" } },
             { products: { some: { name: { contains: q, mode: "insensitive" } } } },
-            { products: { some: { category: { name: { contains: q, mode: "insensitive" } } } },
+            { products: { some: { category: { name: { contains: q, mode: "insensitive" } } } } },
             { products: { some: { sportType: { contains: q, mode: "insensitive" } } } },
           ]
         : undefined,
