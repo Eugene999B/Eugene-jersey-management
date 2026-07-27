@@ -5,19 +5,17 @@ import { Building2, MessageCircle, UsersRound } from "lucide-react";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { parsePlatformPermissions } from "@/lib/platform-admin";
+import { canAccessPlatformPermission, getAllowedPlatformPermissions, platformAdminHomePath } from "@/lib/platform-admin";
 import { permissions } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireRole(permissions.superAdmin);
-  const adminUser = await prisma.user.findUnique({ where: { id: session.id }, select: { adminPermissions: true } });
-  const assignedPermissions = parsePlatformPermissions(adminUser?.adminPermissions);
-  const allowedPermissions = assignedPermissions.length ? assignedPermissions : null;
-  const canManageShops = allowedPermissions === null || allowedPermissions.includes("shops");
-  const canSupport = allowedPermissions === null || allowedPermissions.includes("support");
+  const allowedPermissions = await getAllowedPlatformPermissions(session.id);
+  const homePath = platformAdminHomePath(allowedPermissions);
+  const canManageShops = canAccessPlatformPermission(allowedPermissions, "shops");
+  const canSupport = canAccessPlatformPermission(allowedPermissions, "support");
 
   return (
     <div className="min-h-screen bg-[#f4f6f8] text-slate-950">
@@ -25,7 +23,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <aside className="border-b border-slate-200 bg-[#081528] text-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r lg:border-white/10">
           <div className="flex h-full flex-col">
             <div className="border-b border-white/10 p-5">
-              <Link href="/admin" prefetch={false} className="flex items-center gap-3">
+              <Link href={homePath} prefetch={false} className="flex items-center gap-3">
                 <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={48} height={48} priority />
                 <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300/75">Platform control</p><h1 className="mt-1 text-lg font-semibold">Super Admin</h1></div>
               </Link>

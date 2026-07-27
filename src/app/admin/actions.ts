@@ -63,11 +63,11 @@ const announcementSchema = z.object({ title: z.string().min(2), body: z.string()
 export async function createGlobalAnnouncementAction(formData: FormData) {
   const session = await requirePlatformPermission("broadcast");
   const parsed = announcementSchema.safeParse({ title: formData.get("title"), body: formData.get("body") });
-  if (!parsed.success) redirect("/admin/shops?error=announcement");
+  if (!parsed.success) redirect("/admin/broadcast?error=announcement");
   const announcement = await prisma.announcement.create({ data: { ...parsed.data, isGlobal: true } });
   await audit({ userId: session.id, action: "admin.global_announcement_created", entityType: "Announcement", entityId: announcement.id });
   revalidatePath("/admin");
-  revalidatePath("/admin/shops");
+  revalidatePath("/admin/broadcast");
 }
 
 const subscriptionSchema = z.object({
@@ -131,6 +131,11 @@ const platformWorkerSchema = z.object({
   adminPermissions: z.array(z.enum(platformPermissionValues)).min(1),
 });
 
+const platformWorkerPermissionsSchema = z.object({
+  userId: z.string().min(1),
+  adminPermissions: z.array(z.enum(platformPermissionValues)).min(1),
+});
+
 function platformWorkerLoginId(name: string, provided?: string) {
   const clean = provided?.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
   if (clean && clean.length >= 5) return clean;
@@ -183,6 +188,32 @@ export async function createPlatformWorkerAction(formData: FormData) {
   });
   revalidatePath("/admin");
   revalidatePath("/admin/staff");
+}
+
+export async function updatePlatformWorkerPermissionsAction(formData: FormData) {
+  const session = await requirePlatformPermission("workers");
+  const parsed = platformWorkerPermissionsSchema.safeParse({
+    userId: formData.get("userId"),
+    adminPermissions: formData.getAll("adminPermissions").map(String),
+  });
+  if (!parsed.success || parsed.data.userId === session.id) redirect("/admin/staff?error=permissions");
+
+  const worker = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
+  if (!worker || worker.role !== Role.SUPER_ADMIN || worker.shopId) redirect("/admin/staff?error=permissions");
+
+  const updated = await prisma.user.update({
+    where: { id: worker.id },
+    data: { adminPermissions: parsed.data.adminPermissions, sessionVersion: { increment: 1 } },
+  });
+  await audit({
+    userId: session.id,
+    action: "admin.platform_worker_permissions_updated",
+    entityType: "User",
+    entityId: updated.id,
+    metadata: { email: updated.email, adminPermissions: parsed.data.adminPermissions },
+  });
+  revalidatePath("/admin/staff");
+  revalidatePath("/admin/security");
 }
 
 export async function togglePlatformWorkerAction(formData: FormData) {
