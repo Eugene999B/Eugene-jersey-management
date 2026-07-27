@@ -9,8 +9,12 @@ function password() {
 async function signInAsOwner(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
-  await page.getByPlaceholder("Click, then enter Login ID or email").fill("EJM-E2E-OWNER");
-  await page.getByPlaceholder("Click, then enter password").fill(password());
+  const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
+  const passwordField = page.getByPlaceholder("Click, then enter password");
+  await loginId.click();
+  await loginId.fill("EJM-E2E-OWNER");
+  await passwordField.click();
+  await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await page.waitForURL((url) => url.pathname.startsWith("/dashboard"), { timeout: 30_000 });
 }
