@@ -17,7 +17,7 @@ type PaystackInitInput = {
   metadata?: Record<string, unknown>;
   subaccount?: string | null;
   transactionCharge?: number | null;
-  bearer?: PaystackChargeBearer | null;
+  bearer?: string | null;
 };
 
 type PaystackInitResult = { authorizationUrl: string | null; reference: string; providerEnabled: boolean };
