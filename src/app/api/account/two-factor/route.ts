@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession, verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { BUYER_SESSION_COOKIE, getBuyerSession } from "@/lib/buyer-session";
 import { platformDb } from "@/lib/platform-db";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
@@ -15,6 +16,7 @@ import {
   getTwoFactorStatus,
   regenerateRecoveryCodes,
   verifyTwoFactorLogin,
+  type TwoFactorAccount,
 } from "@/lib/two-factor-account";
 
 const requestSchema = z.discriminatedUnion("action", [
@@ -33,6 +35,17 @@ const requestSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
+type SecurityActor = {
+  account: TwoFactorAccount;
+  id: string;
+  label: string;
+  passwordHash: string;
+  entityType: "User" | "BuyerAccount";
+  shopId: string | null;
+  userId: string | null;
+  loginPath: string;
+};
+
 function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -43,18 +56,88 @@ function requestIp(request: NextRequest) {
     || "unknown";
 }
 
+async function securityActor(): Promise<SecurityActor | null> {
+  const workforceSession = await getSession();
+  if (workforceSession) {
+    const user = await platformDb.user.findUnique({
+      where: { id: workforceSession.id },
+      select: { id: true, email: true, passwordHash: true, isActive: true, shopId: true },
+    });
+    if (!user?.isActive) return null;
+    return {
+      account: { accountKind: AccountKind.USER, accountId: user.id },
+      id: user.id,
+      label: user.email,
+      passwordHash: user.passwordHash,
+      entityType: "User",
+      shopId: user.shopId,
+      userId: user.id,
+      loginPath: "/login?securityChanged=1",
+    };
+  }
+
+  const buyerSession = await getBuyerSession();
+  if (!buyerSession) return null;
+  const buyer = await platformDb.buyerAccount.findUnique({
+    where: { id: buyerSession.id },
+    select: { id: true, phone: true, email: true, passwordHash: true, isActive: true },
+  });
+  if (!buyer?.isActive || !buyer.passwordHash) return null;
+  return {
+    account: { accountKind: AccountKind.BUYER, accountId: buyer.id },
+    id: buyer.id,
+    label: buyer.email ?? buyer.phone,
+    passwordHash: buyer.passwordHash,
+    entityType: "BuyerAccount",
+    shopId: null,
+    userId: null,
+    loginPath: "/buyer/login?securityChanged=1",
+  };
+}
+
+async function recordSecurityAction(actor: SecurityActor, action: string) {
+  await audit({
+    shopId: actor.shopId,
+    userId: actor.userId,
+    action,
+    entityType: actor.entityType,
+    entityId: actor.id,
+  });
+}
+
+async function revokeAllSessions(actor: SecurityActor) {
+  if (actor.account.accountKind === AccountKind.USER) {
+    await platformDb.user.update({
+      where: { id: actor.id },
+      data: { sessionVersion: { increment: 1 } },
+    });
+    return;
+  }
+  await platformDb.buyerAccount.update({
+    where: { id: actor.id },
+    data: { lastLoginAt: new Date() },
+  });
+}
+
+function signedOutResponse(actor: SecurityActor, message: string) {
+  const response = json({ ok: true, redirectPath: actor.loginPath, message });
+  response.cookies.delete(SESSION_COOKIE);
+  response.cookies.delete(BUYER_SESSION_COOKIE);
+  return response;
+}
+
 export async function GET(request: NextRequest) {
   if (!isTrustedApplicationOrigin(request)) return json({ ok: false, error: "origin" }, 403);
-  const session = await getSession();
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401);
-  const status = await getTwoFactorStatus({ accountKind: AccountKind.USER, accountId: session.id });
+  const actor = await securityActor();
+  if (!actor) return json({ ok: false, error: "unauthorized" }, 401);
+  const status = await getTwoFactorStatus(actor.account);
   return json({ ok: true, status });
 }
 
 export async function POST(request: NextRequest) {
   if (!isTrustedApplicationOrigin(request)) return json({ ok: false, error: "origin" }, 403);
-  const session = await getSession();
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401);
+  const actor = await securityActor();
+  if (!actor) return json({ ok: false, error: "unauthorized" }, 401);
 
   let parsed: z.infer<typeof requestSchema>;
   try {
@@ -67,34 +150,25 @@ export async function POST(request: NextRequest) {
 
   try {
     await Promise.all([
-      enforceRateLimit({ key: `account-two-factor:${session.id}`, limit: 20, windowSeconds: 15 * 60 }),
+      enforceRateLimit({
+        key: `account-two-factor:${actor.account.accountKind}:${actor.id}`,
+        limit: 20,
+        windowSeconds: 15 * 60,
+      }),
       enforceRateLimit({ key: `account-two-factor-ip:${requestIp(request)}`, limit: 80, windowSeconds: 15 * 60 }),
     ]);
   } catch {
     return json({ ok: false, error: "rate" }, 429);
   }
 
-  const user = await platformDb.user.findUnique({
-    where: { id: session.id },
-    select: { id: true, email: true, passwordHash: true, isActive: true, shopId: true },
-  });
-  if (!user?.isActive) return json({ ok: false, error: "unauthorized" }, 401);
-  const account = { accountKind: AccountKind.USER, accountId: user.id };
-
   if (parsed.action === "begin") {
-    const currentStatus = await getTwoFactorStatus(account);
+    const currentStatus = await getTwoFactorStatus(actor.account);
     if (currentStatus.enabled) return json({ ok: false, error: "already-enabled" }, 409);
-    if (!await verifyPassword(parsed.password, user.passwordHash)) return json({ ok: false, error: "password" }, 401);
+    if (!await verifyPassword(parsed.password, actor.passwordHash)) return json({ ok: false, error: "password" }, 401);
 
     try {
-      const setup = await beginTwoFactorSetup(account, user.email);
-      await audit({
-        shopId: user.shopId,
-        userId: user.id,
-        action: "auth.two_factor_setup_started",
-        entityType: "User",
-        entityId: user.id,
-      });
+      const setup = await beginTwoFactorSetup(actor.account, actor.label);
+      await recordSecurityAction(actor, "auth.two_factor_setup_started");
       return json({
         ok: true,
         setup: {
@@ -110,63 +184,35 @@ export async function POST(request: NextRequest) {
   }
 
   if (parsed.action === "confirm") {
-    const confirmed = await confirmTwoFactorSetup(account, parsed.code);
+    const confirmed = await confirmTwoFactorSetup(actor.account, parsed.code);
     if (!confirmed) return json({ ok: false, error: "code" }, 401);
-    await audit({
-      shopId: user.shopId,
-      userId: user.id,
-      action: "auth.two_factor_enabled",
-      entityType: "User",
-      entityId: user.id,
-    });
-    return json({ ok: true, status: await getTwoFactorStatus(account) });
+    await revokeAllSessions(actor);
+    await recordSecurityAction(actor, "auth.two_factor_enabled");
+    return signedOutResponse(actor, "Two-factor authentication was enabled and every existing session was revoked.");
   }
 
   if (parsed.action === "cancel") {
-    await cancelTwoFactorSetup(account);
-    await audit({
-      shopId: user.shopId,
-      userId: user.id,
-      action: "auth.two_factor_setup_cancelled",
-      entityType: "User",
-      entityId: user.id,
-    });
-    return json({ ok: true, status: await getTwoFactorStatus(account) });
+    await cancelTwoFactorSetup(actor.account);
+    await recordSecurityAction(actor, "auth.two_factor_setup_cancelled");
+    return json({ ok: true, status: await getTwoFactorStatus(actor.account) });
   }
 
-  if (!await verifyPassword(parsed.password, user.passwordHash)) return json({ ok: false, error: "password" }, 401);
-  const verified = await verifyTwoFactorLogin(account, parsed.code);
+  if (!await verifyPassword(parsed.password, actor.passwordHash)) return json({ ok: false, error: "password" }, 401);
+  const verified = await verifyTwoFactorLogin(actor.account, parsed.code);
   if (!verified) return json({ ok: false, error: "code" }, 401);
 
   if (parsed.action === "regenerate") {
     try {
-      const recoveryCodes = await regenerateRecoveryCodes(account);
-      await audit({
-        shopId: user.shopId,
-        userId: user.id,
-        action: "auth.two_factor_recovery_codes_regenerated",
-        entityType: "User",
-        entityId: user.id,
-      });
-      return json({ ok: true, recoveryCodes, status: await getTwoFactorStatus(account) });
+      const recoveryCodes = await regenerateRecoveryCodes(actor.account);
+      await recordSecurityAction(actor, "auth.two_factor_recovery_codes_regenerated");
+      return json({ ok: true, recoveryCodes, status: await getTwoFactorStatus(actor.account) });
     } catch {
       return json({ ok: false, error: "unavailable" }, 503);
     }
   }
 
-  await disableTwoFactor(account);
-  await platformDb.user.update({
-    where: { id: user.id },
-    data: { sessionVersion: { increment: 1 } },
-  });
-  await audit({
-    shopId: user.shopId,
-    userId: user.id,
-    action: "auth.two_factor_disabled",
-    entityType: "User",
-    entityId: user.id,
-  });
-  const response = json({ ok: true, redirectPath: "/login?securityChanged=1" });
-  response.cookies.delete(SESSION_COOKIE);
-  return response;
+  await disableTwoFactor(actor.account);
+  await revokeAllSessions(actor);
+  await recordSecurityAction(actor, "auth.two_factor_disabled");
+  return signedOutResponse(actor, "Two-factor authentication was disabled and every existing session was revoked.");
 }
