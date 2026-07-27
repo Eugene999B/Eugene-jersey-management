@@ -39,10 +39,6 @@ const schema = z.object({
   storefrontEnabled: z.boolean().default(false),
   publicOrderingEnabled: z.boolean().default(false),
   cashOrderHoldMinutes: z.coerce.number().int().min(15).max(10080),
-  paystackPublicKey: z.string().trim().max(200).optional(),
-  paystackSubaccountCode: z.string().trim().max(200).optional(),
-  paystackTransactionCharge: z.coerce.number().int().min(0).max(100_000_000).optional(),
-  paystackChargeBearer: z.enum(["account", "subaccount", "all-proportional", "all"]).optional(),
   settlementBank: z.string().trim().max(120).optional(),
   settlementAccount: z.string().trim().max(80).optional(),
   settlementAccountName: z.string().trim().max(160).optional(),
@@ -64,10 +60,6 @@ export async function updateShopSettingsAction(formData: FormData) {
     storefrontEnabled: formData.get("storefrontEnabled") === "on",
     publicOrderingEnabled: formData.get("publicOrderingEnabled") === "on",
     cashOrderHoldMinutes: formData.get("cashOrderHoldMinutes") || 120,
-    paystackPublicKey: formData.get("paystackPublicKey") || undefined,
-    paystackSubaccountCode: formData.get("paystackSubaccountCode") || undefined,
-    paystackTransactionCharge: formData.get("paystackTransactionCharge") || undefined,
-    paystackChargeBearer: formData.get("paystackChargeBearer") || undefined,
     settlementBank: formData.get("settlementBank") || undefined,
     settlementAccount: formData.get("settlementAccount") || undefined,
     settlementAccountName: formData.get("settlementAccountName") || undefined,
@@ -103,10 +95,6 @@ export async function updateShopSettingsAction(formData: FormData) {
       paymentConfig: {
         upsert: {
           create: {
-            paystackPublicKey: parsed.data.paystackPublicKey,
-            paystackSubaccountCode: parsed.data.paystackSubaccountCode,
-            paystackTransactionCharge: parsed.data.paystackTransactionCharge,
-            paystackChargeBearer: parsed.data.paystackChargeBearer,
             settlementBank: parsed.data.settlementBank,
             settlementAccount: parsed.data.settlementAccount,
             settlementAccountName: parsed.data.settlementAccountName,
@@ -118,10 +106,6 @@ export async function updateShopSettingsAction(formData: FormData) {
             allowMomo: parsed.data.allowMomo,
           },
           update: {
-            paystackPublicKey: parsed.data.paystackPublicKey,
-            paystackSubaccountCode: parsed.data.paystackSubaccountCode,
-            paystackTransactionCharge: parsed.data.paystackTransactionCharge,
-            paystackChargeBearer: parsed.data.paystackChargeBearer,
             settlementBank: parsed.data.settlementBank,
             settlementAccount: parsed.data.settlementAccount,
             settlementAccountName: parsed.data.settlementAccountName,
@@ -136,7 +120,19 @@ export async function updateShopSettingsAction(formData: FormData) {
       },
     },
   });
-  await audit({ shopId, userId: session.id, action: "settings.shop_updated", entityType: "Shop", entityId: shopId, metadata: { storefrontEnabled: parsed.data.storefrontEnabled, publicOrderingEnabled: parsed.data.publicOrderingEnabled, logoChanged: Boolean(logoAsset || parsed.data.logoUrl) } });
+  await audit({
+    shopId,
+    userId: session.id,
+    action: "settings.shop_updated",
+    entityType: "Shop",
+    entityId: shopId,
+    metadata: {
+      storefrontEnabled: parsed.data.storefrontEnabled,
+      publicOrderingEnabled: parsed.data.publicOrderingEnabled,
+      logoChanged: Boolean(logoAsset || parsed.data.logoUrl),
+      settlementDetailsUpdated: Boolean(parsed.data.settlementBank || parsed.data.settlementAccount || parsed.data.settlementAccountName),
+    },
+  });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/shops");
