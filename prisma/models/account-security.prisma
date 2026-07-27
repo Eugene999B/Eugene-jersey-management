@@ -12,6 +12,7 @@ model AccountTwoFactor {
   recoveryCodeHashes        Json        @default("[]")
   pendingEncryptedSecret    String?
   pendingRecoveryCodeHashes Json        @default("[]")
+  pendingExpiresAt          DateTime?
   enabledAt                 DateTime?
   createdAt                 DateTime    @default(now())
   updatedAt                 DateTime    @updatedAt
