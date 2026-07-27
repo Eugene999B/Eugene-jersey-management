@@ -4,12 +4,14 @@ import { AlertTriangle, KeyRound, LockKeyhole, ShieldCheck, UserCheck, UserX } f
 import { StatCard } from "@/components/ui/stat-card";
 import { prisma } from "@/lib/db";
 import { compactNumber, shortDate } from "@/lib/format";
-import { requirePlatformPermission } from "@/lib/platform-admin";
+import { canAccessPlatformPermission, getAllowedPlatformPermissions, requirePlatformPermission } from "@/lib/platform-admin";
 
 export const dynamic = "force-dynamic";
 
 export default async function SecurityPage() {
   const session = await requirePlatformPermission("security");
+  const allowedPermissions = await getAllowedPlatformPermissions(session.id);
+  const canManageStaff = canAccessPlatformPermission(allowedPermissions, "workers");
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [currentAdmin, failedLoginEvents, failedLoginLogs, activeAdmins, suspendedAdmins] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.id } }),
@@ -21,7 +23,7 @@ export default async function SecurityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Platform protection</p><h1 className="mt-2 text-3xl font-semibold">Security</h1><p className="mt-2 text-sm text-slate-600">Review authentication risk, administrator status and the controls protecting every tenant.</p></div><Link href="/admin/staff" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">Manage admin access</Link></div>
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Platform protection</p><h1 className="mt-2 text-3xl font-semibold">Security</h1><p className="mt-2 text-sm text-slate-600">Review authentication risk, administrator status and the controls protecting every tenant.</p></div>{canManageStaff ? <Link href="/admin/staff" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">Manage admin access</Link> : null}</div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Failed logins · 24h" value={compactNumber(failedLoginEvents)} icon={<AlertTriangle size={20} />} /><StatCard label="Active administrators" value={compactNumber(activeAdmins)} icon={<UserCheck size={20} />} /><StatCard label="Suspended administrators" value={compactNumber(suspendedAdmins)} icon={<UserX size={20} />} /><StatCard label="Your session version" value={compactNumber(currentAdmin?.sessionVersion ?? 0)} icon={<KeyRound size={20} />} /></section>
 
