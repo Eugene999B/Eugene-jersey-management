@@ -12,6 +12,8 @@ import {
   verifyTotpCode,
 } from "@/lib/two-factor";
 
+const SETUP_TTL_MINUTES = 10;
+
 function stringArray(value: Prisma.JsonValue | null | undefined) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -24,15 +26,26 @@ export type TwoFactorAccount = {
 export async function getTwoFactorStatus(account: TwoFactorAccount) {
   const record = await platformDb.accountTwoFactor.findUnique({
     where: { accountKind_accountId: account },
-    select: { enabled: true, enabledAt: true, recoveryCodeHashes: true, pendingEncryptedSecret: true },
+    select: {
+      enabled: true,
+      enabledAt: true,
+      recoveryCodeHashes: true,
+      pendingEncryptedSecret: true,
+      pendingExpiresAt: true,
+    },
   });
+  const setupPending = Boolean(
+    record?.pendingEncryptedSecret
+    && record.pendingExpiresAt
+    && record.pendingExpiresAt.getTime() > Date.now(),
+  );
 
   return {
     configured: isTwoFactorConfigured(),
     enabled: record?.enabled === true,
     enabledAt: record?.enabledAt ?? null,
     recoveryCodesRemaining: stringArray(record?.recoveryCodeHashes).length,
-    setupPending: Boolean(record?.pendingEncryptedSecret),
+    setupPending,
   };
 }
 
@@ -49,6 +62,7 @@ export async function accountRequiresTwoFactor(account: TwoFactorAccount) {
 export async function beginTwoFactorSetup(account: TwoFactorAccount, accountLabel: string) {
   if (!isTwoFactorConfigured()) throw new Error("TWO_FACTOR_NOT_CONFIGURED");
   const setup = createTwoFactorSetup(accountLabel);
+  const pendingExpiresAt = new Date(Date.now() + SETUP_TTL_MINUTES * 60_000);
 
   await platformDb.accountTwoFactor.upsert({
     where: { accountKind_accountId: account },
@@ -56,10 +70,12 @@ export async function beginTwoFactorSetup(account: TwoFactorAccount, accountLabe
       ...account,
       pendingEncryptedSecret: setup.encryptedSecret,
       pendingRecoveryCodeHashes: setup.recoveryCodeHashes,
+      pendingExpiresAt,
     },
     update: {
       pendingEncryptedSecret: setup.encryptedSecret,
       pendingRecoveryCodeHashes: setup.recoveryCodeHashes,
+      pendingExpiresAt,
     },
   });
 
@@ -67,6 +83,7 @@ export async function beginTwoFactorSetup(account: TwoFactorAccount, accountLabe
     secret: setup.secret,
     otpauthUri: setup.otpauthUri,
     recoveryCodes: setup.recoveryCodes,
+    expiresAt: pendingExpiresAt,
   };
 }
 
@@ -74,9 +91,16 @@ export async function confirmTwoFactorSetup(account: TwoFactorAccount, code: str
   if (!isTwoFactorConfigured()) return false;
   const record = await platformDb.accountTwoFactor.findUnique({
     where: { accountKind_accountId: account },
-    select: { pendingEncryptedSecret: true, pendingRecoveryCodeHashes: true },
+    select: { pendingEncryptedSecret: true, pendingRecoveryCodeHashes: true, pendingExpiresAt: true },
   });
-  if (!record?.pendingEncryptedSecret) return false;
+  if (
+    !record?.pendingEncryptedSecret
+    || !record.pendingExpiresAt
+    || record.pendingExpiresAt.getTime() <= Date.now()
+  ) {
+    await cancelTwoFactorSetup(account);
+    return false;
+  }
 
   const secret = decryptTwoFactorSecret(record.pendingEncryptedSecret);
   if (!verifyTotpCode(secret, code)) return false;
@@ -89,6 +113,7 @@ export async function confirmTwoFactorSetup(account: TwoFactorAccount, code: str
       recoveryCodeHashes: record.pendingRecoveryCodeHashes,
       pendingEncryptedSecret: null,
       pendingRecoveryCodeHashes: [],
+      pendingExpiresAt: null,
       enabledAt: new Date(),
     },
   });
@@ -98,7 +123,11 @@ export async function confirmTwoFactorSetup(account: TwoFactorAccount, code: str
 export async function cancelTwoFactorSetup(account: TwoFactorAccount) {
   await platformDb.accountTwoFactor.updateMany({
     where: account,
-    data: { pendingEncryptedSecret: null, pendingRecoveryCodeHashes: [] },
+    data: {
+      pendingEncryptedSecret: null,
+      pendingRecoveryCodeHashes: [],
+      pendingExpiresAt: null,
+    },
   });
 }
 
@@ -111,6 +140,7 @@ export async function disableTwoFactor(account: TwoFactorAccount) {
       recoveryCodeHashes: [],
       pendingEncryptedSecret: null,
       pendingRecoveryCodeHashes: [],
+      pendingExpiresAt: null,
       enabledAt: null,
     },
   });
