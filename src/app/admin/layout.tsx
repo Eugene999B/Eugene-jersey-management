@@ -1,23 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, Building2, CreditCard, LifeBuoy, MessageCircle, Settings, Shield, Store, UserCog, UsersRound } from "lucide-react";
+import { Building2, MessageCircle, UsersRound } from "lucide-react";
+import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
-
-const adminNav = [
-  { href: "/admin#overview", label: "Overview", icon: BarChart3 },
-  { href: "/admin#shops", label: "Shops", icon: Store },
-  { href: "/admin#workers", label: "Admin staff", icon: UserCog },
-  { href: "/admin#support", label: "Support desk", icon: LifeBuoy },
-  { href: "/admin#billing", label: "Billing", icon: CreditCard },
-  { href: "/admin#activity", label: "Activity logs", icon: Activity },
-  { href: "/admin#security", label: "Security", icon: Shield },
-  { href: "/admin#settings", label: "Settings", icon: Settings },
-];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireRole(permissions.superAdmin);
@@ -32,12 +22,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300/75">Platform control</p><h1 className="mt-1 text-lg font-semibold">Super Admin</h1></div>
               </Link>
             </div>
-            <nav className="flex gap-2 overflow-x-auto p-3 lg:grid lg:overflow-visible" aria-label="Admin sections">
-              {adminNav.map((item) => {
-                const Icon = item.icon;
-                return <Link key={item.href} prefetch={false} className="inline-flex min-h-11 shrink-0 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-white/68 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50" href={item.href}><Icon size={17} />{item.label}</Link>;
-              })}
-            </nav>
+            <AdminNavigation />
             <div className="mt-auto hidden border-t border-white/10 p-4 lg:block">
               <div className="rounded-xl bg-white/[0.07] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">Signed in as</p><p className="mt-1 truncate text-sm font-semibold">{session.name}</p><p className="mt-1 truncate text-xs text-white/55">{session.email}</p></div>
               <LogoutButton className="mt-3 w-full bg-white text-slate-950 hover:bg-slate-100" />
@@ -54,7 +39,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <div className="flex flex-wrap items-center gap-2">
                 <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold" href="/shops" prefetch={false}><UsersRound size={16} /> Marketplace</Link>
                 <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold" href="/admin/shops/new" prefetch={false}><Building2 size={16} /> New shop</Link>
-                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#081528] px-3 text-sm font-semibold text-white" href="/admin#support" prefetch={false}><MessageCircle size={16} /> Issues</Link>
+                <Link className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#081528] px-3 text-sm font-semibold text-white" href="/admin/support" prefetch={false}><MessageCircle size={16} /> Issues</Link>
                 <LogoutButton className="border border-slate-200 bg-white text-slate-800 lg:hidden" />
               </div>
             </div>
