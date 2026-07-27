@@ -72,8 +72,7 @@ function decodeEntities(value: string) {
 function parseAttributes(source: string) {
   const attributes: Record<string, string> = {};
   const pattern = /([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(source))) {
+  for (const match of source.matchAll(pattern)) {
     attributes[match[1].toLowerCase()] = decodeEntities(match[2] ?? match[3] ?? "");
   }
   return attributes;
@@ -88,8 +87,7 @@ function parseTransform(value: string | undefined): Matrix {
   if (!value) return IDENTITY;
   let matrix = IDENTITY;
   const pattern = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(value))) {
+  for (const match of value.matchAll(pattern)) {
     const name = match[1].toLowerCase();
     const args = numbers(match[2]);
     let next = IDENTITY;
@@ -181,7 +179,7 @@ function arcPoints(start: CutPoint, end: CutPoint, rxInput: number, ryInput: num
 
   const startVector = { x: (xPrime - cxPrime) / rx, y: (yPrime - cyPrime) / ry };
   const endVector = { x: (-xPrime - cxPrime) / rx, y: (-yPrime - cyPrime) / ry };
-  let startAngle = vectorAngle({ x: 1, y: 0 }, startVector);
+  const startAngle = vectorAngle({ x: 1, y: 0 }, startVector);
   let sweepAngle = vectorAngle(startVector, endVector);
   if (!sweep && sweepAngle > 0) sweepAngle -= Math.PI * 2;
   if (sweep && sweepAngle < 0) sweepAngle += Math.PI * 2;
@@ -366,9 +364,7 @@ function parseEmbeddedSvg(svg: string, layer: CutPathLayer): CutPathResult {
   const tagPattern = /<\/?([A-Za-z][\w:-]*)([^>]*)>/g;
   const stack: Array<{ name: string; matrix: Matrix; skipped: boolean }> = [];
   let rootSeen = false;
-  let match: RegExpExecArray | null;
-
-  while ((match = tagPattern.exec(svg))) {
+  for (const match of svg.matchAll(tagPattern)) {
     const raw = match[0];
     if (raw.startsWith("<!--") || raw.startsWith("<!") || raw.startsWith("<?")) continue;
     const closing = raw.startsWith("</");
@@ -465,7 +461,7 @@ function parseEmbeddedSvg(svg: string, layer: CutPathLayer): CutPathResult {
 }
 
 export function decodeEmbeddedSvgDataUrl(url: string | undefined) {
-  if (!url || !url.toLowerCase().startsWith("data:image/svg+xml")) return null;
+  if (!url?.toLowerCase().startsWith("data:image/svg+xml")) return null;
   const comma = url.indexOf(",");
   if (comma < 0) return null;
   const metadata = url.slice(0, comma).toLowerCase();
