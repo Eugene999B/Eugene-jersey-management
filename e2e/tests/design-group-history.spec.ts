@@ -60,6 +60,7 @@ test("groups layers and reopens immutable shop versions", async ({ page }) => {
   await expect(page.getByText("Saved version 2 to this shop", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   await page.reload();
+  await expect(page.getByRole("heading", { name: "Recovered work found" })).toHaveCount(0);
   await page.getByLabel("Open shop project").selectOption({ label: "Grouped history kit revised" });
   await expect(page.getByRole("button", { name: "Open version 1" })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Open version 2" })).toBeVisible();

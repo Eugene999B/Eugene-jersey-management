@@ -231,6 +231,7 @@ export function DesignStudioAdvanced({
   const [recoveryMessage, setRecoveryMessage] = useState("Local recovery is starting…");
   const [recoveryDraft, setRecoveryDraft] = useState<DesignRecoveryDraft | null>(null);
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [authoritativeFingerprint, setAuthoritativeFingerprint] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState("");
   const [historyStatus, setHistoryStatus] = useState("Save the project to begin version history");
   const [versions, setVersions] = useState<DesignVersionSummary[]>([]);
@@ -263,6 +264,8 @@ export function DesignStudioAdvanced({
   const projectInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const recoveryTimerRef = useRef<number | null>(null);
+  const authoritativeFingerprintRef = useRef<string | null>(null);
 
   const size = sheet === "custom" ? { label: "Custom", width: customWidth, height: customHeight } : sheets[sheet];
   const selected = layers.find((layer) => layer.id === primarySelectedId) ?? null;
@@ -287,6 +290,8 @@ export function DesignStudioAdvanced({
     machineProfile,
     layers,
   }), [jobName, customer, material, sheet, customWidth, customHeight, copies, mirror, showGrid, snap, weedBox, registrationMarks, contourOffset, machineProfile, layers]);
+  const projectFingerprint = useMemo(() => JSON.stringify(projectSnapshot), [projectSnapshot]);
+  const hasUnsavedChanges = projectFingerprint !== authoritativeFingerprint;
   const productionCheck = useMemo(() => checkProductionDesign({
     layers,
     sheet: size,
@@ -325,17 +330,23 @@ export function DesignStudioAdvanced({
 
   useEffect(() => {
     if (!recoveryReady || recoveryDraft) return;
-    if (!isMeaningfulDesignProject(projectSnapshot)) {
+    if (recoveryTimerRef.current !== null) {
+      window.clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
+    if (!hasUnsavedChanges || !isMeaningfulDesignProject(projectSnapshot)) {
       try {
         window.localStorage.removeItem(recoveryKey);
       } catch {
         // Private browsing or disabled storage may reject writes.
       }
-      setRecoveryMessage("No recovery draft needed");
+      setRecoveryMessage(hasUnsavedChanges ? "No recovery draft needed" : "Shop copy is current; no recovery draft needed");
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    recoveryTimerRef.current = window.setTimeout(() => {
+      recoveryTimerRef.current = null;
+      if (projectFingerprint === authoritativeFingerprintRef.current) return;
       const serialized = serializeDesignRecoveryDraft({ project: projectSnapshot, designJobId });
       if (!serialized.ok) {
         setRecoveryMessage(serialized.reason === "too-large"
@@ -351,13 +362,18 @@ export function DesignStudioAdvanced({
       }
     }, 1_200);
 
-    return () => window.clearTimeout(timer);
-  }, [projectSnapshot, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
+    return () => {
+      if (recoveryTimerRef.current !== null) {
+        window.clearTimeout(recoveryTimerRef.current);
+        recoveryTimerRef.current = null;
+      }
+    };
+  }, [projectSnapshot, projectFingerprint, hasUnsavedChanges, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
 
   useEffect(() => {
     if (!recoveryReady || recoveryDraft) return;
     const persistBeforeExit = () => {
-      if (!isMeaningfulDesignProject(projectSnapshot)) return;
+      if (projectFingerprint === authoritativeFingerprintRef.current || !isMeaningfulDesignProject(projectSnapshot)) return;
       const serialized = serializeDesignRecoveryDraft({ project: projectSnapshot, designJobId });
       if (!serialized.ok) return;
       try {
@@ -368,7 +384,7 @@ export function DesignStudioAdvanced({
     };
     window.addEventListener("pagehide", persistBeforeExit);
     return () => window.removeEventListener("pagehide", persistBeforeExit);
-  }, [projectSnapshot, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
+  }, [projectSnapshot, projectFingerprint, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
 
   useEffect(() => {
     if (!designJobId) {
@@ -669,7 +685,17 @@ export function DesignStudioAdvanced({
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}mm" height="${size.height}mm" viewBox="0 0 ${size.width} ${size.height}"><title>${escapeXml(jobName)}</title>${artwork}</svg>`;
   }
 
+  function markAuthoritative(project: Record<string, unknown> | null) {
+    const fingerprint = project ? JSON.stringify(project) : null;
+    authoritativeFingerprintRef.current = fingerprint;
+    setAuthoritativeFingerprint(fingerprint);
+  }
+
   function clearRecovery(message: string) {
+    if (recoveryTimerRef.current !== null) {
+      window.clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
     try {
       window.localStorage.removeItem(recoveryKey);
     } catch {
@@ -691,6 +717,7 @@ export function DesignStudioAdvanced({
       const result = await response.json() as { design?: { id: string; versionNumber?: number }; error?: string };
       if (!response.ok || !result.design) throw new Error(result.error ?? "Could not save this project.");
       setDesignJobId(result.design.id);
+      markAuthoritative(projectSnapshot);
       setSaveStatus("saved");
       setSaveMessage(result.design.versionNumber ? `Saved version ${result.design.versionNumber} to this shop` : "Saved to this shop");
       clearRecovery("Shop save complete; local recovery draft cleared");
@@ -705,38 +732,80 @@ export function DesignStudioAdvanced({
     download(`${safeName(jobName)}.design.json`, JSON.stringify(projectSnapshot, null, 2), "application/json");
   }
 
-  function applyProject(rawProject: Record<string, unknown>, projectId: string | null = null) {
+  function applyProject(
+    rawProject: Record<string, unknown>,
+    projectId: string | null = null,
+    authority: "saved" | "working" = projectId ? "saved" : "working",
+  ) {
     const project = migrateDesignProject(rawProject);
     const nextSheet = typeof project.sheet === "string" && (project.sheet === "custom" || project.sheet in sheets) ? project.sheet as Sheet : "a3";
     const nextWidth = nextSheet === "custom" ? finiteNumber(project.customWidth, 300, 20, 2_000) : sheets[nextSheet].width;
     const nextHeight = nextSheet === "custom" ? finiteNumber(project.customHeight, 500, 20, 5_000) : sheets[nextSheet].height;
+    const nextLayers = normalizedLayers(project.layers as unknown[], { width: nextWidth, height: nextHeight });
+    const nextJobName = typeof project.jobName === "string" ? project.jobName.slice(0, 120) : "New design job";
+    const nextCustomer = typeof project.customer === "string" ? project.customer.slice(0, 120) : "";
+    const nextMaterial = typeof project.material === "string" && project.material in materialDetails ? project.material as Material : "htv";
+    const nextCopies = Math.round(finiteNumber(project.copies, 1, 1, 100));
+    const nextMirror = typeof project.mirror === "boolean" ? project.mirror : true;
+    const nextShowGrid = typeof project.showGrid === "boolean" ? project.showGrid : true;
+    const nextSnap = typeof project.snap === "boolean" ? project.snap : true;
+    const nextWeedBox = typeof project.weedBox === "boolean" ? project.weedBox : true;
+    const nextRegistrationMarks = typeof project.registrationMarks === "boolean" ? project.registrationMarks : false;
+    const nextContourOffset = finiteNumber(project.contourOffset, 0, 0, 50);
+    const nextMachineProfile = typeof project.machineProfile === "string" && machineProfiles.includes(project.machineProfile as MachineProfile) ? project.machineProfile as MachineProfile : "Generic SVG";
+    const nextSnapshot = {
+      version: DESIGN_PROJECT_VERSION,
+      jobName: nextJobName,
+      customer: nextCustomer,
+      material: nextMaterial,
+      sheet: nextSheet,
+      customWidth: nextWidth,
+      customHeight: nextHeight,
+      copies: nextCopies,
+      mirror: nextMirror,
+      showGrid: nextShowGrid,
+      snap: nextSnap,
+      weedBox: nextWeedBox,
+      registrationMarks: nextRegistrationMarks,
+      contourOffset: nextContourOffset,
+      machineProfile: nextMachineProfile,
+      layers: nextLayers,
+    };
+
     setPast([]);
     setFuture([]);
-    setLayers(normalizedLayers(project.layers as unknown[], { width: nextWidth, height: nextHeight }));
+    setLayers(nextLayers);
     setSheet(nextSheet);
     setCustomWidth(nextWidth);
     setCustomHeight(nextHeight);
-    setJobName(typeof project.jobName === "string" ? project.jobName.slice(0, 120) : "New design job");
-    setCustomer(typeof project.customer === "string" ? project.customer.slice(0, 120) : "");
-    setMaterial(typeof project.material === "string" && project.material in materialDetails ? project.material as Material : "htv");
-    setCopies(Math.round(finiteNumber(project.copies, 1, 1, 100)));
-    setMirror(typeof project.mirror === "boolean" ? project.mirror : true);
-    setShowGrid(typeof project.showGrid === "boolean" ? project.showGrid : true);
-    setSnap(typeof project.snap === "boolean" ? project.snap : true);
-    setWeedBox(typeof project.weedBox === "boolean" ? project.weedBox : true);
-    setRegistrationMarks(typeof project.registrationMarks === "boolean" ? project.registrationMarks : false);
-    setContourOffset(finiteNumber(project.contourOffset, 0, 0, 50));
-    setMachineProfile(typeof project.machineProfile === "string" && machineProfiles.includes(project.machineProfile as MachineProfile) ? project.machineProfile as MachineProfile : "Generic SVG");
+    setJobName(nextJobName);
+    setCustomer(nextCustomer);
+    setMaterial(nextMaterial);
+    setCopies(nextCopies);
+    setMirror(nextMirror);
+    setShowGrid(nextShowGrid);
+    setSnap(nextSnap);
+    setWeedBox(nextWeedBox);
+    setRegistrationMarks(nextRegistrationMarks);
+    setContourOffset(nextContourOffset);
+    setMachineProfile(nextMachineProfile);
     setDesignJobId(projectId);
     setSelection([]);
-    setSaveStatus(projectId ? "saved" : "idle");
-    setSaveMessage(projectId ? "Saved project opened" : "Backup opened; save it to this shop");
+    if (authority === "saved") {
+      markAuthoritative(nextSnapshot);
+      setSaveStatus("saved");
+      setSaveMessage("Saved project opened");
+    } else {
+      markAuthoritative(null);
+      setSaveStatus("idle");
+      setSaveMessage(projectId ? "Working copy opened; save changes to update this shop project" : "Backup opened; save it to this shop");
+    }
   }
 
   function restoreRecovery() {
     if (!recoveryDraft) return;
     try {
-      applyProject(recoveryDraft.project, recoveryDraft.designJobId);
+      applyProject(recoveryDraft.project, recoveryDraft.designJobId, "working");
       setRecoveryDraft(null);
       setRecoveryMessage("Recovered draft restored; local autosave remains active");
     } catch (error) {
@@ -770,7 +839,7 @@ export function DesignStudioAdvanced({
       const response = await fetch(`/api/designs/${encodeURIComponent(designJobId)}/versions?version=${versionNumber}`);
       const result = await response.json() as { version?: { canvas: Record<string, unknown> }; error?: string };
       if (!response.ok || !result.version) throw new Error(result.error ?? "Could not open this version.");
-      applyProject(result.version.canvas, designJobId);
+      applyProject(result.version.canvas, designJobId, "working");
       setSaveStatus("idle");
       setSaveMessage(`Version ${versionNumber} opened; save changes to create a new current version`);
       setHistoryStatus(`Version ${versionNumber} opened from shop history`);
