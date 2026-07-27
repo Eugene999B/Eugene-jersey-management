@@ -39,29 +39,23 @@ export default async function MessagesPage() {
   ];
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
-      <section className="panel p-5">
+    <div className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr] xl:gap-5">
+      <section className="panel h-fit p-4 sm:p-5">
         <div className="mb-4 flex items-center gap-2">
           <Send size={18} className="text-[var(--shop-primary)]" />
           <h1 className="text-xl font-semibold">Send customer message</h1>
         </div>
-        <p className="mb-5 text-sm text-slate-500">
-          Send receipts, debt reminders, order updates, promos, or custom notes by SMS, WhatsApp, or email.
-        </p>
+        <p className="mb-4 text-sm leading-6 text-slate-500 sm:mb-5">Send receipts, debt reminders, order updates, promos, or custom notes by SMS, WhatsApp, or email.</p>
         <form action={sendMessageAction} className="space-y-3">
           <select className="field" name="customerId">
             <option value="">No saved customer</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name} {customer.phone ? `- ${customer.phone}` : ""}
-              </option>
-            ))}
+            {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} {customer.phone ? `- ${customer.phone}` : ""}</option>)}
           </select>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2">
             {channelOptions.map((option) => (
-              <label key={option.channel} className="flex cursor-pointer items-center justify-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-2 py-3 text-sm font-semibold">
+              <label key={option.channel} className="flex min-h-14 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-[#ded8cd] bg-white px-1 py-2 text-[11px] font-semibold sm:flex-row sm:gap-2 sm:px-2 sm:py-3 sm:text-sm">
                 <input className="sr-only" type="radio" name="channel" value={option.channel} defaultChecked={option.channel === NotificationChannel.SMS} />
-                <option.Icon size={16} /> {option.channel}
+                <option.Icon size={17} /> {option.channel}
               </label>
             ))}
           </div>
@@ -72,52 +66,37 @@ export default async function MessagesPage() {
           <Button className="w-full">Send or queue message</Button>
         </form>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-[8px] bg-white p-3">
-            <p className="text-slate-500">SMS records</p>
-            <p className="mt-1 text-2xl font-semibold">{smsSent}</p>
-          </div>
-          <div className="rounded-[8px] bg-white p-3">
-            <p className="text-slate-500">WhatsApp records</p>
-            <p className="mt-1 text-2xl font-semibold">{whatsappSent}</p>
-          </div>
+        <div className="mt-5 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3 text-sm">
+          <div className="rounded-xl bg-white p-3"><p className="text-slate-500">SMS records</p><p className="mt-1 text-2xl font-semibold">{smsSent}</p></div>
+          <div className="rounded-xl bg-white p-3"><p className="text-slate-500">WhatsApp records</p><p className="mt-1 text-2xl font-semibold">{whatsappSent}</p></div>
         </div>
       </section>
 
-      <section className="panel overflow-hidden">
-        <div className="border-b border-[#ded8cd] p-5">
+      <section className="panel min-w-0 overflow-hidden">
+        <div className="border-b border-[#ded8cd] p-4 sm:p-5">
           <h2 className="text-xl font-semibold">Communication history</h2>
           <p className="mt-1 text-sm text-slate-500">Every outgoing reminder and receipt is tracked here.</p>
         </div>
         <div className="divide-y divide-[#ded8cd] bg-white">
           {threads.map((thread) => (
-            <article key={thread.id} className="border-b border-[#ded8cd] bg-[#f6f4ef] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{thread.subject}</p>
-                  <p className="text-sm text-slate-500">{thread.customer?.name ?? "Portal customer"} - {thread.messages[0]?.body ?? "No message"}</p>
-                </div>
-                <Badge tone={thread.status === "OPEN" ? "blue" : "green"}>{thread.status}</Badge>
+            <article key={thread.id} className="border-b border-[#ded8cd] bg-[#f6f4ef] p-3 sm:p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><p className="truncate font-semibold">{thread.subject}</p><p className="mt-1 line-clamp-2 text-sm text-slate-500">{thread.customer?.name ?? "Portal customer"} · {thread.messages[0]?.body ?? "No message"}</p></div>
+                <Badge className="shrink-0" tone={thread.status === "OPEN" ? "blue" : "green"}>{thread.status}</Badge>
               </div>
             </article>
           ))}
           {messages.map((message) => (
-            <article key={message.id} className="p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{message.customer?.name ?? message.recipientName ?? "Direct recipient"}</p>
-                  <p className="text-sm text-slate-500">{message.recipientPhone ?? message.recipientEmail ?? "No contact saved"}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge tone={message.status === "SENT" ? "green" : message.status === "FAILED" ? "red" : "orange"}>{titleCase(message.status)}</Badge>
-                  <Badge>{message.channel}</Badge>
-                </div>
+            <article key={message.id} className="min-w-0 p-3 sm:p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><p className="truncate font-semibold">{message.customer?.name ?? message.recipientName ?? "Direct recipient"}</p><p className="break-all text-sm text-slate-500">{message.recipientPhone ?? message.recipientEmail ?? "No contact saved"}</p></div>
+                <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:gap-2"><Badge tone={message.status === "SENT" ? "green" : message.status === "FAILED" ? "red" : "orange"}>{titleCase(message.status)}</Badge><Badge>{message.channel}</Badge></div>
               </div>
-              <p className="mt-3 text-sm text-slate-700">{message.body}</p>
-              <p className="mt-3 text-xs text-slate-400">{shortDate(message.createdAt)} - {message.providerReference ?? "No provider reference"}</p>
+              <p className="mt-3 break-words text-sm leading-6 text-slate-700">{message.body}</p>
+              <p className="mt-3 break-all text-xs text-slate-400">{shortDate(message.createdAt)} · {message.providerReference ?? "No provider reference"}</p>
             </article>
           ))}
-          {!messages.length ? <p className="p-5 text-sm text-slate-500">No messages have been sent yet.</p> : null}
+          {!messages.length && !threads.length ? <p className="p-5 text-sm text-slate-500">No messages have been sent yet.</p> : null}
         </div>
       </section>
     </div>
