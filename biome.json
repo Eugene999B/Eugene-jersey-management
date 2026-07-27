@@ -54,7 +54,10 @@
   },
   "overrides": [
     {
-      "includes": ["src/components/design/production-studio.tsx"],
+      "includes": [
+        "src/components/design/production-studio.tsx",
+        "src/components/design/production-studio-advanced.tsx"
+      ],
       "linter": {
         "rules": {
           "a11y": {

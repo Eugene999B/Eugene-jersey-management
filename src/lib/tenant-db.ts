@@ -94,6 +94,7 @@ const modelPropertyNames: Record<string, string> = {
   customerThread: "CustomerThread",
   chatMessage: "ChatMessage",
   designJob: "DesignJob",
+  designJobVersion: "DesignJobVersion",
   supplier: "Supplier",
   supplierOrder: "SupplierOrder",
   supplierOrderItem: "SupplierOrderItem",
@@ -184,7 +185,6 @@ function policyFor(model: string): TenantPolicy {
 
 function combineWhere(where: UnknownRecord, ownershipWhere: UnknownRecord, preserveUniqueShape: boolean) {
   if (!preserveUniqueShape) return { AND: [where, ownershipWhere] };
-
   const existingAnd = where.AND;
   const topLevelWhere = { ...where };
   delete topLevelWhere.AND;
@@ -193,11 +193,7 @@ function combineWhere(where: UnknownRecord, ownershipWhere: UnknownRecord, prese
     : existingAnd === undefined
       ? []
       : [existingAnd];
-
-  return {
-    ...topLevelWhere,
-    AND: [...existingConditions, ownershipWhere],
-  };
+  return { ...topLevelWhere, AND: [...existingConditions, ownershipWhere] };
 }
 
 function scopeWhere(

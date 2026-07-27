@@ -30,6 +30,19 @@ describe("design recovery", () => {
     expect(migrated.machineProfile).toBe("Generic SVG");
   });
 
+  it("preserves grouped layer metadata in current projects", () => {
+    const migrated = migrateDesignProject(project({
+      version: DESIGN_PROJECT_VERSION,
+      layers: [
+        { id: "layer-1", kind: "text", name: "Name", groupId: "group-1" },
+        { id: "layer-2", kind: "text", name: "Number", groupId: "group-1" },
+      ],
+    }));
+
+    expect((migrated.layers as Array<Record<string, unknown>>)[0].groupId).toBe("group-1");
+    expect((migrated.layers as Array<Record<string, unknown>>)[1].groupId).toBe("group-1");
+  });
+
   it("rejects projects created by a newer unsupported studio", () => {
     expect(() => migrateDesignProject(project({ version: DESIGN_PROJECT_VERSION + 1 }))).toThrow(/newer studio version/i);
   });
@@ -63,9 +76,9 @@ describe("design recovery", () => {
 
   it("uses scoped storage keys and recognises meaningful work", () => {
     expect(designRecoveryStorageKey("shop-a:user-a")).not.toBe(designRecoveryStorageKey("shop-a:user-b"));
-    expect(isMeaningfulDesignProject({ version: 4, layers: [], jobName: "New design job", customer: "" })).toBe(false);
-    expect(isMeaningfulDesignProject({ version: 4, layers: [], jobName: "Final kit", customer: "" })).toBe(true);
-    expect(isMeaningfulDesignProject({ version: 4, layers: [{ id: "one" }] })).toBe(true);
+    expect(isMeaningfulDesignProject({ version: DESIGN_PROJECT_VERSION, layers: [], jobName: "New design job", customer: "" })).toBe(false);
+    expect(isMeaningfulDesignProject({ version: DESIGN_PROJECT_VERSION, layers: [], jobName: "Final kit", customer: "" })).toBe(true);
+    expect(isMeaningfulDesignProject({ version: DESIGN_PROJECT_VERSION, layers: [{ id: "one" }] })).toBe(true);
   });
 
   it("offers recovery only when it is newer than the server copy", () => {
