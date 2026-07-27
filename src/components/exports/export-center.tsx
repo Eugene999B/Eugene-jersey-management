@@ -32,24 +32,24 @@ export function ExportCenter() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="panel p-5">
+    <div className="space-y-4 sm:space-y-5">
+      <section className="panel p-4 sm:p-5">
         <div className="flex items-center gap-2"><SlidersHorizontal size={18} /><h2 className="font-semibold">Report scope</h2></div>
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end">
           <label className="text-xs font-semibold text-slate-600"><span className="flex items-center gap-1"><CalendarRange size={14} /> From</span><input className="field mt-1" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
           <label className="text-xs font-semibold text-slate-600"><span className="flex items-center gap-1"><CalendarRange size={14} /> To</span><input className="field mt-1" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
           <label className="text-xs font-semibold text-slate-600"><span className="flex items-center gap-1"><Search size={14} /> Search within exported rows</span><input className="field mt-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Receipt, customer, product, status, staff…" /></label>
-          <button type="button" className="h-[43px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold" onClick={() => { setFrom(""); setTo(""); setQuery(""); }}>Clear</button>
+          <button type="button" className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold" onClick={() => { setFrom(""); setTo(""); setQuery(""); }}>Clear scope</button>
         </div>
-        <p className="mt-3 text-xs text-slate-500">The selected range and search are applied to every download below. Empty dates mean all available records.</p>
+        <p className="mt-3 text-xs leading-5 text-slate-500">The selected range and search are applied to every download below. Empty dates mean all available records.</p>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-4">
         {modules.map(([module, title, description]) => (
-          <section key={module} className="panel p-5">
-            <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{description}</p></div><Download size={19} className="text-[var(--shop-primary)]" /></div>
-            <div className="mt-5 grid grid-cols-3 gap-2">
-              {["pdf", "word", "excel"].map((format) => <a key={format} href={href(module, format)} className="rounded-lg border border-[#ded8cd] bg-white px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:border-[var(--shop-primary)] hover:text-[var(--shop-primary)]">{format.toUpperCase()}</a>)}
+          <section key={module} className="panel p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="text-lg font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{description}</p></div><Download size={19} className="shrink-0 text-[var(--shop-primary)]" /></div>
+            <div className="mt-4 grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:mt-5">
+              {["pdf", "word", "excel"].map((format) => <a key={format} href={href(module, format)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#ded8cd] bg-white px-2 py-2 text-center text-xs font-semibold text-slate-700 hover:border-[var(--shop-primary)] hover:text-[var(--shop-primary)] sm:px-3 sm:text-sm">{format.toUpperCase()}</a>)}
             </div>
           </section>
         ))}
