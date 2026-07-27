@@ -1,4 +1,4 @@
-export const DESIGN_PROJECT_VERSION = 5;
+export const DESIGN_PROJECT_VERSION = 6;
 export const DESIGN_RECOVERY_VERSION = 1;
 export const DESIGN_RECOVERY_MAX_BYTES = 1_800_000;
 export const DESIGN_RECOVERY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -62,7 +62,9 @@ export function migrateDesignProject(value: unknown): DesignProject {
     weedBox: project.weedBox ?? true,
     registrationMarks: project.registrationMarks ?? false,
     contourOffset: project.contourOffset ?? 0,
-    machineProfile: project.machineProfile ?? "Generic SVG",
+    machineProfile: project.machineProfile ?? "Generic SVG cutter",
+    machineProfileId: project.machineProfileId ?? null,
+    machineSettings: objectRecord(project.machineSettings),
   };
 }
 
