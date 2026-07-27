@@ -5,8 +5,15 @@ import { MissingTenantScopeError } from "@/lib/tenant-scope";
 type UnknownRecord = Record<string, unknown>;
 type TenantPolicy =
   | { kind: "direct" }
+  | { kind: "globalRead" }
   | { kind: "shop" }
-  | { kind: "child"; relationWhere: (shopId: string) => UnknownRecord };
+  | { kind: "child"; relationWhere: (shopId: string) => UnknownRecord }
+  | {
+      kind: "multi";
+      accessWhere: (shopId: string) => UnknownRecord;
+      createOwnerField: string;
+      immutableFields: string[];
+    };
 
 const directTenantModels = new Set([
   "User",
@@ -22,7 +29,6 @@ const directTenantModels = new Set([
   "ReturnRequest",
   "InviteToken",
   "ProductReview",
-  "Announcement",
   "SaleHold",
   "Notification",
   "Debt",
@@ -46,6 +52,9 @@ const childTenantPolicies: Record<string, (shopId: string) => UnknownRecord> = {
   ChatMessage: (shopId) => ({ thread: { shopId } }),
   SupplierOrderItem: (shopId) => ({ supplierOrder: { shopId } }),
   AnnouncementDismissal: (shopId) => ({ user: { shopId } }),
+  ShopNetworkOrderItem: (shopId) => ({
+    networkOrder: { OR: [{ requesterShopId: shopId }, { partnerShopId: shopId }] },
+  }),
 };
 
 const modelPropertyNames: Record<string, string> = {
@@ -146,24 +155,54 @@ function requireShopId(shopId: string) {
 
 function policyFor(model: string): TenantPolicy {
   if (model === "Shop") return { kind: "shop" };
+  if (model === "Announcement") return { kind: "globalRead" };
+  if (model === "ShopNetworkLink") {
+    return {
+      kind: "multi",
+      accessWhere: (shopId) => ({ OR: [{ requesterShopId: shopId }, { partnerShopId: shopId }] }),
+      createOwnerField: "requesterShopId",
+      immutableFields: ["requesterShopId", "partnerShopId"],
+    };
+  }
+  if (model === "ShopNetworkOrder") {
+    return {
+      kind: "multi",
+      accessWhere: (shopId) => ({ OR: [{ requesterShopId: shopId }, { partnerShopId: shopId }] }),
+      createOwnerField: "requesterShopId",
+      immutableFields: ["requesterShopId", "partnerShopId"],
+    };
+  }
   if (directTenantModels.has(model)) return { kind: "direct" };
   const relationWhere = childTenantPolicies[model];
   if (relationWhere) return { kind: "child", relationWhere };
   throw new TenantDatabaseAccessError(
-    `${model} is platform-global or has a multi-tenant ownership rule. Use the explicitly reviewed platform client or a dedicated repository.`,
+    `${model} is platform-global or has an unsupported ownership rule. Use the explicitly reviewed platform client or a dedicated repository.`,
   );
 }
 
-function scopeWhere(model: string, policy: TenantPolicy, whereValue: unknown, shopId: string) {
+function scopeWhere(
+  model: string,
+  policy: TenantPolicy,
+  whereValue: unknown,
+  shopId: string,
+  allowGlobalRead = false,
+) {
   const where = isRecord(whereValue) ? whereValue : {};
   if (policy.kind === "direct") {
     if (typeof where.shopId === "string" && where.shopId !== shopId) throw new TenantScopeMismatchError(model);
     return { AND: [where, { shopId }] };
   }
+  if (policy.kind === "globalRead") {
+    if (typeof where.shopId === "string" && where.shopId !== shopId) throw new TenantScopeMismatchError(model);
+    return allowGlobalRead
+      ? { AND: [where, { OR: [{ shopId }, { isGlobal: true }] }] }
+      : { AND: [where, { shopId }] };
+  }
   if (policy.kind === "shop") {
     if (typeof where.id === "string" && where.id !== shopId) throw new TenantScopeMismatchError(model);
     return { AND: [where, { id: shopId }] };
   }
+  if (policy.kind === "multi") return { AND: [where, policy.accessWhere(shopId)] };
   return { AND: [where, policy.relationWhere(shopId)] };
 }
 
@@ -173,9 +212,16 @@ function scopeDirectData(model: string, dataValue: unknown, shopId: string) {
   return { ...dataValue, shopId };
 }
 
+function scopeMultiData(model: string, policy: Extract<TenantPolicy, { kind: "multi" }>, dataValue: unknown, shopId: string) {
+  if (!isRecord(dataValue)) throw new TenantDatabaseAccessError(`${model} data must be an object.`);
+  const ownerValue = dataValue[policy.createOwnerField];
+  if (typeof ownerValue === "string" && ownerValue !== shopId) throw new TenantScopeMismatchError(model);
+  return { ...dataValue, [policy.createOwnerField]: shopId };
+}
+
 function protectUpdateData(model: string, policy: TenantPolicy, dataValue: unknown, shopId: string) {
   if (!isRecord(dataValue)) return dataValue;
-  if (policy.kind === "direct") {
+  if (policy.kind === "direct" || policy.kind === "globalRead") {
     if (Object.prototype.hasOwnProperty.call(dataValue, "shopId") && dataValue.shopId !== shopId) {
       throw new TenantScopeMismatchError(model);
     }
@@ -183,6 +229,9 @@ function protectUpdateData(model: string, policy: TenantPolicy, dataValue: unkno
   }
   if (policy.kind === "shop" && Object.prototype.hasOwnProperty.call(dataValue, "id")) {
     throw new TenantDatabaseAccessError("Tenant code cannot change a shop primary key.");
+  }
+  if (policy.kind === "multi" && policy.immutableFields.some((field) => Object.prototype.hasOwnProperty.call(dataValue, field))) {
+    throw new TenantDatabaseAccessError(`${model} ownership fields cannot be changed by tenant code.`);
   }
   return dataValue;
 }
@@ -216,6 +265,14 @@ async function assertChildCreate(model: string, dataValue: unknown, shopId: stri
     case "AnnouncementDismissal":
       belongs = typeof dataValue.userId === "string" && await platformDb.user.count({ where: { id: dataValue.userId, shopId } }) === 1;
       break;
+    case "ShopNetworkOrderItem":
+      belongs = typeof dataValue.networkOrderId === "string" && await platformDb.shopNetworkOrder.count({
+        where: {
+          id: dataValue.networkOrderId,
+          OR: [{ requesterShopId: shopId }, { partnerShopId: shopId }],
+        },
+      }) === 1;
+      break;
     default:
       belongs = false;
   }
@@ -226,7 +283,8 @@ async function assertChildCreate(model: string, dataValue: unknown, shopId: stri
 
 async function scopeCreateData(model: string, policy: TenantPolicy, dataValue: unknown, shopId: string) {
   if (policy.kind === "shop") throw new TenantDatabaseAccessError("Tenant code cannot create shops.");
-  if (policy.kind === "direct") return scopeDirectData(model, dataValue, shopId);
+  if (policy.kind === "direct" || policy.kind === "globalRead") return scopeDirectData(model, dataValue, shopId);
+  if (policy.kind === "multi") return scopeMultiData(model, policy, dataValue, shopId);
   return assertChildCreate(model, dataValue, shopId);
 }
 
@@ -240,7 +298,7 @@ async function scopeOperationArguments(model: string, operation: string, argsVal
   const scopedArgs: UnknownRecord = isRecord(argsValue) ? { ...argsValue } : {};
 
   if (readOperations.has(operation)) {
-    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId);
+    scopedArgs.where = scopeWhere(model, policy, scopedArgs.where, shopId, true);
   } else if (createOperations.has(operation)) {
     scopedArgs.data = await scopeCreatePayload(model, policy, scopedArgs.data, shopId);
   } else if (updateOperations.has(operation)) {
@@ -331,6 +389,9 @@ export type TenantDb = ReturnType<typeof createTenantDb>;
 
 export const tenantScopedModelNames = Object.freeze([
   "Shop",
+  "Announcement",
+  "ShopNetworkLink",
+  "ShopNetworkOrder",
   ...directTenantModels,
   ...Object.keys(childTenantPolicies),
 ]);
