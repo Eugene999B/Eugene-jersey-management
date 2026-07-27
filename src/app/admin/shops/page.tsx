@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Megaphone, Plus, Power, Shield, Store } from "lucide-react";
+import { Plus, Power, Shield, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createGlobalAnnouncementAction, toggleShopAction } from "@/app/admin/actions";
+import { toggleShopAction } from "@/app/admin/actions";
 import { prisma } from "@/lib/db";
 import { currency, shortDate } from "@/lib/format";
 import { requirePlatformPermission } from "@/lib/platform-admin";
@@ -30,7 +30,7 @@ export default async function ShopsPage({ searchParams }: ShopsPageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Tenant administration</p><h1 className="mt-2 text-3xl font-semibold">Shops</h1><p className="mt-2 text-sm text-slate-600">Create, search, inspect, verify, suspend and communicate with tenant businesses.</p></div><Link href="/admin/shops/new" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16} /> Create shop</Link></div>
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Tenant administration</p><h1 className="mt-2 text-3xl font-semibold">Shops</h1><p className="mt-2 text-sm text-slate-600">Create, search, inspect, verify and suspend tenant businesses.</p></div><Link href="/admin/shops/new" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16} /> Create shop</Link></div>
       {params.error ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">The shop action could not be completed. Check the submitted information and your access.</div> : null}
 
       <section className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
@@ -49,10 +49,7 @@ export default async function ShopsPage({ searchParams }: ShopsPageProps) {
           </tbody></table></div>
         </div>
 
-        <div className="grid content-start gap-5">
-          <div className="panel p-5"><div className="mb-4 flex items-center gap-2"><Megaphone size={18} /><h2 className="text-xl font-semibold">Platform broadcast</h2></div><p className="mb-4 text-sm text-slate-500">Publish an announcement to every shop dashboard.</p><form action={createGlobalAnnouncementAction} className="space-y-3"><input className="field" name="title" placeholder="Announcement title" required /><textarea className="field min-h-28" name="body" placeholder="Message to every shop dashboard" required /><Button variant="secondary" className="w-full">Send announcement</Button></form></div>
-          <div className="panel p-5"><div className="mb-4 flex items-center gap-2"><Shield size={18} /><h2 className="text-xl font-semibold">Store risk watch</h2></div><div className="grid gap-2">{atRiskShops.map((shop) => <Link key={shop.id} href={`/admin/shops/${shop.id}`} className="rounded-xl border border-[#ded8cd] bg-white p-3 text-sm transition hover:border-[#0f766e]"><p className="font-semibold">{shop.name}</p><p className="text-slate-500">{!shop.isActive ? "Suspended" : shop.subscriptionStatus === "PAST_DUE" ? "Payment issue" : !shop.publicOrderingEnabled ? "Ordering off" : "No recent orders"}</p></Link>)}{!atRiskShops.length ? <p className="text-sm text-slate-500">All shops look healthy.</p> : null}</div></div>
-        </div>
+        <div className="panel p-5"><div className="mb-4 flex items-center gap-2"><Shield size={18} /><h2 className="text-xl font-semibold">Store risk watch</h2></div><p className="mb-4 text-sm text-slate-500">Shops needing tenant-administration attention.</p><div className="grid gap-2">{atRiskShops.map((shop) => <Link key={shop.id} href={`/admin/shops/${shop.id}`} className="rounded-xl border border-[#ded8cd] bg-white p-3 text-sm transition hover:border-[#0f766e]"><p className="font-semibold">{shop.name}</p><p className="text-slate-500">{!shop.isActive ? "Suspended" : shop.subscriptionStatus === "PAST_DUE" ? "Payment issue" : !shop.publicOrderingEnabled ? "Ordering off" : "No recent orders"}</p></Link>)}{!atRiskShops.length ? <p className="text-sm text-slate-500">All shops look healthy.</p> : null}</div></div>
       </section>
     </div>
   );
