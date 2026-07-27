@@ -117,6 +117,12 @@ canvas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  main .panel > .grid.grid-cols-2:has(> button),
+  main .bg-slate-950 > .grid.grid-cols-2,
+  main article > .grid.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   main table {
     font-size: 0.8125rem;
   }
