@@ -16,7 +16,7 @@ const errorCopy: Record<string, string> = {
   origin: "The security request was rejected. Refresh the page and try again.",
 };
 
-export function TwoFactorLoginForm({ cancelPath = "/logout" }: { cancelPath?: string }) {
+export function TwoFactorLoginForm({ cancelPath = "/login/two-factor/cancel" }: { cancelPath?: string }) {
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
