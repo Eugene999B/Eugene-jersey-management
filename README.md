@@ -1,6 +1,6 @@
 # Eugene Jersey Management
 
-Production-ready multi-tenant sports shop platform for jersey shops, sports equipment retailers, suppliers, buyers, and platform admins. The app is built with Next.js App Router, Prisma, PostgreSQL, role-based access, structural tenant isolation, public storefronts, POS, debts, daily closing, supplier/network tools, exports, buyer ordering, chat, optional personal two-factor authentication, and an advanced jersey design studio.
+Production-ready multi-tenant sports shop platform for jersey shops, sports equipment retailers, suppliers, buyers, and platform admins. The app is built with Next.js App Router, Prisma, PostgreSQL, role-based access, structural tenant isolation, public storefronts, POS, debts, daily closing, supplier/network tools, exports, buyer ordering, chat, optional personal two-factor authentication, production integration health monitoring, store-owned Paystack settlement routing, and an advanced jersey design studio.
 
 Live Railway app: https://web-production-8ee56.up.railway.app
 
@@ -11,8 +11,10 @@ GitHub repository: https://github.com/Eugene999B/Eugene-jersey-management
 - Next.js 16 App Router and React 19
 - Prisma 7 with PostgreSQL
 - Railway for backend/database deployment
-- Paystack-ready payment flow
-- Arkesel-ready SMS/WhatsApp messaging helpers
+- Paystack main-account and store-subaccount payment routing
+- Arkesel-ready SMS and provider-safe WhatsApp helpers
+- S3/R2 durable media support
+- Read-only production integration health probes
 - Server actions and API routes for secure mutations
 - HTTP-only staff/admin and buyer sessions
 - Optional TOTP authenticator protection with encrypted secrets and recovery codes
@@ -29,6 +31,7 @@ GitHub repository: https://github.com/Eugene999B/Eugene-jersey-management
 - `/dashboard`: Shop operations dashboard.
 - `/dashboard/designs`: Advanced jersey and transfer-sheet design studio.
 - `/admin`: Super Admin platform command center.
+- `/admin/integrations`: Read-only provider, storage, scheduler and settlement health control centre.
 - `/supplier`: Supplier portal.
 
 ## Login Rules
@@ -69,12 +72,54 @@ Two-factor authentication is optional for every account type and disabled by def
 
 Do not reuse `SESSION_SECRET` as `TWO_FACTOR_ENCRYPTION_KEY`. Keep both as separate long random Railway secrets.
 
+## Payment Ownership and Settlement
+
+The platform uses one administrator Paystack integration with a separate store subaccount for each shop.
+
+1. The EJM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
+2. Every store has its own Paystack subaccount and settlement bank account.
+3. Customer payments for a store are initialized with that store's `subaccount` code.
+4. The store receives its settlement through its own subaccount.
+5. The configured EJM flat `transaction_charge`, when present, remains with the administrator main account.
+6. Platform subscriptions and future SMS/WhatsApp credit purchases belong to the administrator account.
+7. Stores may edit their settlement details and accepted payment methods, but cannot assign the Paystack subaccount, EJM charge or fee bearer.
+8. Only a platform administrator with Billing permission can verify and save those routing fields.
+9. A store card checkout is disabled unless a valid `ACCT_...` subaccount is assigned.
+10. Full settlement account numbers are masked in administrator views and excluded from audit metadata.
+11. One store's funds must never be represented as another tenant's balance.
+
+## Production Integration Health
+
+`/admin/integrations` separates “environment variable exists” from “provider accepted an authenticated read-only request.”
+
+- PostgreSQL: `SELECT 1` readiness query.
+- Paystack: read-only administrator balance request and selected store subaccount verification.
+- Arkesel: read-only balance-details request and low-credit warning.
+- WhatsApp: separate HTTPS `WHATSAPP_HEALTH_URL`; the send endpoint is never used as a health check.
+- S3/R2: read-only `HeadBucket` request; local Railway storage is flagged as ephemeral.
+- Reservation release: authenticated scheduler route with audited started, succeeded and failed heartbeats.
+
+Health checks never initialize a payment, send a message, upload a file or release stock.
+
+The scheduler endpoint is:
+
+```text
+POST /api/jobs/release-reservations
+Authorization: Bearer <JOBS_API_TOKEN>
+```
+
+`JOBS_API_TOKEN` must be a separate random value of at least 32 characters.
+
+See `docs/source/14_Production_Integration_Health.md` for rollout and operating rules.
+
 ## Admin System
 
 The Super Admin area controls:
 
 - Platform overview
 - Tenant shops
+- Store settlement and EJM payment routing
+- Production integration health
 - Admin staff/workers
 - Buyer and marketplace health
 - Supplier/network monitoring
@@ -94,6 +139,7 @@ Important admin logic:
 - Failed staff login attempts are audited and temporarily locked after repeated failures.
 - Users attached to a suspended shop are rejected during login.
 - Platform administrators manage their own optional 2FA from `/account/security`, not from another worker's admin form.
+- Only an administrator with Billing permission may assign store Paystack routes and platform charges.
 
 ## Buyer Flow
 
@@ -107,7 +153,7 @@ Buyers can:
 - Optionally enable personal authenticator security.
 - Chat with a shop only after signing in.
 - Order for pickup or delivery.
-- Pay online where enabled, or reserve cash pickup.
+- Pay online where enabled, with settlement assigned to the selected shop's subaccount, or reserve cash pickup.
 - Rate/review products only after login.
 
 Online buying does not support credit. Credit is only approved inside shop/POS by shop staff.
@@ -142,7 +188,7 @@ npm.cmd install
 copy .env.example .env
 ```
 
-Set independent long random values for both `SESSION_SECRET` and `TWO_FACTOR_ENCRYPTION_KEY` before testing optional 2FA.
+Set independent long random values for `SESSION_SECRET`, `TWO_FACTOR_ENCRYPTION_KEY`, and `JOBS_API_TOKEN` before testing the related security and scheduler flows.
 
 With Docker PostgreSQL:
 
@@ -176,6 +222,7 @@ npm.cmd run docs:generate
 npm.cmd run admin:bootstrap
 npm.cmd run production:activate
 npm.cmd run production:purge-demo
+npm.cmd run jobs:release-reservations
 ```
 
 ## Railway Deployment
@@ -189,6 +236,8 @@ Railway uses `railway.toml`:
 Production deployment is GitHub-controlled. Set `ADMIN_EMAIL` and, for the first activation, a strong `ADMIN_PASSWORD`. Optional variables are `ADMIN_LOGIN_ID`, `ADMIN_NAME`, and `ADMIN_PHONE`. Keep `ADMIN_FORCE_RESET=false` during normal operation.
 
 Set `TWO_FACTOR_ENCRYPTION_KEY` to a strong independent random value of at least 32 characters before allowing production users to enable 2FA. Existing accounts remain password-only because 2FA is off by default, but protected accounts fail closed if this key later becomes unavailable.
+
+Set the Release #17 provider variables from `.env.example`, including `PAYSTACK_SECRET_KEY`, Arkesel credentials, durable storage variables and `JOBS_API_TOKEN`. Provider features with incomplete credentials should remain disabled until `/admin/integrations` and controlled delivery/payment tests are healthy.
 
 The activation command creates or preserves the real Super Admin and retires demo access. The purge command normally skips. For the one-time permanent cleanup, set `PURGE_DEMO_DATA=PURGE-ACC-PRO-DEMO-2026`, deploy once, verify the application, then remove `PURGE_DEMO_DATA` from Railway.
 
@@ -208,7 +257,9 @@ Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not conn
 - `scripts/activate-production.ts`: Idempotent Railway production activation and demo retirement.
 - `scripts/purge-demo-data.ts`: Guarded one-time permanent deletion of seeded production demo data.
 - `scripts/verify-tenant-isolation.ts`: Permanent two-shop and platform-global-model attack verification.
+- `scripts/release-expired-reservations.ts`: Audited reservation-release job runner.
 - `docs/source/11_Production_Activation.md`: GitHub-only production activation and cleanup runbook.
+- `docs/source/14_Production_Integration_Health.md`: Release #17 provider and settlement runbook.
 - `src/app/login/page.tsx`: Role-detect login UI.
 - `src/app/login/two-factor`: Optional second-factor challenge and cancellation.
 - `src/app/api/auth/login/route.ts`: Staff/admin/supplier password and optional challenge backend.
@@ -217,6 +268,12 @@ Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not conn
 - `src/app/account/security/page.tsx`: Workforce personal security page.
 - `src/app/buyer/login`: Buyer login and SMS recovery.
 - `src/app/buyer/security/page.tsx`: Buyer personal security page.
+- `src/app/admin/integrations/page.tsx`: Read-only production integration control centre.
+- `src/app/admin/shops/[shopId]/payment-actions.ts`: Billing-admin store routing control.
+- `src/app/api/jobs/release-reservations/route.ts`: Authenticated reservation scheduler endpoint.
+- `src/lib/integration-health.ts`: Read-only provider, storage and scheduler probes.
+- `src/lib/scheduled-jobs.ts`: Audited job heartbeat runner.
+- `src/lib/payments.ts`: Paystack initialization, webhook verification and store-subaccount enforcement.
 - `src/lib/two-factor.ts`: Encryption, TOTP and recovery-code primitives.
 - `src/lib/two-factor-account.ts`: Optional 2FA account service.
 - `src/lib/two-factor-challenge.ts`: Short-lived pre-session challenge token.
@@ -242,24 +299,28 @@ Before editing:
 6. If changing the database, add a Prisma migration and update disposable seed data when relevant.
 7. Never make 2FA mandatory without a new explicit product decision. The approved rule is optional personal opt-in/opt-out for every account type.
 8. Never expose, log or store plaintext authenticator secrets or recovery codes after setup.
-9. If changing design studio behaviour, test selection, movement, mirror view, zoom, save, reload and mobile layout.
-10. Use GitHub pull requests and Railway deployment as the production source of truth.
-11. Never weaken or bypass the `PURGE_DEMO_DATA` confirmation, tenant-isolation tests or protected-account fail-closed behaviour.
+9. Never replace store-owned Paystack settlement with a shared tenant balance.
+10. Never let a store user change the EJM platform fee, assigned subaccount or Paystack fee bearer.
+11. Provider health checks must remain read-only and must not initialize payments, send messages, upload files or release stock.
+12. If changing design studio behaviour, test selection, movement, mirror view, zoom, save, reload and mobile layout.
+13. Use GitHub pull requests and Railway deployment as the production source of truth.
+14. Never weaken or bypass the `PURGE_DEMO_DATA` confirmation, tenant-isolation tests or protected-account fail-closed behaviour.
 
 Generated Word docs live in `docs/word` when `npm.cmd run docs:generate` is run.
 
 ## Current Diagnostic
 
-Read `docs/source/10_System_Diagnostic_Progress_and_Roadmap.md` before planning the next major update. It records the latest system check, launch blockers, optional 2FA rules, Design Studio gaps, production integration direction, and recommended implementation order.
+Read `docs/source/10_System_Diagnostic_Progress_and_Roadmap.md` and `docs/source/14_Production_Integration_Health.md` before planning the next major update.
 
 Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc-MipRfi1_5fdJKxahJ-aYWYEj
 
 Highest-priority status from the latest audit:
 
-- Production activation creates the real administrator from Railway variables and retires demo access automatically.
+- Release #16 optional personal 2FA is deployed successfully on Railway.
 - Structural tenant database isolation and permanent two-shop attack verification are active.
-- Desktop/mobile Chromium covers shop-owner, public, supplier and platform-admin surfaces.
-- Optional personal 2FA covers buyer, shop worker, owner, supplier and platform-admin accounts, with encrypted secrets, recovery codes, session revocation and protected-account browser journeys.
+- Desktop/mobile Chromium covers shop-owner, buyer, public, supplier and platform-admin surfaces.
+- Store card payments require a store-owned Paystack subaccount; EJM platform income remains with the administrator main account.
+- `/admin/integrations` checks provider reachability without mutating payment, messaging, media or stock state.
 - POS, cart checkout, and public ordering use transaction-safe conditional stock decrements.
 - Design Studio has undo, redo, delete selected, grouped templates, richer shapes, improved selection math, and clearer machine connection details.
-- Next major programme: Production Integration Health for Paystack, Arkesel, WhatsApp, storage and scheduled jobs, followed by Design Studio reliability and commercial controls.
+- Next after Release #17 deployment: controlled provider tests, Paystack refund/reconciliation operations, SMS/WhatsApp credits, and Design Studio reliability.
