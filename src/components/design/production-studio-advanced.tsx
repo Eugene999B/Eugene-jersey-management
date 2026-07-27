@@ -44,7 +44,20 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { MachineProfilePanel } from "@/components/design/machine-profile-panel";
 import { Button } from "@/components/ui/button";
+import {
+  buildCutDxf,
+  buildCutHpgl,
+  buildCutSvg,
+  buildDesignCutPaths,
+} from "@/lib/design-cut-path";
+import {
+  normalizeMachineOrigin,
+  normalizeMachineOutputFormat,
+  productionWorkflowForProfile,
+  type DesignMachineProfile,
+} from "@/lib/design-machine-profile";
 import {
   DESIGN_PROJECT_VERSION,
   designRecoveryStorageKey,
@@ -56,12 +69,10 @@ import {
   type DesignRecoveryDraft,
 } from "@/lib/design-recovery";
 import {
-  buildHpgl,
   buildPrintDocument,
   checkProductionDesign,
   clampLayerToSheet,
   type ProductionLayer,
-  type ProductionMachineProfile,
 } from "@/lib/design-production";
 import {
   groupSelectedLayers,
@@ -79,7 +90,6 @@ type Material = "htv" | "printable-htv" | "sublimation" | "dtf" | "flock";
 type Sheet = "a4" | "a3" | "12x20" | "15x20" | "custom";
 type DeviceState = "not-configured" | "unsupported" | "selecting" | "connected" | "error";
 type LayerKind = ProductionLayer["kind"];
-type MachineProfile = ProductionMachineProfile;
 type SavedDesign = {
   id: string;
   title: string;
@@ -137,8 +147,20 @@ const materialDetails: Record<Material, { label: string; instruction: string; de
   flock: { label: "Flock vinyl", instruction: "Mirror before cutting. Weed carefully and follow the material temperature and peel instructions.", defaultMirror: true },
 };
 
-const machineProfiles: MachineProfile[] = ["Generic SVG", "HPGL / PLT cutter", "SignMaster", "VinylMaster", "Print/RIP"];
 const allowedFonts = ["Arial", "Impact", "Georgia", "Courier New", "Times New Roman"];
+const fallbackMachineProfile: DesignMachineProfile = {
+  id: "fallback-generic-svg",
+  name: "Generic SVG cutter",
+  outputFormat: "SVG_CUT",
+  bedWidthMm: 305,
+  bedHeightMm: 508,
+  unitsPerMm: 40,
+  baudRate: 9600,
+  origin: "BOTTOM_LEFT",
+  mirrorDefault: true,
+  isDefault: true,
+  isActive: true,
+};
 const transformHandles: Array<{ handle: TransformHandle; x: -1 | 1; y: -1 | 1 }> = [
   { handle: "north-west", x: -1, y: -1 },
   { handle: "north-east", x: 1, y: -1 },
@@ -161,6 +183,25 @@ function escapeXml(value: string) {
 function finiteNumber(value: unknown, fallback: number, min = -100_000, max = 100_000) {
   const number = typeof value === "number" ? value : Number.NaN;
   return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+}
+
+function machineProfileSnapshot(value: unknown, fallbackName: string, fallbackId: string): DesignMachineProfile | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const profile = value as Record<string, unknown>;
+  const name = typeof profile.name === "string" && profile.name.trim() ? profile.name.slice(0, 80) : fallbackName;
+  return {
+    id: typeof profile.id === "string" && profile.id.trim() ? profile.id.slice(0, 100) : fallbackId,
+    name,
+    outputFormat: normalizeMachineOutputFormat(profile.outputFormat),
+    bedWidthMm: finiteNumber(profile.bedWidthMm, 305, 20, 2_000),
+    bedHeightMm: finiteNumber(profile.bedHeightMm, 508, 20, 5_000),
+    unitsPerMm: Math.round(finiteNumber(profile.unitsPerMm, 40, 1, 1_000)),
+    baudRate: Math.round(finiteNumber(profile.baudRate, 9600, 300, 1_000_000)),
+    origin: normalizeMachineOrigin(profile.origin),
+    mirrorDefault: profile.mirrorDefault !== false,
+    isDefault: profile.isDefault === true,
+    isActive: false,
+  };
 }
 
 function normalizedLayers(value: unknown[], sheetSize?: { width: number; height: number }): DesignLayer[] {
@@ -233,13 +274,21 @@ function historyTime(value: string) {
 export function DesignStudioAdvanced({
   savedDesigns = [],
   recoveryScope,
+  initialMachineProfiles,
+  canManageMachineProfiles,
 }: {
   savedDesigns?: SavedDesign[];
   recoveryScope: string;
+  initialMachineProfiles: DesignMachineProfile[];
+  canManageMachineProfiles: boolean;
 }) {
   const router = useRouter();
   const gridId = `design-grid-${useId().replace(/:/g, "")}`;
   const recoveryKey = useMemo(() => designRecoveryStorageKey(recoveryScope), [recoveryScope]);
+  const startingMachineProfile = initialMachineProfiles.find((profile) => profile.isDefault && profile.isActive)
+    ?? initialMachineProfiles.find((profile) => profile.isActive)
+    ?? initialMachineProfiles[0]
+    ?? fallbackMachineProfile;
   const [designJobId, setDesignJobId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState("Not saved yet");
@@ -265,7 +314,8 @@ export function DesignStudioAdvanced({
   const [weedBox, setWeedBox] = useState(true);
   const [registrationMarks, setRegistrationMarks] = useState(false);
   const [contourOffset, setContourOffset] = useState(0);
-  const [machineProfile, setMachineProfile] = useState<MachineProfile>("Generic SVG");
+  const [availableMachineProfiles, setAvailableMachineProfiles] = useState<DesignMachineProfile[]>(initialMachineProfiles.length ? initialMachineProfiles : [fallbackMachineProfile]);
+  const [machineProfileId, setMachineProfileId] = useState(startingMachineProfile.id);
   const [newText, setNewText] = useState("");
   const [layers, setLayers] = useState<DesignLayer[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -275,7 +325,7 @@ export function DesignStudioAdvanced({
   const [device, setDevice] = useState<DeviceState>("not-configured");
   const [deviceName, setDeviceName] = useState("No output device selected");
   const [deviceMessage, setDeviceMessage] = useState("System printing and SVG export are ready. A compatible serial cutter can also receive checked HPGL vector jobs.");
-  const [baudRate, setBaudRate] = useState(9600);
+  const [baudRate, setBaudRate] = useState(startingMachineProfile.baudRate);
   const portRef = useRef<SerialPortLike | null>(null);
   const projectInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
@@ -285,6 +335,12 @@ export function DesignStudioAdvanced({
   const authoritativeFingerprintRef = useRef<string | null>(null);
 
   const size = sheet === "custom" ? { label: "Custom", width: customWidth, height: customHeight } : sheets[sheet];
+  const machineProfile = availableMachineProfiles.find((profile) => profile.id === machineProfileId)
+    ?? availableMachineProfiles.find((profile) => profile.isDefault && profile.isActive)
+    ?? availableMachineProfiles.find((profile) => profile.isActive)
+    ?? fallbackMachineProfile;
+  const productionWorkflow = productionWorkflowForProfile(machineProfile);
+  const productionValidationWorkflow = machineProfile.outputFormat === "HPGL" ? "Generic SVG" : productionWorkflow;
   const selected = layers.find((layer) => layer.id === primarySelectedId) ?? null;
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedLayers = useMemo(() => layers.filter((layer) => selectedSet.has(layer.id)), [layers, selectedSet]);
@@ -306,7 +362,9 @@ export function DesignStudioAdvanced({
     weedBox,
     registrationMarks,
     contourOffset,
-    machineProfile,
+    machineProfile: machineProfile.name,
+    machineProfileId: machineProfile.id,
+    machineSettings: machineProfile,
     layers,
   }), [jobName, customer, material, sheet, customWidth, customHeight, copies, mirror, showGrid, snap, weedBox, registrationMarks, contourOffset, machineProfile, layers]);
   const projectFingerprint = useMemo(() => JSON.stringify(projectSnapshot), [projectSnapshot]);
@@ -314,13 +372,26 @@ export function DesignStudioAdvanced({
   const productionCheck = useMemo(() => checkProductionDesign({
     layers,
     sheet: size,
-    machineProfile,
+    machineProfile: productionValidationWorkflow,
     material,
     mirror,
     registrationMarks,
     copies,
-  }), [layers, size.width, size.height, machineProfile, material, mirror, registrationMarks, copies]);
-  const productionBlocked = productionCheck.errors.length > 0;
+  }), [layers, size.width, size.height, productionValidationWorkflow, material, mirror, registrationMarks, copies]);
+  const cutPathResult = useMemo(() => buildDesignCutPaths({
+    layers,
+    sheet: size,
+    weedBox,
+    registrationMarks,
+  }), [layers, size.width, size.height, weedBox, registrationMarks]);
+  const usesCutPaths = machineProfile.outputFormat !== "PRINT_RIP";
+  const copyErrors = usesCutPaths && copies !== 1
+    ? ["Arrange multiple copies as separate artwork on the sheet before cutter export; repeating one path can damage the material."]
+    : [];
+  const productionErrors = [...new Set(usesCutPaths ? [...productionCheck.errors, ...cutPathResult.errors, ...copyErrors] : productionCheck.errors)];
+  const productionWarnings = [...new Set(usesCutPaths ? [...productionCheck.warnings, ...cutPathResult.warnings] : productionCheck.warnings)];
+  const productionBlocked = productionErrors.length > 0;
+  const printBlocked = productionCheck.errors.length > 0;
 
   useEffect(() => {
     try {
@@ -775,6 +846,30 @@ export function DesignStudioAdvanced({
     setRecoveryMessage(message);
   }
 
+  function selectMachineProfile(profile: DesignMachineProfile) {
+    setMachineProfileId(profile.id);
+    setBaudRate(profile.baudRate);
+    setMirror(profile.mirrorDefault);
+    if (device === "connected") {
+      setDeviceMessage("Machine profile changed. Close and reconnect the serial port before sending with the new baud rate.");
+    }
+  }
+
+  function updateMachineProfiles(profiles: DesignMachineProfile[]) {
+    setAvailableMachineProfiles(profiles.length ? profiles : [fallbackMachineProfile]);
+    if (!profiles.some((profile) => profile.id === machineProfileId)) {
+      const replacement = profiles.find((profile) => profile.isDefault && profile.isActive) ?? profiles.find((profile) => profile.isActive) ?? profiles[0];
+      if (replacement) selectMachineProfile(replacement);
+    }
+  }
+
+  function useMachineBed(profile: DesignMachineProfile) {
+    setSheet("custom");
+    setCustomWidth(profile.bedWidthMm);
+    setCustomHeight(profile.bedHeightMm);
+    setMirror(profile.mirrorDefault);
+  }
+
   async function saveProject() {
     setSaveStatus("saving");
     setSaveMessage("Saving to this shop…");
@@ -782,9 +877,9 @@ export function DesignStudioAdvanced({
       const response = await fetch("/api/designs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: designJobId ?? undefined, title: jobName, customer: customer || undefined, machineProfile, canvas: projectSnapshot }),
+        body: JSON.stringify({ id: designJobId ?? undefined, title: jobName, customer: customer || undefined, machineProfile: machineProfile.name, canvas: projectSnapshot }),
       });
-      const result = await response.json() as { design?: { id: string; versionNumber?: number }; error?: string };
+      const result = await response.json() as { design?: { id: string; versionNumber?: number; machineProfile?: DesignMachineProfile }; error?: string };
       if (!response.ok || !result.design) throw new Error(result.error ?? "Could not save this project.");
       setDesignJobId(result.design.id);
       markAuthoritative(projectSnapshot);
@@ -822,7 +917,18 @@ export function DesignStudioAdvanced({
     const nextWeedBox = typeof project.weedBox === "boolean" ? project.weedBox : true;
     const nextRegistrationMarks = typeof project.registrationMarks === "boolean" ? project.registrationMarks : false;
     const nextContourOffset = finiteNumber(project.contourOffset, 0, 0, 50);
-    const nextMachineProfile = typeof project.machineProfile === "string" && machineProfiles.includes(project.machineProfile as MachineProfile) ? project.machineProfile as MachineProfile : "Generic SVG";
+    const requestedProfileId = typeof project.machineProfileId === "string" ? project.machineProfileId : "";
+    const requestedProfileName = typeof project.machineProfile === "string" ? project.machineProfile : "Generic SVG cutter";
+    const currentProfile = availableMachineProfiles.find((profile) => profile.id === requestedProfileId)
+      ?? availableMachineProfiles.find((profile) => profile.name === requestedProfileName && profile.isActive);
+    const savedSnapshot = machineProfileSnapshot(project.machineSettings, requestedProfileName, requestedProfileId || `snapshot-${projectId ?? id()}`);
+    const nextMachineProfile = currentProfile ?? savedSnapshot
+      ?? availableMachineProfiles.find((profile) => profile.isDefault && profile.isActive)
+      ?? availableMachineProfiles.find((profile) => profile.isActive)
+      ?? fallbackMachineProfile;
+    if (!currentProfile && savedSnapshot) {
+      setAvailableMachineProfiles((profiles) => profiles.some((profile) => profile.id === savedSnapshot.id) ? profiles : [...profiles, savedSnapshot]);
+    }
     const nextSnapshot = {
       version: DESIGN_PROJECT_VERSION,
       jobName: nextJobName,
@@ -838,7 +944,9 @@ export function DesignStudioAdvanced({
       weedBox: nextWeedBox,
       registrationMarks: nextRegistrationMarks,
       contourOffset: nextContourOffset,
-      machineProfile: nextMachineProfile,
+      machineProfile: nextMachineProfile.name,
+      machineProfileId: nextMachineProfile.id,
+      machineSettings: nextMachineProfile,
       layers: nextLayers,
     };
 
@@ -858,7 +966,8 @@ export function DesignStudioAdvanced({
     setWeedBox(nextWeedBox);
     setRegistrationMarks(nextRegistrationMarks);
     setContourOffset(nextContourOffset);
-    setMachineProfile(nextMachineProfile);
+    setMachineProfileId(nextMachineProfile.id);
+    setBaudRate(nextMachineProfile.baudRate);
     setDesignJobId(projectId);
     setSelection([]);
     if (authority === "saved") {
@@ -930,15 +1039,39 @@ export function DesignStudioAdvanced({
       sheet: { preset: sheet, widthMm: size.width, heightMm: size.height },
       output: { copies, mirror, weedBox, registrationMarks, contourOffsetMm: contourOffset },
       layers: layers.map(({ url, ...layer }) => ({ ...layer, embeddedArtwork: Boolean(url) })),
-      productionChecks: productionCheck,
+      productionChecks: { print: productionCheck, cutPaths: cutPathResult },
       heatPressNote: materialDetails[material].instruction,
       machineProfile,
-      device: { state: device, name: deviceName, baudRate },
+      device: { state: device, name: deviceName, baudRate: machineProfile.baudRate },
     }, null, 2), "application/json");
   }
 
+  function exportCutFile() {
+    if (cutPathResult.errors.length) return;
+    if (machineProfile.outputFormat === "HPGL") {
+      download(`${safeName(jobName)}.plt`, buildCutHpgl({
+        paths: cutPathResult.paths,
+        sheet: size,
+        mirror,
+        origin: machineProfile.origin,
+        unitsPerMm: machineProfile.unitsPerMm,
+      }), "application/vnd.hp-hpgl");
+      return;
+    }
+    if (machineProfile.outputFormat === "DXF") {
+      download(`${safeName(jobName)}.dxf`, buildCutDxf({
+        paths: cutPathResult.paths,
+        sheet: size,
+        mirror,
+        origin: machineProfile.origin,
+      }), "application/dxf");
+      return;
+    }
+    download(`${safeName(jobName)}-cut.svg`, buildCutSvg({ paths: cutPathResult.paths, sheet: size, mirror }), "image/svg+xml");
+  }
+
   function printDesign() {
-    if (productionBlocked) return;
+    if (printBlocked) return;
     const printWindow = window.open("", "_blank", "width=900,height=700");
     if (!printWindow) {
       window.alert("Allow pop-ups for this site so the production print window can open.");
@@ -975,7 +1108,7 @@ export function DesignStudioAdvanced({
       ].filter(Boolean);
       setDevice("connected");
       setDeviceName(parts.join(" · "));
-      setDeviceMessage(`Port detected at ${baudRate} baud. Only checked HPGL rectangle/circle vector jobs can be sent directly; other workflows use SVG or system printing.`);
+      setDeviceMessage(`Port detected at ${baudRate} baud for ${machineProfile.name}. Only validated vector paths can be sent directly.`);
     } catch (error) {
       setDevice("error");
       setDeviceName("No device connected");
@@ -990,14 +1123,25 @@ export function DesignStudioAdvanced({
       setDeviceMessage("The selected serial port is not writable. Reconnect the cutter and try again.");
       return;
     }
-    if (productionCheck.errors.length) {
+    if (machineProfile.outputFormat !== "HPGL") {
       setDevice("error");
-      setDeviceMessage(productionCheck.errors.join(" "));
+      setDeviceMessage("Select an active HPGL machine profile before direct serial sending.");
+      return;
+    }
+    if (productionErrors.length) {
+      setDevice("error");
+      setDeviceMessage(productionErrors.join(" "));
       return;
     }
     const writer = port.writable.getWriter();
     try {
-      const hpgl = buildHpgl({ layers, sheet: size, mirror, weedBox });
+      const hpgl = buildCutHpgl({
+        paths: cutPathResult.paths,
+        sheet: size,
+        mirror,
+        origin: machineProfile.origin,
+        unitsPerMm: machineProfile.unitsPerMm,
+      });
       await writer.write(new TextEncoder().encode(hpgl));
       setDevice("connected");
       setDeviceMessage(`Vector job sent at ${baudRate} baud. Confirm cutter movement, origin and material loading before leaving the machine unattended.`);
@@ -1214,6 +1358,15 @@ export function DesignStudioAdvanced({
         <aside className="space-y-4">
           <div className="hidden xl:block">{renderSelectionInspector()}</div>
 
+          <MachineProfilePanel
+            profiles={availableMachineProfiles}
+            selectedId={machineProfile.id}
+            canManage={canManageMachineProfiles}
+            onSelect={selectMachineProfile}
+            onProfilesChange={updateMachineProfiles}
+            onUseBed={useMachineBed}
+          />
+
           <section className="panel p-4">
             <h3 className="font-semibold">Material and cut setup</h3>
             <label className="mt-3 block text-xs font-semibold text-slate-600">Material<select className="field mt-1" value={material} onChange={(event) => { const value = event.target.value as Material; setMaterial(value); setMirror(materialDetails[value].defaultMirror); }}>{Object.entries(materialDetails).map(([value, detail]) => <option key={value} value={value}>{detail.label}</option>)}</select></label>
@@ -1228,22 +1381,24 @@ export function DesignStudioAdvanced({
             <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Usb size={18} /><h3 className="font-semibold">Device readiness</h3></div>{device === "connected" ? <CheckCircle2 className="text-emerald-600" size={19} /> : <AlertTriangle className="text-amber-600" size={19} />}</div>
             <p className="mt-2 text-sm font-semibold">{deviceName}</p>
             <p className="mt-1 text-xs leading-5 text-slate-600">{deviceMessage}</p>
-            <label className="mt-3 block text-xs font-semibold text-slate-600">Serial speed<select className="field mt-1" value={baudRate} onChange={(event) => setBaudRate(Number(event.target.value))} disabled={device === "connected"}>{[9600, 19200, 38400, 57600, 115200].map((rate) => <option key={rate}>{rate}</option>)}</select></label>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600"><p className="font-semibold text-slate-900">{machineProfile.name}</p><p>{machineProfile.baudRate} baud · {machineProfile.unitsPerMm} units/mm · {machineProfile.origin === "BOTTOM_LEFT" ? "bottom-left" : "top-left"} origin</p></div>
             {device === "connected" ? <Button className="mt-3 w-full" variant="outline" onClick={disconnectDevice}>Close serial port</Button> : <Button className="mt-3 w-full" variant="outline" onClick={connectDevice} disabled={device === "selecting"}><Usb size={16} /> {device === "selecting" ? "Selecting device…" : "Connect serial cutter"}</Button>}
           </section>
 
           <section className="panel p-4">
             <div className="flex items-center gap-2"><Download size={18} /><h3 className="font-semibold">Production output</h3></div>
-            <label className="mt-3 block text-xs font-semibold text-slate-600">Machine workflow<select className="field mt-1" value={machineProfile} onChange={(event) => setMachineProfile(event.target.value as MachineProfile)}>{machineProfiles.map((profile) => <option key={profile}>{profile}</option>)}</select></label>
-            {productionCheck.errors.length ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><p className="font-semibold">Fix before production</p><ul className="mt-1 list-disc pl-4">{productionCheck.errors.map((issue) => <li key={issue}>{issue}</li>)}</ul></div> : null}
-            {productionCheck.warnings.length ? <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><p className="font-semibold">Operator checks</p><ul className="mt-1 list-disc pl-4">{productionCheck.warnings.map((issue) => <li key={issue}>{issue}</li>)}</ul></div> : null}
+            <div className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-xs leading-5 text-slate-600"><p className="font-semibold text-slate-900">{machineProfile.name}</p><p>{machineProfile.outputFormat.replace("_", " ")} · {machineProfile.bedWidthMm} × {machineProfile.bedHeightMm} mm</p>{!machineProfile.isActive ? <p className="mt-1 font-semibold text-amber-700">Historical profile snapshot. Select an active shop profile before saving.</p> : null}</div>
+            {productionErrors.length ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><p className="font-semibold">Fix before production</p><ul className="mt-1 list-disc pl-4">{productionErrors.map((issue) => <li key={issue}>{issue}</li>)}</ul></div> : null}
+            {productionWarnings.length ? <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><p className="font-semibold">Operator checks</p><ul className="mt-1 list-disc pl-4">{productionWarnings.map((issue) => <li key={issue}>{issue}</li>)}</ul></div> : null}
             <div className="mt-3 grid gap-2">
-              <Button disabled={productionBlocked} onClick={() => download(`${safeName(jobName)}.svg`, svgDocument(), "image/svg+xml")}><Scissors size={16} /> Export for {machineProfile}</Button>
-              {machineProfile === "HPGL / PLT cutter" ? <Button variant="secondary" disabled={productionBlocked || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send vector job to cutter</Button> : null}
-              <Button variant="secondary" disabled={productionBlocked} onClick={printDesign}><Printer size={16} /> Print {copies} cop{copies === 1 ? "y" : "ies"}</Button>
+              {machineProfile.outputFormat === "PRINT_RIP"
+                ? <Button disabled={printBlocked} onClick={() => download(`${safeName(jobName)}.svg`, svgDocument(), "image/svg+xml")}><Scissors size={16} /> Export full-colour SVG</Button>
+                : <Button disabled={productionBlocked} onClick={exportCutFile}><Scissors size={16} /> Export {machineProfile.outputFormat.replace("_", " ")}</Button>}
+              {machineProfile.outputFormat === "HPGL" ? <Button variant="secondary" disabled={productionBlocked || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send validated paths to cutter</Button> : null}
+              <Button variant="secondary" disabled={printBlocked} onClick={printDesign}><Printer size={16} /> Print {copies} cop{copies === 1 ? "y" : "ies"}</Button>
               <Button variant="outline" onClick={exportManifest}><MonitorCog size={16} /> Export job manifest</Button>
             </div>
-            <p className="mt-3 text-[11px] leading-4 text-slate-500">System printing uses the printer installed on this computer and creates the selected number of real-size pages. Direct serial sending is limited to checked HPGL rectangle/circle vector jobs. SVG remains the safe handoff for SignMaster, VinylMaster, RIP and other cutter software.</p>
+            <p className="mt-3 text-[11px] leading-4 text-slate-500">Cutter exports contain vector polylines only. Live text and raster artwork must be outlined or traced first; the studio never silently converts them into unsafe cut geometry.</p>
           </section>
         </aside>
       </div>

@@ -35,6 +35,21 @@ async function createFixture(slug: string, name: string) {
       publicOrderingEnabled: true,
     },
   });
+  const machineProfile = await platformDb.shopMachineProfile.create({
+    data: {
+      shopId: shop.id,
+      name: `${name} cutter`,
+      outputFormat: "HPGL",
+      bedWidthMm: 305,
+      bedHeightMm: 508,
+      unitsPerMm: 40,
+      baudRate: 9600,
+      origin: "BOTTOM_LEFT",
+      mirrorDefault: true,
+      isDefault: true,
+      isActive: true,
+    },
+  });
   const category = await platformDb.category.create({ data: { shopId: shop.id, name: "Isolation products" } });
   const product = await platformDb.product.create({
     data: {
@@ -73,7 +88,7 @@ async function createFixture(slug: string, name: string) {
       },
     },
   });
-  return { shop, product, variant: product.variants[0], customer, order };
+  return { shop, machineProfile, product, variant: product.variants[0], customer, order };
 }
 
 async function main() {
@@ -120,6 +135,27 @@ async function main() {
     }));
     assert(transactionResult.count === 0, "Interactive transaction bypassed tenant scope.");
 
+    const ownProfiles = await tenantA.shopMachineProfile.findMany({ orderBy: { name: "asc" } });
+    assert(ownProfiles.length === 1 && ownProfiles[0].id === tenantAData.machineProfile.id, "Tenant A machine profile read leaked another shop.");
+    const foreignProfile = await tenantA.shopMachineProfile.findUnique({ where: { id: tenantBData.machineProfile.id } });
+    assert(foreignProfile === null, "Tenant A found Tenant B machine profile by unique id.");
+    const foreignProfileUpdate = await tenantA.$transaction(async (transaction) => transaction.shopMachineProfile.updateMany({
+      where: { id: tenantBData.machineProfile.id },
+      data: { name: "Cross-tenant cutter" },
+    }));
+    assert(foreignProfileUpdate.count === 0, "Interactive transaction updated Tenant B machine profile.");
+    await expectRejects(
+      TenantScopeMismatchError,
+      () => tenantA.shopMachineProfile.create({
+        data: {
+          shopId: tenantBData.shop.id,
+          name: "Cross-tenant machine",
+          outputFormat: "SVG_CUT",
+        },
+      }),
+      "Tenant A created a machine profile under Tenant B.",
+    );
+
     await expectRejects(
       TenantDatabaseAccessError,
       () => tenantA.$transaction(async (transaction) => transaction.accountTwoFactor.findMany()),
@@ -163,7 +199,7 @@ async function main() {
     const tenantBCustomerAfter = await platformDb.customer.findUniqueOrThrow({ where: { id: tenantBData.customer.id } });
     assert(tenantBCustomerAfter.name === "Isolation Shop B customer" && tenantBCustomerAfter.notes === null, "Tenant B data changed during negative tests.");
 
-    console.log("Tenant isolation verification passed for direct models, child relations, transactions, design-version denial, two-factor global-model denial, and raw SQL denial.");
+    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, two-factor global-model denial, and raw SQL denial.");
   } finally {
     await deleteFixtures();
     await platformDb.$disconnect();

@@ -41,8 +41,18 @@ function newDraft(): ProfileDraft {
 }
 
 function draftFromProfile(profile: DesignMachineProfile): ProfileDraft {
-  const { id: _id, ...draft } = profile;
-  return draft;
+  return {
+    name: profile.name,
+    outputFormat: profile.outputFormat,
+    bedWidthMm: profile.bedWidthMm,
+    bedHeightMm: profile.bedHeightMm,
+    unitsPerMm: profile.unitsPerMm,
+    baudRate: profile.baudRate,
+    origin: profile.origin,
+    mirrorDefault: profile.mirrorDefault,
+    isDefault: profile.isDefault,
+    isActive: profile.isActive,
+  };
 }
 
 function parseNumber(value: string, fallback: number) {
@@ -70,6 +80,7 @@ export function MachineProfilePanel({
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const selected = profiles.find((profile) => profile.id === selectedId) ?? profiles.find((profile) => profile.isDefault) ?? profiles[0];
+  const selectedIsHistorical = Boolean(selected && !selected.isActive);
 
   function beginCreate() {
     setEditingId("new");
@@ -147,7 +158,7 @@ export function MachineProfilePanel({
         <>
           <label className="mt-3 block text-xs font-semibold text-slate-600">Active machine
             <select className="field mt-1" value={selected.id} onChange={(event) => { const profile = profiles.find((candidate) => candidate.id === event.target.value); if (profile) onSelect(profile); }}>
-              {profiles.filter((profile) => profile.isActive).map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {formatLabels[profile.outputFormat]}</option>)}
+              {profiles.filter((profile) => profile.isActive || profile.id === selectedId).map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {formatLabels[profile.outputFormat]}{profile.isActive ? "" : " · historical"}</option>)}
             </select>
           </label>
           <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-950">
@@ -156,7 +167,7 @@ export function MachineProfilePanel({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Button variant="outline" onClick={() => onUseBed(selected)}>Use machine bed</Button>
-            {canManage ? <Button variant="outline" onClick={() => beginEdit(selected)}>Edit profile</Button> : <Button variant="outline" disabled>Owner/manager only</Button>}
+            {canManage && selected.isActive ? <Button variant="outline" onClick={() => beginEdit(selected)}>Edit profile</Button> : <Button variant="outline" disabled>{selectedIsHistorical ? "Historical snapshot" : "Owner/manager only"}</Button>}
           </div>
         </>
       ) : <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">No active machine profile is available.</p>}
@@ -180,7 +191,7 @@ export function MachineProfilePanel({
             <label className="flex items-center gap-2 rounded border border-[#ded8cd] p-2"><input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })} /> Shop default</label>
             <label className="col-span-2 flex items-center gap-2 rounded border border-[#ded8cd] p-2"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} /> Active and selectable</label>
           </div>
-          <div className="grid grid-cols-2 gap-2"><Button onClick={saveProfile} disabled={saving}><Save size={16} /> {saving ? "Saving…" : "Save profile"}</Button>{editingId !== "new" && selected ? <Button variant="outline" onClick={() => deleteProfile(selected)} disabled={saving}><Trash2 size={16} /> Delete</Button> : <Button variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>}</div>
+          <div className="grid grid-cols-2 gap-2"><Button onClick={saveProfile} disabled={saving}><Save size={16} /> {saving ? "Saving…" : "Save profile"}</Button>{editingId !== "new" && selected?.isActive ? <Button variant="outline" onClick={() => deleteProfile(selected)} disabled={saving}><Trash2 size={16} /> Delete</Button> : <Button variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>}</div>
         </div>
       ) : null}
       {status ? <p className={`mt-3 text-xs font-medium ${status.toLowerCase().includes("could not") || status.toLowerCase().includes("must keep") ? "text-red-600" : "text-slate-600"}`}>{status}</p> : null}

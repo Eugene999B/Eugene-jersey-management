@@ -32,6 +32,11 @@ const identities = {
     loginId: "EJM-E2E-OWNER",
     name: "EJM Browser Shop Owner",
   },
+  designer: {
+    email: "browser-designer@ejm.test",
+    loginId: "EJM-E2E-DESIGNER",
+    name: "EJM Browser Designer",
+  },
   twoFactorOwner: {
     email: "browser-2fa-owner@ejm.test",
     loginId: "EJM-E2E-2FA-OWNER",
@@ -185,6 +190,41 @@ async function main() {
     },
   });
 
+  await prisma.shopMachineProfile.deleteMany({
+    where: { shopId: shop.id, name: "E2E Browser Cutter" },
+  });
+  await prisma.shopMachineProfile.updateMany({
+    where: { shopId: shop.id, isDefault: true },
+    data: { isDefault: false },
+  });
+  await prisma.shopMachineProfile.upsert({
+    where: { shopId_name: { shopId: shop.id, name: "Generic SVG cutter" } },
+    update: {
+      outputFormat: "SVG_CUT",
+      bedWidthMm: 305,
+      bedHeightMm: 508,
+      unitsPerMm: 40,
+      baudRate: 9600,
+      origin: "BOTTOM_LEFT",
+      mirrorDefault: true,
+      isDefault: true,
+      isActive: true,
+    },
+    create: {
+      shopId: shop.id,
+      name: "Generic SVG cutter",
+      outputFormat: "SVG_CUT",
+      bedWidthMm: 305,
+      bedHeightMm: 508,
+      unitsPerMm: 40,
+      baudRate: 9600,
+      origin: "BOTTOM_LEFT",
+      mirrorDefault: true,
+      isDefault: true,
+      isActive: true,
+    },
+  });
+
   const owner = await prisma.user.upsert({
     where: { email: identities.owner.email },
     update: {
@@ -205,6 +245,32 @@ async function main() {
       name: identities.owner.name,
       passwordHash,
       role: Role.OWNER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: identities.designer.email },
+    update: {
+      adminLoginId: identities.designer.loginId,
+      name: identities.designer.name,
+      passwordHash,
+      role: Role.DESIGNER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+      failedLoginCount: 0,
+      lockUntil: null,
+      sessionVersion: 0,
+    },
+    create: {
+      adminLoginId: identities.designer.loginId,
+      email: identities.designer.email,
+      name: identities.designer.name,
+      passwordHash,
+      role: Role.DESIGNER,
       shopId: shop.id,
       adminPermissions: [],
       isActive: true,

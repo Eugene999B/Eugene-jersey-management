@@ -89,8 +89,9 @@ export async function PATCH(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Check the machine name, bed size and output settings." }, { status: 400 });
 
   try {
+    const { id, ...profileData } = parsed.data;
     const profile = await prisma.$transaction(async (transaction) => {
-      const existing = await transaction.shopMachineProfile.findFirst({ where: { id: parsed.data.id, shopId: access.shopId } });
+      const existing = await transaction.shopMachineProfile.findFirst({ where: { id, shopId: access.shopId } });
       if (!existing) return null;
       const activeCount = await transaction.shopMachineProfile.count({ where: { shopId: access.shopId, isActive: true } });
       if (existing.isActive && !parsed.data.isActive && activeCount <= 1) {
@@ -106,7 +107,7 @@ export async function PATCH(request: NextRequest) {
       }
       return transaction.shopMachineProfile.update({
         where: { id: existing.id },
-        data: { ...parsed.data, id: undefined, isDefault: makeDefault, isActive: makeDefault ? true : parsed.data.isActive },
+        data: { ...profileData, isDefault: makeDefault, isActive: makeDefault ? true : profileData.isActive },
       });
     });
     if (!profile) return NextResponse.json({ error: "Machine profile not found." }, { status: 404 });

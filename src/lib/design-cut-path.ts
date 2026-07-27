@@ -376,9 +376,11 @@ function parseEmbeddedSvg(svg: string, layer: CutPathLayer): CutPathResult {
     const name = match[1].toLowerCase();
 
     if (closing) {
-      while (stack.length) {
-        const popped = stack.pop();
-        if (popped?.name === name) break;
+      if (name === "svg" || name === "g" || SKIPPED_CONTAINER_TAGS.has(name)) {
+        while (stack.length) {
+          const popped = stack.pop();
+          if (popped?.name === name) break;
+        }
       }
       continue;
     }
