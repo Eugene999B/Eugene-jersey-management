@@ -55,7 +55,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="w-full max-w-[520px] origin-center [@media(max-height:700px)]:scale-[0.91] [@media(max-height:610px)]:scale-[0.82]">
           <div className="mb-4 text-center sm:mb-5">
             <Link href="/" className="mb-3 inline-flex items-center gap-2 text-xs font-bold text-white/45 transition hover:text-white sm:hidden"><ArrowLeft size={15} /> Return home</Link>
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">EJM // Control room</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">EJM · Control room</p>
             <h1 className="mt-3 text-4xl font-black tracking-[-0.055em] sm:text-5xl">Access your operation.</h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48 [@media(max-height:690px)]:hidden">A focused entry point for platform administrators, shop owners, managers and authorised staff.</p>
           </div>
