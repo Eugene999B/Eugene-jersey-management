@@ -24,6 +24,7 @@ function retryableVersionConflict(error: unknown) {
 export async function POST(request: NextRequest) {
   const session = await requireRole(permissions.designs);
   if (!session.shopId) return NextResponse.json({ error: "A shop workspace is required." }, { status: 403 });
+  const shopId = session.shopId;
 
   if (!isTrustedApplicationOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
   let customerId: string | null = null;
   if (parsed.data.customer) {
     const matches = await prisma.customer.findMany({
-      where: { shopId: session.shopId, name: { equals: parsed.data.customer, mode: "insensitive" } },
+      where: { shopId, name: { equals: parsed.data.customer, mode: "insensitive" } },
       select: { id: true },
       take: 2,
     });
@@ -62,21 +63,21 @@ export async function POST(request: NextRequest) {
       saved = await prisma.$transaction(async (transaction) => {
         if (parsed.data.id) {
           const existing = await transaction.designJob.findFirst({
-            where: { id: parsed.data.id, shopId: session.shopId },
+            where: { id: parsed.data.id, shopId },
             select: { id: true, title: true, canvasJson: true, machineProfile: true },
           });
           if (!existing) return null;
 
           const maximum = await transaction.designJobVersion.aggregate({
-            where: { shopId: session.shopId, designJobId: existing.id },
+            where: { shopId, designJobId: existing.id },
             _max: { versionNumber: true },
           });
-          let currentMaximum = maximum._max.versionNumber;
+          let currentMaximum = maximum._max?.versionNumber ?? null;
 
           if (!currentMaximum) {
             await transaction.designJobVersion.create({
               data: {
-                shopId: session.shopId,
+                shopId,
                 designJobId: existing.id,
                 versionNumber: 1,
                 title: existing.title,
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
           const versionNumber = nextDesignVersionNumber(currentMaximum);
           await transaction.designJobVersion.create({
             data: {
-              shopId: session.shopId,
+              shopId,
               designJobId: design.id,
               versionNumber,
               title: design.title,
@@ -106,11 +107,11 @@ export async function POST(request: NextRequest) {
           return { design, versionNumber };
         }
 
-        const design = await transaction.designJob.create({ data: { ...data, shopId: session.shopId } });
+        const design = await transaction.designJob.create({ data: { ...data, shopId } });
         const versionNumber = 1;
         await transaction.designJobVersion.create({
           data: {
-            shopId: session.shopId,
+            shopId,
             designJobId: design.id,
             versionNumber,
             title: design.title,
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
   if (!saved) return NextResponse.json({ error: "Design project not found." }, { status: 404 });
 
   await audit({
-    shopId: session.shopId,
+    shopId,
     userId: session.id,
     action: parsed.data.id ? "design.updated" : "design.created",
     entityType: "DesignJob",
