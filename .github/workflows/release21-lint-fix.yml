@@ -1,0 +1,45 @@
+name: Apply Release 21 Lint Fix
+
+on:
+  push:
+    branches:
+      - agent/release-21-shop-machine-profiles-cut-paths
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/release-21-shop-machine-profiles-cut-paths
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply focused parser lint fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("src/lib/design-cut-path.ts")
+          text = path.read_text()
+          text = text.replace('  let match: RegExpExecArray | null;\n  while ((match = pattern.exec(source))) {', '  for (const match of source.matchAll(pattern)) {', 1)
+          text = text.replace('  let match: RegExpExecArray | null;\n  while ((match = pattern.exec(value))) {', '  for (const match of value.matchAll(pattern)) {', 1)
+          text = text.replace('  let match: RegExpExecArray | null;\n\n  while ((match = tagPattern.exec(svg))) {', '  for (const match of svg.matchAll(tagPattern)) {', 1)
+          text = text.replace('  let startAngle = vectorAngle({ x: 1, y: 0 }, startVector);', '  const startAngle = vectorAngle({ x: 1, y: 0 }, startVector);', 1)
+          text = text.replace('  if (!url || !url.toLowerCase().startsWith("data:image/svg+xml")) return null;', '  if (!url?.toLowerCase().startsWith("data:image/svg+xml")) return null;', 1)
+          path.write_text(text)
+
+          tenant = Path("src/lib/tenant-db.ts")
+          tenant_text = tenant.read_text().replace("Object.prototype.hasOwnProperty.call(dataValue,", "Object.hasOwn(dataValue,")
+          tenant.write_text(tenant_text)
+          PY
+          rm -f .github/workflows/release21-lint-fix.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/design-cut-path.ts src/lib/tenant-db.ts .github/workflows/release21-lint-fix.yml
+          git commit -m "Fix Release 21 parser lint diagnostics"
+          git push origin HEAD:agent/release-21-shop-machine-profiles-cut-paths
