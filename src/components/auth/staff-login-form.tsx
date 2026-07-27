@@ -93,15 +93,15 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
       onSubmit={submitLogin}
       autoComplete="off"
       data-form-type="other"
-      className="rounded-[28px] border border-white/70 bg-white/90 p-5 shadow-[0_30px_90px_rgba(5,16,34,0.16)] backdrop-blur-xl sm:p-7"
+      className="rounded-[26px] border border-white/10 bg-white/[0.065] p-4 shadow-[0_28px_100px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-6"
     >
       <div className="space-y-4">
         <label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Login ID or work email</span>
+          <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Private access ID</span>
           <div className="relative">
-            <UserRound className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <UserRound className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
             <input
-              className="min-h-13 w-full rounded-2xl border border-slate-200 bg-white px-4 pl-11 text-[15px] outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
+              className="min-h-13 w-full rounded-2xl border border-white/10 bg-black/25 px-4 pl-11 text-[15px] text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/70 focus:bg-black/35 focus:ring-4 focus:ring-cyan-300/10"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
               autoComplete="off"
@@ -111,18 +111,18 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
               data-lpignore="true"
               data-1p-ignore="true"
               data-bwignore="true"
-              placeholder="Enter your private access ID"
+              placeholder="Login ID or work email"
               disabled={submitting}
               required
             />
           </div>
         </label>
         <label className="block">
-          <span className="mb-2 flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500"><span>Password</span><Link href="/forgot-password" className="normal-case tracking-normal text-cyan-700 hover:text-cyan-900">Forgot password?</Link></span>
+          <span className="mb-2 flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400"><span>Password</span><Link href="/forgot-password" className="normal-case tracking-normal text-cyan-300 transition hover:text-white">Forgot password?</Link></span>
           <div className="relative">
-            <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
             <input
-              className="min-h-13 w-full rounded-2xl border border-slate-200 bg-white px-12 pl-11 text-[15px] outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
+              className="min-h-13 w-full rounded-2xl border border-white/10 bg-black/25 px-12 pl-11 text-[15px] text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/70 focus:bg-black/35 focus:ring-4 focus:ring-cyan-300/10"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               type={showPassword ? "text" : "password"}
@@ -134,15 +134,15 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
               disabled={submitting}
               required
             />
-            <button type="button" onClick={() => setShowPassword((value) => !value)} disabled={submitting} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            <button type="button" onClick={() => setShowPassword((value) => !value)} disabled={submitting} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-500 transition hover:bg-white/10 hover:text-white" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
           </div>
         </label>
       </div>
-      {message ? <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert" aria-live="polite">{message}</p> : null}
-      <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#07111f] px-5 text-sm font-semibold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-[#10243e] focus:outline-none focus:ring-4 focus:ring-cyan-200 disabled:cursor-wait disabled:opacity-70">
-        {submitting ? <><LoaderCircle className="animate-spin" size={18} /> Signing in securely…</> : <>Enter workspace <ArrowRight size={18} /></>}
+      {message ? <p className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100" role="alert" aria-live="polite">{message}</p> : null}
+      <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 text-sm font-black text-[#031018] shadow-[0_14px_35px_rgba(103,232,249,0.2)] transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-cyan-300/20 disabled:cursor-wait disabled:opacity-70">
+        {submitting ? <><LoaderCircle className="animate-spin" size={18} /> Authenticating…</> : <>Open control room <ArrowRight size={18} /></>}
       </button>
-      <p className="mt-3 text-center text-[11px] leading-5 text-slate-500">Credentials are not stored by the application or placed in the page URL.</p>
+      <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">No credentials are retained by EJM</p>
     </form>
   );
 }
