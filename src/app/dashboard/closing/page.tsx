@@ -64,89 +64,63 @@ export default async function ClosingPage({ searchParams }: Props) {
   const total = orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Daily closing</h1>
-          <p className="mt-2 text-sm text-slate-500">Compare the system expectation with the money counted by staff.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+        <div><h1 className="text-2xl font-semibold">Daily closing</h1><p className="mt-2 text-sm text-slate-500">Compare the system expectation with the money counted by staff.</p></div>
+        <div className="grid w-full grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {["pdf", "word", "excel"].map((format) => (
-            <a key={format} className="inline-flex min-h-10 items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3 py-2 text-sm font-semibold" href={`/api/exports?module=closing&format=${format}&from=${selectedDate}&to=${selectedDate}`}>
-              <FileDown size={16} /> {format.toUpperCase()}
-            </a>
+            <a key={format} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#ded8cd] bg-white px-2 py-2 text-xs font-semibold sm:gap-2 sm:px-3 sm:text-sm" href={`/api/exports?module=closing&format=${format}&from=${selectedDate}&to=${selectedDate}`}><FileDown size={15} /> {format.toUpperCase()}</a>
           ))}
         </div>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Total sales" value={currency(total, shop.currency)} icon={<ReceiptText size={20} />} />
         <StatCard label="Expected cash" value={currency(cash, shop.currency)} />
         <StatCard label="Card" value={currency(card, shop.currency)} />
         <StatCard label="Momo" value={currency(momo, shop.currency)} />
         <StatCard label="Credit sales" value={currency(credit, shop.currency)} icon={<Scale size={20} />} />
-        <StatCard label="Debt collected" value={currency(debtCollections, shop.currency)} helper="Included by tender, not counted as new sales" />
+        <StatCard label="Debt collected" value={currency(debtCollections, shop.currency)} helper="Assigned by tender" />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
-        <div className="panel p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Calculator size={18} className="text-[var(--shop-primary)]" />
-            <h2 className="text-lg font-semibold">Close selected day</h2>
-          </div>
+      <section className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr] xl:gap-5">
+        <div className="panel h-fit p-4 sm:p-5">
+          <div className="mb-4 flex items-center gap-2"><Calculator size={18} className="text-[var(--shop-primary)]" /><h2 className="text-lg font-semibold">Close selected day</h2></div>
           <form className="space-y-3" action={closeDayAction}>
             <input className="field" name="businessDate" type="date" defaultValue={selectedDate} required />
             <input className="field" name="openingFloat" type="number" min="0" step="0.01" placeholder="Opening float" defaultValue="0" />
             <input className="field" name="manualCash" type="number" min="0" step="0.01" placeholder="Cash counted manually" required />
-            <div className="grid grid-cols-2 gap-2">
-              <input className="field" name="expenses" type="number" min="0" step="0.01" placeholder="Expenses" defaultValue="0" />
-              <input className="field" name="refunds" type="number" min="0" step="0.01" placeholder="Refunds" defaultValue="0" />
-            </div>
+            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2"><input className="field" name="expenses" type="number" min="0" step="0.01" placeholder="Expenses" defaultValue="0" /><input className="field" name="refunds" type="number" min="0" step="0.01" placeholder="Refunds" defaultValue="0" /></div>
             <textarea className="field min-h-24" name="notes" placeholder="Variance reason, manager notes, cash bag code" />
             <Button className="w-full">Save closing</Button>
           </form>
         </div>
 
         <div className="panel overflow-hidden">
-          <div className="border-b border-[#ded8cd] p-5">
-            <h2 className="text-lg font-semibold">Closing history</h2>
+          <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="text-lg font-semibold">Closing history</h2></div>
+          <div className="divide-y divide-[#ded8cd] bg-white md:hidden">
+            {closings.map((closing) => (
+              <article key={closing.id} className="p-3">
+                <div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{shortDate(closing.businessDate)}</p><p className="text-sm text-slate-500">{closing.closedBy.name}</p></div><Badge tone={closing.status === "BALANCED" ? "green" : "orange"}>{titleCase(closing.status)}</Badge></div>
+                <div className="mt-3 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2 text-sm"><div className="rounded-lg bg-[#f6f4ef] p-2"><p className="text-xs text-slate-500">Sales</p><p className="font-semibold">{currency(closing.totalSales.toString(), shop.currency)}</p></div><div className="rounded-lg bg-[#f6f4ef] p-2"><p className="text-xs text-slate-500">Manual cash</p><p className="font-semibold">{currency(closing.manualCash.toString(), shop.currency)}</p></div><div className="rounded-lg bg-[#f6f4ef] p-2"><p className="text-xs text-slate-500">Debt collected</p><p className="font-semibold">{currency(closing.debtCollections.toString(), shop.currency)}</p></div><div className="rounded-lg bg-[#f6f4ef] p-2"><p className="text-xs text-slate-500">Difference</p><p className="font-semibold">{currency(closing.cashDifference.toString(), shop.currency)}</p></div></div>
+              </article>
+            ))}
+            {!closings.length ? <p className="p-5 text-sm text-slate-500">No days closed yet.</p> : null}
           </div>
-          <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500">
-              <tr><th className="p-4">Date</th><th className="p-4">Closed by</th><th className="p-4">Sales</th><th className="p-4">Debt collected</th><th className="p-4">Manual cash</th><th className="p-4">Difference</th><th className="p-4">Status</th></tr>
-            </thead>
-            <tbody className="divide-y divide-[#ded8cd] bg-white">
-              {closings.map((closing) => (
-                <tr key={closing.id}>
-                  <td className="p-4 font-semibold">{shortDate(closing.businessDate)}</td>
-                  <td className="p-4">{closing.closedBy.name}</td>
-                  <td className="p-4">{currency(closing.totalSales.toString(), shop.currency)}</td>
-                  <td className="p-4">{currency(closing.debtCollections.toString(), shop.currency)}</td>
-                  <td className="p-4">{currency(closing.manualCash.toString(), shop.currency)}</td>
-                  <td className="p-4">{currency(closing.cashDifference.toString(), shop.currency)}</td>
-                  <td className="p-4"><Badge tone={closing.status === "BALANCED" ? "green" : "orange"}>{titleCase(closing.status)}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!closings.length ? <p className="p-5 text-sm text-slate-500">No days closed yet.</p> : null}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-4">Date</th><th className="p-4">Closed by</th><th className="p-4">Sales</th><th className="p-4">Debt collected</th><th className="p-4">Manual cash</th><th className="p-4">Difference</th><th className="p-4">Status</th></tr></thead>
+              <tbody className="divide-y divide-[#ded8cd] bg-white">{closings.map((closing) => <tr key={closing.id}><td className="p-4 font-semibold">{shortDate(closing.businessDate)}</td><td className="p-4">{closing.closedBy.name}</td><td className="p-4">{currency(closing.totalSales.toString(), shop.currency)}</td><td className="p-4">{currency(closing.debtCollections.toString(), shop.currency)}</td><td className="p-4">{currency(closing.manualCash.toString(), shop.currency)}</td><td className="p-4">{currency(closing.cashDifference.toString(), shop.currency)}</td><td className="p-4"><Badge tone={closing.status === "BALANCED" ? "green" : "orange"}>{titleCase(closing.status)}</Badge></td></tr>)}</tbody>
+            </table>
+          </div>
         </div>
       </section>
 
       {debtPayments.length ? (
         <section className="panel overflow-hidden">
-          <div className="border-b border-[#ded8cd] p-5">
-            <h2 className="text-lg font-semibold">Debt collections for {selectedDate}</h2>
-            <p className="mt-1 text-sm text-slate-500">Each collection is assigned to its real payment category for reconciliation.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-left text-sm">
-              <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-4">Customer</th><th className="p-4">Method</th><th className="p-4">Amount</th><th className="p-4">Received by</th><th className="p-4">Time</th></tr></thead>
-              <tbody className="divide-y divide-[#ded8cd] bg-white">
-                {debtPayments.map((payment) => <tr key={payment.id}><td className="p-4 font-semibold">{payment.debt.customer.name}</td><td className="p-4">{titleCase(payment.method)}</td><td className="p-4">{currency(payment.amount.toString(), shop.currency)}</td><td className="p-4">{payment.receivedBy.name}</td><td className="p-4">{payment.receivedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td></tr>)}
-              </tbody>
-            </table>
-          </div>
+          <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="text-lg font-semibold">Debt collections for {selectedDate}</h2><p className="mt-1 text-sm text-slate-500">Each collection is assigned to its real payment category for reconciliation.</p></div>
+          <div className="divide-y divide-[#ded8cd] bg-white md:hidden">{debtPayments.map((payment) => <article key={payment.id} className="flex items-start justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-semibold">{payment.debt.customer.name}</p><p className="text-sm text-slate-500">{titleCase(payment.method)} · {payment.receivedBy.name}</p></div><div className="shrink-0 text-right"><p className="font-semibold">{currency(payment.amount.toString(), shop.currency)}</p><p className="text-xs text-slate-400">{payment.receivedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p></div></article>)}</div>
+          <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-4">Customer</th><th className="p-4">Method</th><th className="p-4">Amount</th><th className="p-4">Received by</th><th className="p-4">Time</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{debtPayments.map((payment) => <tr key={payment.id}><td className="p-4 font-semibold">{payment.debt.customer.name}</td><td className="p-4">{titleCase(payment.method)}</td><td className="p-4">{currency(payment.amount.toString(), shop.currency)}</td><td className="p-4">{payment.receivedBy.name}</td><td className="p-4">{payment.receivedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td></tr>)}</tbody></table></div>
         </section>
       ) : null}
     </div>
