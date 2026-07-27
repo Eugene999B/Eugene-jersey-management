@@ -1,37 +1,43 @@
 import { Palette, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DesignStudioAdvanced } from "@/components/design/production-studio-advanced";
+import { ensureShopMachineProfiles } from "@/lib/design-machine-profile";
 import { prisma } from "@/lib/db";
-import { getTenantContext } from "@/lib/tenant";
 import { shortDate, titleCase } from "@/lib/format";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
+import { getTenantContext } from "@/lib/tenant";
 
 export default async function DesignsPage() {
   const session = await requireRole(permissions.designs);
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
-  const recentJobs = await prisma.designJob.findMany({
-    where: { shopId: shop.id },
-    include: { customer: true, order: true },
-    orderBy: { updatedAt: "desc" },
-    take: 8,
-  });
+  const [recentJobs, machineProfiles] = await Promise.all([
+    prisma.designJob.findMany({
+      where: { shopId: shop.id },
+      include: { customer: true, order: true },
+      orderBy: { updatedAt: "desc" },
+      take: 8,
+    }),
+    ensureShopMachineProfiles(shop.id),
+  ]);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Design Studio</h1>
-          <p className="mt-2 text-sm text-slate-500">Create layered artwork directly on the production material, group related elements, preserve spacing, and reopen immutable shop versions before production.</p>
+          <p className="mt-2 text-sm text-slate-500">Create layered artwork on the real production material, preserve immutable shop versions, and produce vector-only cut files through this shop&apos;s own machine profiles.</p>
         </div>
-        <Badge tone="blue"><ShieldCheck size={14} /> Production-safe workflow</Badge>
+        <Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge>
       </div>
 
       <div className="mobile-design-studio">
         <DesignStudioAdvanced
           recoveryScope={`${shop.id}:${session.id}`}
+          initialMachineProfiles={machineProfiles}
+          canManageMachineProfiles={permissions.settings.includes(session.role)}
           savedDesigns={recentJobs.map((job) => ({
             id: job.id,
             title: job.title,
@@ -55,7 +61,7 @@ export default async function DesignsPage() {
             <div key={job.id} className="grid gap-3 p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{job.title}</p>
-                <p className="break-words text-slate-500">{job.customer?.name ?? "No customer"} - {job.machineProfile ?? "Generic SVG"}</p>
+                <p className="break-words text-slate-500">{job.customer?.name ?? "No customer"} - {job.machineProfile ?? "Generic SVG cutter"}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>{titleCase(job.status)}</Badge>
