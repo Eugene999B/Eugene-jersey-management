@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, Menu, MessageCircle, MoreHorizontal, Palette, Settings, ShoppingCart, Tags, Truck, Users, X } from "lucide-react";
@@ -48,14 +48,10 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
   const visible = canSeeNav(role);
   const items = navItems.filter((item) => visible[item.key]);
   const currentItem = items.find((item) => isItemActive(pathname, item.href));
-  const primaryItems = useMemo(
-    () => mobilePrimaryKeys.map((key) => items.find((item) => item.key === key)).filter((item): item is (typeof items)[number] => Boolean(item)),
-    [items],
-  );
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
+  const primaryItems = mobilePrimaryKeys.flatMap((key) => {
+    const item = items.find((candidate) => candidate.key === key);
+    return item ? [item] : [];
+  });
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -92,7 +88,6 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
         <nav
           className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_24px_rgb(15_23_42/0.08)] backdrop-blur lg:hidden"
           aria-label="Quick shop navigation"
-          style={{ gridTemplateColumns: `repeat(${primaryItems.length + 1}, minmax(0, 1fr))` }}
         >
           <div className="grid" style={{ gridTemplateColumns: `repeat(${primaryItems.length + 1}, minmax(0, 1fr))` }}>
             {primaryItems.map((item) => {
@@ -128,7 +123,7 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
 
         {menuOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="All shop tools">
-            <button type="button" aria-label="Close shop tools" className="absolute inset-0 bg-slate-950/55" onClick={() => setMenuOpen(false)} />
+            <button type="button" aria-label="Close shop tools" className="absolute inset-0 bg-slate-950/55" onClick={() => setMenuOpen(false onClick={() => setMenuOpen(false)} />
             <aside id="mobile-shop-navigation" className="absolute inset-y-0 left-0 flex w-[min(88vw,370px)] flex-col bg-white shadow-2xl">
               <div className="flex items-center gap-3 border-b border-slate-200 p-4">
                 <BrandImage src={shop.logoUrl} alt={shop.name} width={44} height={44} className="shrink-0 rounded-xl object-cover" />
@@ -156,6 +151,7 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
                               key={item.href}
                               href={item.href}
                               prefetch={false}
+                              onClick={() => setMenuOpen(false)}
                               aria-current={active ? "page" : undefined}
                               className={clsx(
                                 "flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition",
@@ -190,7 +186,7 @@ export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarPro
           <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{shop.name}</p><p className="text-xs text-slate-500">{shop.planTier} plan</p></div>
         </div>
       </div>
-      <nav className="flex-1 space-y-4 overflow-y-auto p-3" aria-label="Shop navigation">
+      <nav className="flex-1 space-y-4 overflow="Shop navigation">
         {navSections.map((section) => {
           const sectionItems = items.filter((item) => item.section === section);
           if (!sectionItems.length) return null;
