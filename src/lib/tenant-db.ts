@@ -67,6 +67,7 @@ const modelPropertyNames: Record<string, string> = {
   productVariant: "ProductVariant",
   customer: "Customer",
   buyerAccount: "BuyerAccount",
+  accountTwoFactor: "AccountTwoFactor",
   order: "Order",
   orderItem: "OrderItem",
   payment: "Payment",
