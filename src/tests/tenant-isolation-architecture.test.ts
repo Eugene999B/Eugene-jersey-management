@@ -43,7 +43,9 @@ describe("structural tenant isolation", () => {
     expect(tenantDb).toContain('ProductVariant: (shopId) => ({ product: { shopId } })');
     expect(tenantDb).toContain('Payment: (shopId) => ({ order: { shopId } })');
     expect(tenantDb).toContain("createTenantTransactionDb(transaction, shopId)");
-    expect(tenantDb).toContain("is platform-global or has a multi-tenant ownership rule");
+    expect(tenantDb).toContain("is platform-global or has an unsupported ownership rule");
+    expect(tenantDb).toContain('model === "Announcement"');
+    expect(tenantDb).toContain('model === "ShopNetworkLink"');
     expect(tenantDb).toContain('"$queryRaw"');
     expect(tenantDb).toContain('"$executeRawUnsafe"');
   });
@@ -69,7 +71,7 @@ describe("structural tenant isolation", () => {
 
   it("keeps a guarded two-shop PostgreSQL verification in the release pipeline", () => {
     const packageJson = source("../package.json");
-    const workflow = source("../.github/workflows/validate.yml");
+    const workflow = source("../.github/workflows/ci.yml");
     const verifier = source("../scripts/verify-tenant-isolation.ts");
     expect(packageJson).toContain('"test:tenant-isolation": "tsx scripts/verify-tenant-isolation.ts"');
     expect(workflow).toContain("Run two-shop tenant isolation verification");
