@@ -16,10 +16,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -28,6 +35,18 @@ input,
 select,
 textarea {
   letter-spacing: 0;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 ::selection {
@@ -51,6 +70,7 @@ textarea {
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: 8px;
@@ -59,4 +79,54 @@ textarea {
 
 .scrollbar-thin {
   scrollbar-width: thin;
+}
+
+@media (max-width: 639px) {
+  .field,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .field {
+    min-height: 44px;
+  }
+
+  main .grid-cols-2,
+  main .grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  main .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  main table {
+    font-size: 0.8125rem;
+  }
+
+  main th,
+  main td {
+    white-space: nowrap;
+  }
+
+  input[type="file"] {
+    max-width: 100%;
+  }
+
+  .panel {
+    border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
