@@ -23,4 +23,8 @@ jobs:
             src/lib/tenant-db.ts
             scripts/verify-tenant-isolation.ts
             src/components/design/production-studio-advanced.tsx
+            src/lib/design-cut-path.ts
+            src/app/api/design-machine-profiles/route.ts
+            src/components/design/machine-profile-panel.tsx
+            scripts/seed-e2e.ts
           retention-days: 1
