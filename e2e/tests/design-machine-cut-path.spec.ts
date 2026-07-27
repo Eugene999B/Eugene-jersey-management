@@ -68,8 +68,12 @@ test.describe.serial("shop machine profiles and cut-path export", () => {
 
     const profileSelect = page.getByLabel("Active machine");
     await expect(profileSelect).toBeVisible();
-    await expect(profileSelect.locator("option", { hasText: "E2E Browser Cutter" })).toHaveCount(1);
-    await profileSelect.selectOption({ label: /E2E Browser Cutter/ });
+    const browserCutterOption = profileSelect.locator("option", { hasText: "E2E Browser Cutter" });
+    await expect(browserCutterOption).toHaveCount(1);
+    const browserCutterValue = await browserCutterOption.getAttribute("value");
+    expect(browserCutterValue).toBeTruthy();
+    await profileSelect.selectOption(browserCutterValue ?? "");
+    await expect(profileSelect.locator("option:checked")).toHaveText(/E2E Browser Cutter/);
     await expect(page.getByRole("button", { name: "Add machine profile" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit profile" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Owner/manager only" })).toBeDisabled();
