@@ -84,7 +84,8 @@ Registration marks remain print-alignment marks and are not silently added to cu
 3. Confirm material loading, blade depth, origin and mirror behaviour with a small test cut.
 4. Direct serial sending remains available only for a connected writable browser serial port.
 5. The selected shop profile's baud rate and HPGL units are used for serial jobs.
-6. Never leave a cutter unattended after sending a new profile or unfamiliar path.
+6. Multiple copies must be arranged as separate artwork before cutter export; repeatedly cutting one path can damage the material.
+7. Never leave a cutter unattended after sending a new profile or unfamiliar path.
 
 ## Validation requirements
 
