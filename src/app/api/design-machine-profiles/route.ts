@@ -3,12 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
-import {
-  ensureShopMachineProfiles,
-  MACHINE_ORIGINS,
-  MACHINE_OUTPUT_FORMATS,
-  serializeMachineProfile,
-} from "@/lib/design-machine-profile";
+import { MACHINE_ORIGINS, MACHINE_OUTPUT_FORMATS } from "@/lib/design-machine-profile";
+import { ensureShopMachineProfiles, serializeMachineProfile } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
 import { permissions } from "@/lib/rbac";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";

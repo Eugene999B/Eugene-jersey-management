@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
-import { ensureShopMachineProfiles, serializeMachineProfile } from "@/lib/design-machine-profile";
+import { ensureShopMachineProfiles, serializeMachineProfile } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
 import { nextDesignVersionNumber } from "@/lib/design-history";
 import { permissions } from "@/lib/rbac";

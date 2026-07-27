@@ -1,7 +1,7 @@
 import { Palette, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DesignStudioAdvanced } from "@/components/design/production-studio-advanced";
-import { ensureShopMachineProfiles } from "@/lib/design-machine-profile";
+import { ensureShopMachineProfiles } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
 import { shortDate, titleCase } from "@/lib/format";
 import { requireRole } from "@/lib/auth";
