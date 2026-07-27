@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 type StaffLoginFormProps = {
   nextPath?: string;
@@ -32,7 +32,7 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
   const passwordRef = useRef<HTMLInputElement>(null);
   const userInteractedRef = useRef(false);
 
-  function clearCredentials() {
+  const clearCredentials = useCallback(() => {
     setIdentifier("");
     setPassword("");
     setShowPassword(false);
@@ -40,21 +40,21 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
     setPasswordUnlocked(false);
     if (identifierRef.current) identifierRef.current.value = "";
     if (passwordRef.current) passwordRef.current.value = "";
-  }
+  }, []);
 
-  function closeCredentialEntry() {
+  const closeCredentialEntry = useCallback(() => {
     userInteractedRef.current = false;
     clearCredentials();
     setCredentialsOpen(false);
     setMessage("");
-  }
+  }, [clearCredentials]);
 
   useEffect(() => {
     closeCredentialEntry();
     const handlePageShow = () => closeCredentialEntry();
     window.addEventListener("pageshow", handlePageShow);
     return () => window.removeEventListener("pageshow", handlePageShow);
-  }, []);
+  }, [closeCredentialEntry]);
 
   useEffect(() => {
     if (!credentialsOpen) return;
@@ -73,7 +73,7 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
       window.clearTimeout(shortTimer);
       window.clearTimeout(delayedTimer);
     };
-  }, [credentialsOpen]);
+  }, [credentialsOpen, clearCredentials]);
 
   function unlockIdentifier() {
     userInteractedRef.current = true;
