@@ -1,0 +1,12 @@
+{
+  "name": "ejm-browser-acceptance",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "install:chromium": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

@@ -8,6 +8,8 @@
     "start": "node .next/standalone/server.js",
     "lint": "biome lint . --max-diagnostics=200",
     "test": "vitest run",
+    "test:e2e": "npm --prefix e2e test",
+    "e2e:seed": "tsx scripts/seed-e2e.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
