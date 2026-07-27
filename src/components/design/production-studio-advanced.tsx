@@ -16,6 +16,7 @@ import {
   Layers3,
   Lock,
   MonitorCog,
+  PanelBottomOpen,
   Printer,
   Redo2,
   RotateCcw,
@@ -68,6 +69,11 @@ import {
   selectLayerUnit,
   ungroupSelectedLayers,
 } from "@/lib/design-selection";
+import {
+  resizeLayerFromHandle,
+  rotateLayerToPoint,
+  type TransformHandle,
+} from "@/lib/design-transform";
 
 type Material = "htv" | "printable-htv" | "sublimation" | "dtf" | "flock";
 type Sheet = "a4" | "a3" | "12x20" | "15x20" | "custom";
@@ -112,6 +118,9 @@ type DragState = {
   startPoint: { x: number; y: number };
   startLayers: DesignLayer[];
 };
+type TransformState =
+  | { kind: "resize"; layerId: string; handle: TransformHandle; startLayers: DesignLayer[] }
+  | { kind: "rotate"; layerId: string; startLayers: DesignLayer[] };
 
 const sheets: Record<Exclude<Sheet, "custom">, { label: string; width: number; height: number }> = {
   a4: { label: "A4", width: 210, height: 297 },
@@ -130,6 +139,12 @@ const materialDetails: Record<Material, { label: string; instruction: string; de
 
 const machineProfiles: MachineProfile[] = ["Generic SVG", "HPGL / PLT cutter", "SignMaster", "VinylMaster", "Print/RIP"];
 const allowedFonts = ["Arial", "Impact", "Georgia", "Courier New", "Times New Roman"];
+const transformHandles: Array<{ handle: TransformHandle; x: -1 | 1; y: -1 | 1 }> = [
+  { handle: "north-west", x: -1, y: -1 },
+  { handle: "north-east", x: 1, y: -1 },
+  { handle: "south-east", x: 1, y: 1 },
+  { handle: "south-west", x: -1, y: 1 },
+];
 
 function id() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -236,6 +251,7 @@ export function DesignStudioAdvanced({
   const [historyStatus, setHistoryStatus] = useState("Save the project to begin version history");
   const [versions, setVersions] = useState<DesignVersionSummary[]>([]);
   const [openingVersion, setOpeningVersion] = useState<number | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [jobName, setJobName] = useState("New design job");
   const [customer, setCustomer] = useState("");
   const [material, setMaterial] = useState<Material>("htv");
@@ -264,6 +280,7 @@ export function DesignStudioAdvanced({
   const projectInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const transformRef = useRef<TransformState | null>(null);
   const recoveryTimerRef = useRef<number | null>(null);
   const authoritativeFingerprintRef = useRef<string | null>(null);
 
@@ -272,6 +289,8 @@ export function DesignStudioAdvanced({
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedLayers = useMemo(() => layers.filter((layer) => selectedSet.has(layer.id)), [layers, selectedSet]);
   const canUngroup = selectedLayers.some((layer) => Boolean(layer.groupId));
+  const handleRadius = Math.max(3, Math.min(7, Math.min(size.width, size.height) / 70));
+  const rotationHandleOffset = handleRadius * 4;
   const projectSnapshot = useMemo(() => ({
     version: DESIGN_PROJECT_VERSION,
     jobName,
@@ -387,6 +406,20 @@ export function DesignStudioAdvanced({
   }, [projectSnapshot, projectFingerprint, designJobId, recoveryDraft, recoveryKey, recoveryReady]);
 
   useEffect(() => {
+    if (!inspectorOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setInspectorOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [inspectorOpen]);
+
+  useEffect(() => {
     if (!designJobId) {
       setVersions([]);
       setHistoryStatus("Save the project to begin version history");
@@ -470,6 +503,24 @@ export function DesignStudioAdvanced({
     return next;
   }
 
+  function startResize(event: ReactPointerEvent<SVGGElement>, layer: DesignLayer, handle: TransformHandle) {
+    event.stopPropagation();
+    if (layer.locked) return;
+    setPast((items) => [...items.slice(-39), layers]);
+    setFuture([]);
+    transformRef.current = { kind: "resize", layerId: layer.id, handle, startLayers: layers };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function startRotate(event: ReactPointerEvent<SVGGElement>, layer: DesignLayer) {
+    event.stopPropagation();
+    if (layer.locked) return;
+    setPast((items) => [...items.slice(-39), layers]);
+    setFuture([]);
+    transformRef.current = { kind: "rotate", layerId: layer.id, startLayers: layers };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
   function startDrag(event: ReactPointerEvent<SVGGElement>, layer: DesignLayer) {
     event.stopPropagation();
     const additive = event.shiftKey || event.ctrlKey || event.metaKey;
@@ -488,10 +539,28 @@ export function DesignStudioAdvanced({
   }
 
   function drag(event: ReactPointerEvent<SVGSVGElement>) {
-    const active = dragRef.current;
-    if (!active) return;
     const point = canvasPoint(event.clientX, event.clientY);
     if (!point) return;
+
+    const transform = transformRef.current;
+    if (transform) {
+      const startLayer = transform.startLayers.find((layer) => layer.id === transform.layerId);
+      if (!startLayer) return;
+      const nextLayer = transform.kind === "resize"
+        ? resizeLayerFromHandle({
+            layer: startLayer,
+            handle: transform.handle,
+            point,
+            sheet: size,
+            preserveAspect: startLayer.kind === "image" || startLayer.kind === "text" || event.shiftKey,
+          })
+        : rotateLayerToPoint({ layer: startLayer, point, sheet: size, snapDegrees: event.shiftKey ? 15 : 0 });
+      setLayers(transform.startLayers.map((layer) => layer.id === nextLayer.id ? nextLayer : layer));
+      return;
+    }
+
+    const active = dragRef.current;
+    if (!active) return;
     setLayers(moveSelectedLayers({
       layers: active.startLayers,
       selectedIds: active.ids,
@@ -503,6 +572,7 @@ export function DesignStudioAdvanced({
 
   function endDrag() {
     dragRef.current = null;
+    transformRef.current = null;
   }
 
   function nudgeLayer(event: ReactKeyboardEvent<SVGGElement>, layer: DesignLayer) {
@@ -951,6 +1021,36 @@ export function DesignStudioAdvanced({
     setDeviceMessage("The serial port is closed. SVG export and system printing remain available.");
   }
 
+  function renderSelectionInspector() {
+    return (
+      <div className="space-y-4">
+        <section className="panel p-4">
+          <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Selection</h3><span className="text-xs text-slate-500">{selectedIds.length} selected</span></div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={groupSelection} disabled={selectedIds.length < 2}><Layers3 size={16} /> Group selected</Button>
+            <Button variant="outline" onClick={ungroupSelection} disabled={!canUngroup}><X size={16} /> Ungroup selected</Button>
+            <Button variant="outline" onClick={duplicateSelection} disabled={!selectedIds.length}><Copy size={16} /> Duplicate selected</Button>
+            <Button variant="outline" onClick={deleteSelection} disabled={!selectedIds.length}><Trash2 size={16} /> Delete selected</Button>
+          </div>
+          <Button className="mt-2 w-full" variant="outline" onClick={() => setSelection([])} disabled={!selectedIds.length}>Clear selection</Button>
+          <p className="mt-3 text-xs leading-5 text-slate-500">Groups select and move as one unit. One unlocked layer also shows corner resize and rotation handles on the sheet.</p>
+        </section>
+
+        <section className="panel p-4">
+          <h3 className="font-semibold">Selected layer</h3>
+          {selectedIds.length > 1 ? <p className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-500">{selectedIds.length} layers are selected. Use the Selection controls for group actions, or clear the selection and choose one layer for exact properties.</p> : selected ? <div className="mt-3 space-y-2">
+            <input className="field" maxLength={120} value={selected.name} onChange={(event) => updateLayer(selected.id, { name: event.target.value })} aria-label="Layer name" />
+            {selected.kind === "text" ? <><textarea className="field min-h-16" maxLength={500} value={selected.content ?? ""} onChange={(event) => updateLayer(selected.id, { content: event.target.value, name: event.target.value.slice(0, 24) || "Text" })} /><select className="field" value={selected.fontFamily ?? "Arial"} onChange={(event) => updateLayer(selected.id, { fontFamily: event.target.value })}>{allowedFonts.map((font) => <option key={font}>{font}</option>)}</select></> : null}
+            <div className="grid grid-cols-2 gap-2"><NumberField label="X (mm)" value={selected.x} min={0} max={size.width} onChange={(x) => updateLayer(selected.id, { x: snapValue(x) })} /><NumberField label="Y (mm)" value={selected.y} min={0} max={size.height} onChange={(y) => updateLayer(selected.id, { y: snapValue(y) })} /><NumberField label="Width (mm)" value={selected.width} min={1} max={size.width} onChange={(width) => updateLayer(selected.id, { width })} /><NumberField label="Height (mm)" value={selected.height} min={1} max={size.height} onChange={(height) => updateLayer(selected.id, { height })} /></div>
+            <NumberField label="Rotation (degrees)" value={selected.rotation} min={-360} max={360} onChange={(rotation) => updateLayer(selected.id, { rotation })} />
+            {selected.kind !== "image" ? <label className="block text-xs font-semibold text-slate-600">Colour<input className="mt-1 h-10 w-full rounded border border-[#ded8cd]" type="color" value={selected.color} onChange={(event) => updateLayer(selected.id, { color: event.target.value })} /></label> : null}
+            {selected.locked ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">Unlock this layer before using canvas resize or rotation handles.</p> : <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-950">Drag a corner to resize. Image and text proportions stay fixed; hold Shift to preserve proportions for shapes. Drag the round handle to rotate and hold Shift for 15° steps.</p>}
+          </div> : <p className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-500">Select a layer on the sheet or in the layer list to set its exact position and size.</p>}
+        </section>
+      </div>
+    );
+  }
+
   const deviceTone = device === "connected"
     ? "border-emerald-200 bg-emerald-50"
     : device === "unsupported" || device === "error"
@@ -1052,7 +1152,7 @@ export function DesignStudioAdvanced({
         <main className="panel min-w-0 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded8cd] bg-white px-4 py-3">
             <div><p className="text-sm font-semibold">Material workspace</p><p className="text-xs text-slate-500">{size.width} × {size.height} mm · {copies} cop{copies === 1 ? "y" : "ies"} · {mirror ? "output mirrored" : "normal output"}</p></div>
-            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setShowGrid(!showGrid)}><Grid3X3 size={16} /> {showGrid ? "Grid on" : "Grid off"}</Button><Button variant="outline" onClick={() => setSnap(!snap)}>{snap ? "Snap 5 mm" : "Free move"}</Button></div>
+            <div className="flex flex-wrap gap-2"><Button className="xl:hidden" variant="outline" aria-label="Open mobile inspector" onClick={() => setInspectorOpen(true)}><PanelBottomOpen size={16} /> Inspector</Button><Button variant="outline" onClick={() => setShowGrid(!showGrid)}><Grid3X3 size={16} /> {showGrid ? "Grid on" : "Grid off"}</Button><Button variant="outline" onClick={() => setSnap(!snap)}>{snap ? "Snap 5 mm" : "Free move"}</Button></div>
           </div>
           <div className="flex min-h-[430px] items-center justify-center overflow-auto bg-slate-200 p-3 sm:min-h-[620px] sm:p-6">
             <svg
@@ -1087,37 +1187,32 @@ export function DesignStudioAdvanced({
                   {layer.kind === "rectangle" ? <rect x={-layer.width / 2} y={-layer.height / 2} width={layer.width} height={layer.height} fill={layer.color} /> : null}
                   {layer.kind === "circle" ? <ellipse cx="0" cy="0" rx={layer.width / 2} ry={layer.height / 2} fill={layer.color} /> : null}
                   {selectedSet.has(layer.id) ? <rect x={-layer.width / 2} y={-layer.height / 2} width={layer.width} height={layer.height} fill="none" stroke={primarySelectedId === layer.id ? "#0284c7" : "#059669"} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray={primarySelectedId === layer.id ? "4 3" : "2 2"} /> : null}
+                  {selectedIds.length === 1 && primarySelectedId === layer.id && !layer.locked ? (
+                    <g aria-label={`Transform handles for ${layer.name}`}>
+                      <line x1="0" y1={-layer.height / 2} x2="0" y2={-layer.height / 2 - rotationHandleOffset} stroke="#0284c7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                      <g role="button" tabIndex={0} aria-label={`Rotate ${layer.name}`} transform={`translate(0 ${-layer.height / 2 - rotationHandleOffset})`} onPointerDown={(event) => startRotate(event, layer)} className="cursor-grab">
+                        <circle r={handleRadius * 1.9} fill="transparent" />
+                        <circle r={handleRadius} fill="#ffffff" stroke="#0284c7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                        <path d={`M ${-handleRadius / 2} 0 A ${handleRadius / 2} ${handleRadius / 2} 0 1 1 ${handleRadius / 2} 0`} fill="none" stroke="#0284c7" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+                      </g>
+                      {transformHandles.map(({ handle, x, y }) => (
+                        <g key={handle} role="button" tabIndex={0} aria-label={`Resize ${layer.name} from ${handle.replace("-", " ")}`} transform={`translate(${x * layer.width / 2} ${y * layer.height / 2})`} onPointerDown={(event) => startResize(event, layer, handle)} className={handle === "north-west" || handle === "south-east" ? "cursor-nwse-resize" : "cursor-nesw-resize"}>
+                          <circle r={handleRadius * 1.9} fill="transparent" />
+                          <rect x={-handleRadius} y={-handleRadius} width={handleRadius * 2} height={handleRadius * 2} rx={handleRadius / 3} fill="#ffffff" stroke="#0284c7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                        </g>
+                      ))}
+                    </g>
+                  ) : null}
                 </g>
               ) : null)}
               {!layers.length ? <g fill="#94a3b8" textAnchor="middle"><text x={size.width / 2} y={size.height / 2 - 4} fontSize={Math.max(8, Math.min(18, size.width / 16))} fontWeight="700">Insert artwork, text, or shapes</text><text x={size.width / 2} y={size.height / 2 + 10} fontSize={Math.max(5, Math.min(10, size.width / 28))}>The sheet is the real production surface</text></g> : null}
             </svg>
           </div>
-          <div className="border-t border-[#ded8cd] bg-white px-4 py-3 text-xs text-slate-600">The editor stays unmirrored for accurate positioning. Dragging any selected member moves the unlocked selection together.</div>
+          <div className="border-t border-[#ded8cd] bg-white px-4 py-3 text-xs text-slate-600">The editor stays unmirrored for accurate positioning. Drag a selected layer to move it; one unlocked layer also shows resize and rotation handles.</div>
         </main>
 
         <aside className="space-y-4">
-          <section className="panel p-4">
-            <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Selection</h3><span className="text-xs text-slate-500">{selectedIds.length} selected</span></div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={groupSelection} disabled={selectedIds.length < 2}><Layers3 size={16} /> Group selected</Button>
-              <Button variant="outline" onClick={ungroupSelection} disabled={!canUngroup}><X size={16} /> Ungroup selected</Button>
-              <Button variant="outline" onClick={duplicateSelection} disabled={!selectedIds.length}><Copy size={16} /> Duplicate selected</Button>
-              <Button variant="outline" onClick={deleteSelection} disabled={!selectedIds.length}><Trash2 size={16} /> Delete selected</Button>
-            </div>
-            <Button className="mt-2 w-full" variant="outline" onClick={() => setSelection([])} disabled={!selectedIds.length}>Clear selection</Button>
-            <p className="mt-3 text-xs leading-5 text-slate-500">Groups select and move as one unit. Locked members remain fixed until unlocked.</p>
-          </section>
-
-          <section className="panel p-4">
-            <h3 className="font-semibold">Selected layer</h3>
-            {selectedIds.length > 1 ? <p className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-500">{selectedIds.length} layers are selected. Use the Selection controls for group actions, or clear the selection and choose one layer for exact properties.</p> : selected ? <div className="mt-3 space-y-2">
-              <input className="field" maxLength={120} value={selected.name} onChange={(event) => updateLayer(selected.id, { name: event.target.value })} aria-label="Layer name" />
-              {selected.kind === "text" ? <><textarea className="field min-h-16" maxLength={500} value={selected.content ?? ""} onChange={(event) => updateLayer(selected.id, { content: event.target.value, name: event.target.value.slice(0, 24) || "Text" })} /><select className="field" value={selected.fontFamily ?? "Arial"} onChange={(event) => updateLayer(selected.id, { fontFamily: event.target.value })}>{allowedFonts.map((font) => <option key={font}>{font}</option>)}</select></> : null}
-              <div className="grid grid-cols-2 gap-2"><NumberField label="X (mm)" value={selected.x} min={0} max={size.width} onChange={(x) => updateLayer(selected.id, { x: snapValue(x) })} /><NumberField label="Y (mm)" value={selected.y} min={0} max={size.height} onChange={(y) => updateLayer(selected.id, { y: snapValue(y) })} /><NumberField label="Width (mm)" value={selected.width} min={1} max={size.width} onChange={(width) => updateLayer(selected.id, { width })} /><NumberField label="Height (mm)" value={selected.height} min={1} max={size.height} onChange={(height) => updateLayer(selected.id, { height })} /></div>
-              <NumberField label="Rotation (degrees)" value={selected.rotation} min={-360} max={360} onChange={(rotation) => updateLayer(selected.id, { rotation })} />
-              {selected.kind !== "image" ? <label className="block text-xs font-semibold text-slate-600">Colour<input className="mt-1 h-10 w-full rounded border border-[#ded8cd]" type="color" value={selected.color} onChange={(event) => updateLayer(selected.id, { color: event.target.value })} /></label> : null}
-            </div> : <p className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-500">Select a layer on the sheet or in the layer list to set its exact position and size.</p>}
-          </section>
+          <div className="hidden xl:block">{renderSelectionInspector()}</div>
 
           <section className="panel p-4">
             <h3 className="font-semibold">Material and cut setup</h3>
@@ -1152,6 +1247,19 @@ export function DesignStudioAdvanced({
           </section>
         </aside>
       </div>
+
+      {inspectorOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end xl:hidden">
+          <button type="button" className="absolute inset-0 bg-slate-950/55" aria-label="Close mobile inspector overlay" onClick={() => setInspectorOpen(false)} />
+          <section role="dialog" aria-modal="true" aria-label="Layer inspector" className="relative z-10 max-h-[82vh] w-full overflow-y-auto rounded-t-2xl border border-slate-300 bg-[#f6f4ef] p-4 shadow-2xl">
+            <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 flex items-center justify-between border-b border-[#ded8cd] bg-white px-4 py-3">
+              <div><p className="text-sm font-semibold">Layer inspector</p><p className="text-xs text-slate-500">Exact millimetre controls for the current selection</p></div>
+              <Button variant="outline" aria-label="Close mobile inspector" onClick={() => setInspectorOpen(false)}><X size={16} /> Close</Button>
+            </div>
+            {renderSelectionInspector()}
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
