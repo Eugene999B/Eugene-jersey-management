@@ -155,13 +155,13 @@ test("keeps the complete owner workspace usable on a mobile viewport", async ({ 
     ["designs", "/dashboard/designs", "Design Studio"],
   ] as const;
 
-  for (const [name, path, heading] of routes) {
+  for (const [screenshotName, path, heading] of routes) {
     await page.goto(path);
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.getByRole("heading", { name }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Quick shop navigation" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath(`mobile-owner-${name}.png`), fullPage: false });
+    await page.screenshot({ path: testInfo.outputPath(`mobile-owner-${screenshotName}.png`), fullPage: false });
   }
 
   await page.goto("/dashboard/pos");
