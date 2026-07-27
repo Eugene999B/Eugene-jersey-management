@@ -47,6 +47,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Upload temporary Release 20 studio source
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-20-studio-source
+          path: |
+            src/components/design/production-studio-advanced.tsx
+            e2e/tests/design-group-history.spec.ts
+          retention-days: 1
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
