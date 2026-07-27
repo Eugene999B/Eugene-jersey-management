@@ -32,6 +32,10 @@ After this branch is validated, merged and deployed, implementation returns to t
 
 Provider credentials and controlled Paystack/Arkesel/WhatsApp production tests remain separate operational work and must not be confused with the feature sequence.
 
+## Engineering boundaries
+
+Client Design Studio components may import only browser-safe machine-profile definitions and pure helpers. Prisma, database access and default-profile creation remain in a server-only module used by authenticated pages and API routes. This boundary must be preserved in future production tooling.
+
 ## Working rule
 
 Future release planning must name both:
