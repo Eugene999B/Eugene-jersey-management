@@ -29,16 +29,18 @@ export default async function DesignsPage() {
         <Badge tone="blue"><ShieldCheck size={14} /> Production-safe workflow</Badge>
       </div>
 
-      <DesignStudio savedDesigns={recentJobs.map((job) => ({
-        id: job.id,
-        title: job.title,
-        canvas: job.canvasJson && typeof job.canvasJson === "object" && !Array.isArray(job.canvasJson)
-          ? job.canvasJson as Record<string, unknown>
-          : {},
-      }))} />
+      <div className="mobile-design-studio">
+        <DesignStudio savedDesigns={recentJobs.map((job) => ({
+          id: job.id,
+          title: job.title,
+          canvas: job.canvasJson && typeof job.canvasJson === "object" && !Array.isArray(job.canvasJson)
+            ? job.canvasJson as Record<string, unknown>
+            : {},
+        }))} />
+      </div>
 
       <section className="panel overflow-hidden">
-        <div className="border-b border-[#ded8cd] p-5">
+        <div className="border-b border-[#ded8cd] p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Palette size={18} className="text-[var(--shop-primary)]" />
             <h2 className="text-lg font-semibold">Recent design jobs</h2>
@@ -46,12 +48,12 @@ export default async function DesignsPage() {
         </div>
         <div className="divide-y divide-[#ded8cd] bg-white">
           {recentJobs.map((job) => (
-            <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
-              <div>
-                <p className="font-semibold">{job.title}</p>
-                <p className="text-slate-500">{job.customer?.name ?? "No customer"} - {job.machineProfile ?? "Generic SVG"}</p>
+            <div key={job.id} className="grid gap-3 p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{job.title}</p>
+                <p className="break-words text-slate-500">{job.customer?.name ?? "No customer"} - {job.machineProfile ?? "Generic SVG"}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge>{titleCase(job.status)}</Badge>
                 <span className="text-slate-500">{shortDate(job.updatedAt)}</span>
               </div>
