@@ -36,6 +36,8 @@ Provider credentials and controlled Paystack/Arkesel/WhatsApp production tests r
 
 Client Design Studio components may import only browser-safe machine-profile definitions and pure helpers. Prisma, database access and default-profile creation remain in a server-only module used by authenticated pages and API routes. This boundary must be preserved in future production tooling.
 
+The production build must validate this separation so database code can never enter the browser bundle.
+
 ## Working rule
 
 Future release planning must name both:
