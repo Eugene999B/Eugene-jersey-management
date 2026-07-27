@@ -45,7 +45,7 @@ export function AdminNavigation({ allowedPermissions, variant = "desktop" }: Adm
             {primaryItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(pathname, item.href);
-              return <Link key={item.href} href={item.href} prefetch={false} aria-current={active ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${active ? "bg-[#081528] text-white" : "text-slate-600 active:bg-slate-100"}`}><Icon size={18} /><span className="max-w-full truncate">{item.shortLabel}</span></Link>;
+              return <Link key={item.href} href={item.href} prefetch={false} aria-label={`Quick ${item.shortLabel}`} aria-current={active ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${active ? "bg-[#081528] text-white" : "text-slate-600 active:bg-slate-100"}`}><Icon size={18} /><span className="max-w-full truncate">{item.shortLabel}</span></Link>;
             })}
             <button type="button" onClick={() => setMenuOpen(true)} aria-label="Show all platform tools" className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold text-slate-600 active:bg-slate-100"><MoreHorizontal size={19} /><span>More</span></button>
           </div>
