@@ -43,7 +43,7 @@ const directTenantModels = new Set([
   "AuditLog",
 ]);
 
-const childTenantPolicies: Record<string, (shopId: string) => UnknownRecord> = {
+const childTenantPolicies: Partial<Record<string, (shopId: string) => UnknownRecord>> = {
   AttributeField: (shopId) => ({ template: { shopId } }),
   ProductVariant: (shopId) => ({ product: { shopId } }),
   OrderItem: (shopId) => ({ order: { shopId } }),
@@ -365,9 +365,9 @@ export function createTenantDb(shopIdValue: string) {
       if (property === "$transaction") {
         return (input: unknown, options?: unknown) => {
           if (typeof input === "function") {
-            const callback = input as (transaction: Prisma.TransactionClient) => unknown;
+            const callback = input as (transaction: Prisma.TransactionClient) => Promise<unknown> | unknown;
             return platformDb.$transaction(
-              (transaction) => callback(createTenantTransactionDb(transaction, shopId)),
+              async (transaction) => callback(createTenantTransactionDb(transaction, shopId)),
               options as never,
             );
           }
