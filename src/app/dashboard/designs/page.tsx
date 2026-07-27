@@ -37,7 +37,7 @@ export default async function DesignsPage() {
         <DesignStudioAdvanced
           recoveryScope={`${shop.id}:${session.id}`}
           initialMachineProfiles={machineProfiles}
-          canManageMachineProfiles={permissions.settings.includes(session.role)}
+          canManageMachineProfiles={session.role === "OWNER" || session.role === "MANAGER"}
           savedDesigns={recentJobs.map((job) => ({
             id: job.id,
             title: job.title,
