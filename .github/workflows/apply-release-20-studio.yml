@@ -1,0 +1,304 @@
+name: Apply Release 20 Studio Patch
+
+on:
+  push:
+    branches:
+      - agent/release-20-machine-profiles-cut-export
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/release-20-machine-profiles-cut-export
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch advanced studio
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('src/components/design/production-studio-advanced.tsx')
+          s = p.read_text()
+
+          s = s.replace('  Lock,\n  MonitorCog,', '  Lock,\n  MonitorCog,\n  PanelBottomOpen,')
+
+          needle = '''import {
+            groupSelectedLayers,
+            moveSelectedLayers,
+            selectLayerUnit,
+            ungroupSelectedLayers,
+          } from "@/lib/design-selection";
+          '''
+          replacement = needle + '''import {
+            resizeLayerFromHandle,
+            rotateLayerToPoint,
+            type TransformHandle,
+          } from "@/lib/design-transform";
+          '''
+          assert needle in s
+          s = s.replace(needle, replacement, 1)
+
+          needle = '''type DragState = {
+            ids: string[];
+            startPoint: { x: number; y: number };
+            startLayers: DesignLayer[];
+          };
+          '''
+          replacement = needle + '''type TransformState =
+            | { kind: "resize"; layerId: string; handle: TransformHandle; startLayers: DesignLayer[] }
+            | { kind: "rotate"; layerId: string; startLayers: DesignLayer[] };
+          '''
+          assert needle in s
+          s = s.replace(needle, replacement, 1)
+
+          needle = 'const allowedFonts = ["Arial", "Impact", "Georgia", "Courier New", "Times New Roman"];\n'
+          replacement = needle + '''const transformHandles: Array<{ handle: TransformHandle; x: -1 | 1; y: -1 | 1 }> = [
+            { handle: "north-west", x: -1, y: -1 },
+            { handle: "north-east", x: 1, y: -1 },
+            { handle: "south-east", x: 1, y: 1 },
+            { handle: "south-west", x: -1, y: 1 },
+          ];
+          '''
+          assert needle in s
+          s = s.replace(needle, replacement, 1)
+
+          needle = '  const [openingVersion, setOpeningVersion] = useState<number | null>(null);\n'
+          assert needle in s
+          s = s.replace(needle, needle + '  const [inspectorOpen, setInspectorOpen] = useState(false);\n', 1)
+
+          needle = '  const dragRef = useRef<DragState | null>(null);\n'
+          assert needle in s
+          s = s.replace(needle, needle + '  const transformRef = useRef<TransformState | null>(null);\n', 1)
+
+          needle = '  const canUngroup = selectedLayers.some((layer) => Boolean(layer.groupId));\n'
+          replacement = needle + '''  const handleRadius = Math.max(3, Math.min(7, Math.min(size.width, size.height) / 70));
+            const rotationHandleOffset = handleRadius * 4;
+          '''
+          assert needle in s
+          s = s.replace(needle, replacement, 1)
+
+          needle = '''  useEffect(() => {
+            if (!designJobId) {
+          '''
+          effect = '''  useEffect(() => {
+            if (!inspectorOpen) return;
+            const previousOverflow = document.body.style.overflow;
+            const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+              if (event.key === "Escape") setInspectorOpen(false);
+            };
+            document.body.style.overflow = "hidden";
+            window.addEventListener("keydown", closeOnEscape);
+            return () => {
+              document.body.style.overflow = previousOverflow;
+              window.removeEventListener("keydown", closeOnEscape);
+            };
+          }, [inspectorOpen]);
+
+          '''
+          assert needle in s
+          s = s.replace(needle, effect + needle, 1)
+
+          needle = '''  function startDrag(event: ReactPointerEvent<SVGGElement>, layer: DesignLayer) {
+          '''
+          insert = '''  function startResize(event: ReactPointerEvent<SVGGElement>, layer: DesignLayer, handle: TransformHandle) {
+            event.stopPropagation();
+            if (layer.locked) return;
+            setPast((items) => [...items.slice(-39), layers]);
+            setFuture([]);
+            transformRef.current = { kind: "resize", layerId: layer.id, handle, startLayers: layers };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }
+
+          function startRotate(event: ReactPointerEvent<SVGGElement>, layer: DesignLayer) {
+            event.stopPropagation();
+            if (layer.locked) return;
+            setPast((items) => [...items.slice(-39), layers]);
+            setFuture([]);
+            transformRef.current = { kind: "rotate", layerId: layer.id, startLayers: layers };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }
+
+          '''
+          assert needle in s
+          s = s.replace(needle, insert + needle, 1)
+
+          old = '''  function drag(event: ReactPointerEvent<SVGSVGElement>) {
+            const active = dragRef.current;
+            if (!active) return;
+            const point = canvasPoint(event.clientX, event.clientY);
+            if (!point) return;
+            setLayers(moveSelectedLayers({
+              layers: active.startLayers,
+              selectedIds: active.ids,
+              dx: snapValue(point.x - active.startPoint.x),
+              dy: snapValue(point.y - active.startPoint.y),
+              sheet: size,
+            }));
+          }
+
+          function endDrag() {
+            dragRef.current = null;
+          }
+          '''
+          new = '''  function drag(event: ReactPointerEvent<SVGSVGElement>) {
+            const point = canvasPoint(event.clientX, event.clientY);
+            if (!point) return;
+
+            const transform = transformRef.current;
+            if (transform) {
+              const startLayer = transform.startLayers.find((layer) => layer.id === transform.layerId);
+              if (!startLayer) return;
+              const nextLayer = transform.kind === "resize"
+                ? resizeLayerFromHandle({
+                    layer: startLayer,
+                    handle: transform.handle,
+                    point,
+                    sheet: size,
+                    preserveAspect: startLayer.kind === "image" || startLayer.kind === "text" || event.shiftKey,
+                  })
+                : rotateLayerToPoint({ layer: startLayer, point, sheet: size, snapDegrees: event.shiftKey ? 15 : 0 });
+              setLayers(transform.startLayers.map((layer) => layer.id === nextLayer.id ? nextLayer : layer));
+              return;
+            }
+
+            const active = dragRef.current;
+            if (!active) return;
+            setLayers(moveSelectedLayers({
+              layers: active.startLayers,
+              selectedIds: active.ids,
+              dx: snapValue(point.x - active.startPoint.x),
+              dy: snapValue(point.y - active.startPoint.y),
+              sheet: size,
+            }));
+          }
+
+          function endDrag() {
+            dragRef.current = null;
+            transformRef.current = null;
+          }
+          '''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          needle = '''  const deviceTone = device === "connected"
+          '''
+          renderer = '''  function renderSelectionInspector() {
+            return (
+              <div className="space-y-4">
+                <section className="panel p-4">
+                  <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Selection</h3><span className="text-xs text-slate-500">{selectedIds.length} selected</span></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button variant="outline" onClick={groupSelection} disabled={selectedIds.length < 2}><Layers3 size={16} /> Group selected</Button>
+                    <Button variant="outline" onClick={ungroupSelection} disabled={!canUngroup}><X size={16} /> Ungroup selected</Button>
+                    <Button variant="outline" onClick={duplicateSelection} disabled={!selectedIds.length}><Copy size={16} /> Duplicate selected</Button>
+                    <Button variant="outline" onClick={deleteSelection} disabled={!selectedIds.length}><Trash2 size={16} /> Delete selected</Button>
+                  </div>
+                  <Button className="mt-2 w-full" variant="outline" onClick={() => setSelection([])} disabled={!selectedIds.length}>Clear selection</Button>
+                  <p className="mt-3 text-xs leading-5 text-slate-500">Groups select and move as one unit. One unlocked layer also shows corner resize and rotation handles on the sheet.</p>
+                </section>
+
+                <section className="panel p-4">
+                  <h3 className="font-semibold">Selected layer</h3>
+                  {selectedIds.length > 1 ? <p className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-500">{selectedIds.length} layers are selected. Use the Selection controls for group actions, or clear the selection and choose one layer for exact properties.</p> : selected ? <div className="mt-3 space-y-2">
+                    <input className="field" maxLength={120} value={selected.name} onChange={(event) => updateLayer(selected.id, { name: event.target.value })} aria-label="Layer name" />
+                    {selected.kind === "text" ? <><textarea className="field min-h-16" maxLength={500} value={selected.content ?? ""} onChange={(event) => updateLayer(selected.id, { content: event.target.value, name: event.target.value.slice(0, 24) || "Text" })} /><select className="field" value={selected.fontFamily ?? "Arial"} onChange={(event) => updateLayer(selected.id, { fontFamily: event.target.value })}>{allowedFonts.map((font) => <option key={font}>{font}</option>)}</select></> : null}
+                    <div className="grid grid-cols-2 gap-2"><NumberField label="X (mm)" value={selected.x} min={0} max={size.width} onChange={(x) => updateLayer(selected.id, { x: snapValue(x) })} /><NumberField label="Y (mm)" value={selected.y} min={0} max={size.height} onChange={(y) => updateLayer(selected.id, { y: snapValue(y) })} /><NumberField label="Width (mm)" value={selected.width} min={1} max={size.width} onChange={(width) => updateLayer(selected.id, { width })} /><NumberField label="Height (mm)" value={selected.height} min={1} max={size.height} onChange={(height) => updateLayer(selected.id, { height })} /></div>
+                    <NumberField label="Rotation (degrees)" value={selected.rotation} min={-360} max={360} onChange={(rotation) => updateLayer(selected.id, { rotation })} />
+                    {selected.kind !== "image" ? <label className="block text-xs font-semibold text-slate-600">Colour<input className="mt-1 h-10 w-full rounded border border-[#ded8cd]" type="color" value={selected.color} onChange={(event) => updateLayer(selected.id, { color: event.target.value })} /></label> : null}
+                    {selected.locked ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">Unlock this layer before using canvas resize or rotation handles.</p> : <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-950">Drag a corner to resize. Image and text proportions stay fixed; hold Shift to preserve proportions for shapes. Drag the round handle to rotate and hold Shift for 15° steps.</p>}
+                  </div> : <p className="mt-3 rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-500">Select a layer on the sheet or in the layer list to set its exact position and size.</p>}
+                </section>
+              </div>
+            );
+          }
+
+          '''
+          assert needle in s
+          s = s.replace(needle, renderer + needle, 1)
+
+          old = '''            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setShowGrid(!showGrid)}><Grid3X3 size={16} /> {showGrid ? "Grid on" : "Grid off"}</Button><Button variant="outline" onClick={() => setSnap(!snap)}>{snap ? "Snap 5 mm" : "Free move"}</Button></div>'''
+          new = '''            <div className="flex flex-wrap gap-2"><Button className="xl:hidden" variant="outline" aria-label="Open mobile inspector" onClick={() => setInspectorOpen(true)}><PanelBottomOpen size={16} /> Inspector</Button><Button variant="outline" onClick={() => setShowGrid(!showGrid)}><Grid3X3 size={16} /> {showGrid ? "Grid on" : "Grid off"}</Button><Button variant="outline" onClick={() => setSnap(!snap)}>{snap ? "Snap 5 mm" : "Free move"}</Button></div>'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = '''                  {selectedSet.has(layer.id) ? <rect x={-layer.width / 2} y={-layer.height / 2} width={layer.width} height={layer.height} fill="none" stroke={primarySelectedId === layer.id ? "#0284c7" : "#059669"} strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray={primarySelectedId === layer.id ? "4 3" : "2 2"} /> : null}
+          '''
+          new = old + '''                  {selectedIds.length === 1 && primarySelectedId === layer.id && !layer.locked ? (
+                    <g aria-label={`Transform handles for ${layer.name}`}>
+                      <line x1="0" y1={-layer.height / 2} x2="0" y2={-layer.height / 2 - rotationHandleOffset} stroke="#0284c7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                      <g role="button" tabIndex={0} aria-label={`Rotate ${layer.name}`} transform={`translate(0 ${-layer.height / 2 - rotationHandleOffset})`} onPointerDown={(event) => startRotate(event, layer)} className="cursor-grab">
+                        <circle r={handleRadius * 1.9} fill="transparent" />
+                        <circle r={handleRadius} fill="#ffffff" stroke="#0284c7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                        <path d={`M ${-handleRadius / 2} 0 A ${handleRadius / 2} ${handleRadius / 2} 0 1 1 ${handleRadius / 2} 0`} fill="none" stroke="#0284c7" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+                      </g>
+                      {transformHandles.map(({ handle, x, y }) => (
+                        <g key={handle} role="button" tabIndex={0} aria-label={`Resize ${layer.name} from ${handle.replace("-", " ")}`} transform={`translate(${x * layer.width / 2} ${y * layer.height / 2})`} onPointerDown={(event) => startResize(event, layer, handle)} className={handle === "north-west" || handle === "south-east" ? "cursor-nwse-resize" : "cursor-nesw-resize"}>
+                          <circle r={handleRadius * 1.9} fill="transparent" />
+                          <rect x={-handleRadius} y={-handleRadius} width={handleRadius * 2} height={handleRadius * 2} rx={handleRadius / 3} fill="#ffffff" stroke="#0284c7" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                        </g>
+                      ))}
+                    </g>
+                  ) : null}
+          '''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          s = s.replace('The editor stays unmirrored for accurate positioning. Dragging any selected member moves the unlocked selection together.', 'The editor stays unmirrored for accurate positioning. Drag a selected layer to move it; one unlocked layer also shows resize and rotation handles.')
+
+          start_marker = '''          <section className="panel p-4">
+            <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Selection</h3><span className="text-xs text-slate-500">{selectedIds.length} selected</span></div>'''
+          end_marker = '''          <section className="panel p-4">
+            <h3 className="font-semibold">Material and cut setup</h3>'''
+          start = s.index(start_marker, s.index('<aside className="space-y-4">', s.index('<main className="panel')))
+          end = s.index(end_marker, start)
+          s = s[:start] + '          <div className="hidden xl:block">{renderSelectionInspector()}</div>\n\n' + s[end:]
+
+          needle = '''      </div>
+    </div>
+  );
+}
+          '''
+          mobile = '''      </div>
+
+      {inspectorOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end xl:hidden">
+          <button type="button" className="absolute inset-0 bg-slate-950/55" aria-label="Close mobile inspector overlay" onClick={() => setInspectorOpen(false)} />
+          <section role="dialog" aria-modal="true" aria-label="Layer inspector" className="relative z-10 max-h-[82vh] w-full overflow-y-auto rounded-t-2xl border border-slate-300 bg-[#f6f4ef] p-4 shadow-2xl">
+            <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 flex items-center justify-between border-b border-[#ded8cd] bg-white px-4 py-3">
+              <div><p className="text-sm font-semibold">Layer inspector</p><p className="text-xs text-slate-500">Exact millimetre controls for the current selection</p></div>
+              <Button variant="outline" aria-label="Close mobile inspector" onClick={() => setInspectorOpen(false)}><X size={16} /> Close</Button>
+            </div>
+            {renderSelectionInspector()}
+          </section>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+          '''
+          assert needle in s
+          s = s.replace(needle, mobile, 1)
+          p.write_text(s)
+          PY
+
+      - name: Restore normal CI and remove patch workflow
+        shell: bash
+        run: |
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          rm .github/workflows/apply-release-20-studio.yml
+
+      - name: Commit release patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/design/production-studio-advanced.tsx .github/workflows/ci.yml .github/workflows/apply-release-20-studio.yml
+          git commit -m "Add Design Studio transform handles and mobile inspector"
+          git push origin HEAD:agent/release-20-machine-profiles-cut-export
