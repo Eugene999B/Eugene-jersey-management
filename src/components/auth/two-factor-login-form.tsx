@@ -84,7 +84,6 @@ export function TwoFactorLoginForm() {
               maxLength={32}
               disabled={submitting}
               required
-              autoFocus
             />
           </div>
         </label>
