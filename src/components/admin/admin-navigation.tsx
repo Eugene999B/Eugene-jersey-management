@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Activity, BarChart3, CreditCard, LifeBuoy, Megaphone, Menu, MoreHorizontal, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { Activity, BarChart3, CreditCard, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Settings, Shield, Store, UserCog, X } from "lucide-react";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
 interface AdminNavigationProps {
@@ -20,6 +20,7 @@ const adminNav = [
   { href: "/admin/broadcast", label: "Broadcast", shortLabel: "Broadcast", icon: Megaphone, permission: "broadcast" },
   { href: "/admin/activity", label: "Activity logs", shortLabel: "Activity", icon: Activity, permission: "activity" },
   { href: "/admin/security", label: "Security", shortLabel: "Security", icon: Shield, permission: "security" },
+  { href: "/admin/integrations", label: "Integrations", shortLabel: "Health", icon: HeartPulse, permission: "settings" },
   { href: "/admin/settings", label: "Settings", shortLabel: "Settings", icon: Settings, permission: "settings" },
 ] as const satisfies ReadonlyArray<{ href: string; label: string; shortLabel: string; icon: typeof BarChart3; permission: PlatformPermission | null }>;
 
