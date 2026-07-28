@@ -26,11 +26,12 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 test("saves a communication package immediately for the sole administrator", async ({ page }) => {
-  await signIn(page, "EJM-E2E-ADMIN");
+  await signIn(page, "EJM-E2E-R25-ADMIN");
   await page.goto("/admin/billing/communications");
   await expect(page.getByRole("heading", { name: "Communication Credits", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Recent saved package changes", exact: true })).toBeVisible();
-  await expect(page.getByText(/another administrator/i)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Pending second-admin approvals", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 
   const packageCard = page.locator("article").filter({ hasText: "SMS-STARTER · version" }).first();
   await expect(packageCard).toBeVisible();
@@ -50,14 +51,14 @@ test("saves a communication package immediately for the sole administrator", asy
 
 test("keeps communication credit administration usable on a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page, "EJM-E2E-ADMIN");
+  await signIn(page, "EJM-E2E-R25-ADMIN");
   await page.goto("/admin/billing/communications");
   await expect(page.getByRole("heading", { name: "Communication Credits", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
 test("starts each shop with isolated zero balances and no invented public package", async ({ page }) => {
-  await signIn(page, "EJM-E2E-OWNER");
+  await signIn(page, "EJM-E2E-R25-OWNER");
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.goto("/dashboard/messages");
   await expect(page.getByRole("heading", { name: "Send customer message", exact: true })).toBeVisible();
