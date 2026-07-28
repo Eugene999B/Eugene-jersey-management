@@ -61,7 +61,7 @@ test("shows the owner Login ID, online controls, credit guidance and Design Stud
 
   await page.getByRole("button", { name: /Offline/ }).click();
   await expect(page).toHaveURL(/storefront=offline/);
-  await expect(page.getByRole("status")).toContainText("updated successfully");
+  await expect(page.getByText("Online shop status updated successfully.", { exact: true })).toBeVisible();
   await expect(page.getByText("OFFLINE", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Online \+ ordering/ }).click();
