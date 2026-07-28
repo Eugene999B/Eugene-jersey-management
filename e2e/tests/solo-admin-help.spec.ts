@@ -29,6 +29,10 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(widths.body).toBeLessThanOrEqual(widths.viewport + 1);
 }
 
+function settingsLoginId(page: Page) {
+  return page.getByRole("main").getByText("EJM-E2E-R25-OWNER", { exact: true });
+}
+
 test("gives the sole administrator page help and downloadable handbooks", async ({ page }) => {
   await signIn(page, "EJM-E2E-R25-ADMIN");
   await expect(page).toHaveURL(/\/admin$/);
@@ -53,7 +57,7 @@ test("shows the owner Login ID, online controls, credit guidance and Design Stud
   await page.goto("/dashboard/settings");
   await expect(page.getByRole("heading", { name: "Online shop status" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your Login ID" })).toBeVisible();
-  await expect(page.getByText("EJM-E2E-R25-OWNER", { exact: true })).toBeVisible();
+  await expect(settingsLoginId(page)).toBeVisible();
 
   await page.getByRole("button", { name: /Offline/ }).click();
   await expect(page).toHaveURL(/storefront=offline/);
@@ -80,7 +84,7 @@ test("keeps the new owner guidance usable on a mobile viewport", async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "EJM-E2E-R25-OWNER");
   await page.goto("/dashboard/settings");
-  await expect(page.getByText("EJM-E2E-R25-OWNER", { exact: true })).toBeVisible();
+  await expect(settingsLoginId(page)).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.goto("/dashboard/designs");
