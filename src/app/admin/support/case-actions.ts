@@ -23,6 +23,10 @@ const optionalId = z.preprocess(
   z.string().min(1).max(100).optional(),
 );
 
+function isTerminalStatus(status: SupportCaseStatus) {
+  return status === SupportCaseStatus.RESOLVED || status === SupportCaseStatus.CLOSED;
+}
+
 const createCaseSchema = z.object({
   shopId: optionalId,
   subjectUserId: optionalId,
@@ -52,7 +56,7 @@ const updateCaseSchema = z
     resolution: z.preprocess((value) => String(value ?? "").trim() || undefined, z.string().max(5000).optional()),
   })
   .superRefine((value, context) => {
-    if ([SupportCaseStatus.RESOLVED, SupportCaseStatus.CLOSED].includes(value.status) && !value.resolution) {
+    if (isTerminalStatus(value.status) && !value.resolution) {
       context.addIssue({ code: "custom", path: ["resolution"], message: "A resolution is required." });
     }
   });
@@ -173,7 +177,7 @@ export async function updateSupportCaseAction(formData: FormData) {
     redirect(`/admin/support/cases/${existing.id}?error=transition`);
   }
 
-  const terminal = [SupportCaseStatus.RESOLVED, SupportCaseStatus.CLOSED].includes(parsed.data.status);
+  const terminal = isTerminalStatus(parsed.data.status);
   const changed = await platformDb.supportCase.updateMany({
     where: { id: existing.id, updatedAt: parsed.data.expectedUpdatedAt },
     data: {
