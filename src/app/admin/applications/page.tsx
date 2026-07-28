@@ -11,6 +11,10 @@ export const dynamic = "force-dynamic";
 
 type Props = { searchParams?: Promise<{ q?: string; type?: string; status?: string; assigned?: string; error?: string }> };
 
+function isAssignableStatus(status: BusinessApplicationStatus) {
+  return status === BusinessApplicationStatus.SUBMITTED || status === BusinessApplicationStatus.UNDER_REVIEW;
+}
+
 function statusTone(status: BusinessApplicationStatus): "green" | "red" | "orange" | "blue" | "neutral" {
   if (status === BusinessApplicationStatus.APPROVED) return "green";
   if (status === BusinessApplicationStatus.REJECTED) return "red";
@@ -44,7 +48,7 @@ export default async function BusinessApplicationsPage({ searchParams }: Props) 
   const pendingCount = applications.filter((item) => item.status === BusinessApplicationStatus.SUBMITTED).length;
   const reviewCount = applications.filter((item) => item.status === BusinessApplicationStatus.UNDER_REVIEW).length;
   const changesCount = applications.filter((item) => item.status === BusinessApplicationStatus.CHANGES_REQUESTED).length;
-  const unassignedCount = applications.filter((item) => !item.assignedReviewerId && [BusinessApplicationStatus.SUBMITTED, BusinessApplicationStatus.UNDER_REVIEW].includes(item.status)).length;
+  const unassignedCount = applications.filter((item) => !item.assignedReviewerId && isAssignableStatus(item.status)).length;
 
   return (
     <div className="space-y-6">
