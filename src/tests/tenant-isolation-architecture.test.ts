@@ -52,6 +52,9 @@ describe("structural tenant isolation", () => {
     expect(tenantDb).toContain('shopCommunicationWallet: "ShopCommunicationWallet"');
     expect(tenantDb).toContain('communicationCreditPurchase: "CommunicationCreditPurchase"');
     expect(tenantDb).toContain('communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"');
+    expect(tenantDb).toContain('supportCase: "SupportCase"');
+    expect(tenantDb).toContain('supportCaseNote: "SupportCaseNote"');
+    expect(tenantDb).toContain('businessApplication: "BusinessApplication"');
     expect(tenantDb).toContain("createTenantTransactionDb(transaction, shopId)");
     expect(tenantDb).toContain("is platform-global or has an unsupported ownership rule");
     expect(tenantDb).toContain('model === "Announcement"');
@@ -90,6 +93,9 @@ describe("structural tenant isolation", () => {
     expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");
     expect(verifier).toContain("Tenant client accessed the communication credit package catalogue");
     expect(verifier).toContain("Interactive tenant transaction accessed communication credit wallets");
+    expect(verifier).toContain("Tenant client accessed Release 26 support cases");
+    expect(verifier).toContain("Interactive tenant transaction accessed Release 26 support case notes");
+    expect(verifier).toContain("Tenant client accessed Release 26 business applications");
     expect(verifier).toContain("Tenant client accessed a platform-global model");
   });
 });
