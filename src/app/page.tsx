@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, BarChart3, Boxes, CreditCard, Layers3, Palette, ShieldCheck, Sparkles, Store, UsersRound } from "lucide-react";
+import { ArrowRight, BadgeCheck, BarChart3, Boxes, ClipboardCheck, CreditCard, Layers3, Palette, ShieldCheck, Sparkles, Store, UsersRound } from "lucide-react";
 
 const capabilities = [
   { icon: CreditCard, label: "Sell", detail: "Fast POS, receipts, verified tenders and customer credit." },
@@ -20,6 +20,7 @@ export default function Home() {
             <div className="min-w-0"><p className="truncate text-sm font-extrabold tracking-tight sm:text-base">Eugene Jersey Management</p><p className="hidden text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">Commerce • production • control</p></div>
           </Link>
           <nav className="flex items-center gap-2">
+            <Link href="/apply" className="hidden min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950 lg:inline-flex"><ClipboardCheck size={16} /> Apply</Link>
             <Link href="/shops" className="hidden min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950 sm:inline-flex"><Store size={16} /> Marketplace</Link>
             <Link href="/buyer/login" className="hidden min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 sm:inline-flex"><UsersRound size={16} /> Buyer access</Link>
             <Link href="/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#07111f] px-4 text-sm font-semibold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-[#10243e]">Staff login <ArrowRight size={16} /></Link>
@@ -35,6 +36,7 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/login" className="inline-flex min-h-13 items-center gap-2 rounded-2xl bg-[#07111f] px-6 text-sm font-semibold text-white shadow-xl shadow-slate-950/20 transition hover:-translate-y-0.5 hover:bg-[#10243e]">Open your workspace <ArrowRight size={18} /></Link>
             <Link href="/shops" className="inline-flex min-h-13 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><Store size={18} /> Explore verified shops</Link>
+            <Link href="/apply" className="inline-flex min-h-13 items-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 px-6 text-sm font-semibold text-cyan-900 transition hover:border-cyan-300"><ClipboardCheck size={18} /> Apply as a business</Link>
           </div>
           <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-slate-500"><span className="inline-flex items-center gap-2"><ShieldCheck size={17} className="text-cyan-600" /> Tenant-isolated</span><span className="inline-flex items-center gap-2"><BadgeCheck size={17} className="text-violet-600" /> Role controlled</span><span className="inline-flex items-center gap-2"><Layers3 size={17} className="text-pink-500" /> Production ready</span></div>
         </div>
@@ -61,7 +63,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="bg-[#07111f] text-white"><div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><div className="flex items-center gap-3"><Image src="/brand/ejm-mark.svg" alt="" width={38} height={38} /><div><p className="font-semibold">Eugene Jersey Management</p><p className="text-xs text-white/45">Professional multi-shop operations</p></div></div><div className="flex flex-wrap gap-5 text-sm font-semibold text-white/60"><Link href="/login" className="hover:text-white">Staff access</Link><Link href="/buyer/login" className="hover:text-white">Buyer access</Link><Link href="/shops" className="hover:text-white">Marketplace</Link></div></div></footer>
+      <footer className="bg-[#07111f] text-white"><div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><div className="flex items-center gap-3"><Image src="/brand/ejm-mark.svg" alt="" width={38} height={38} /><div><p className="font-semibold">Eugene Jersey Management</p><p className="text-xs text-white/45">Professional multi-shop operations</p></div></div><div className="flex flex-wrap gap-5 text-sm font-semibold text-white/60"><Link href="/apply" className="hover:text-white">Business applications</Link><Link href="/login" className="hover:text-white">Staff access</Link><Link href="/buyer/login" className="hover:text-white">Buyer access</Link><Link href="/shops" className="hover:text-white">Marketplace</Link></div></div></footer>
     </main>
   );
 }
