@@ -1,7 +1,10 @@
-import { BillingCycle, PlanTier } from "@prisma/client";
+import { BillingCycle } from "@prisma/client";
 import { createSecureShopAction } from "@/app/admin/create-shop-action";
 import { Button } from "@/components/ui/button";
+import { currency } from "@/lib/format";
 import { PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
+import { requirePlatformPermission } from "@/lib/platform-admin";
+import { ensureSubscriptionPlans } from "@/lib/subscription-plans";
 
 type Props = { searchParams?: Promise<{ error?: string }> };
 
@@ -10,18 +13,23 @@ const errorMessages: Record<string, string> = {
   "email-exists": "That owner email already belongs to an account. Existing users cannot be transferred between shops.",
   "slug-exists": "That shop web address is already in use.",
   "login-id-exists": "That staff login ID is already in use.",
+  plan: "Choose an approved, configured and active subscription plan.",
+  "plan-price": "The chosen plan is missing an approved price for that billing cycle.",
 };
 
 export default async function NewShopPage({ searchParams }: Props) {
   const params = (await searchParams) ?? {};
+  await requirePlatformPermission("shops");
+  const plans = (await ensureSubscriptionPlans()).filter((plan) => plan.isConfigured && plan.isActive);
   return (
     <div className="mx-auto max-w-4xl panel p-6">
       <p className="text-sm font-semibold uppercase text-slate-500">New tenant</p>
       <h1 className="mt-2 text-3xl font-semibold">Create shop, owner, and verification file</h1>
       <p className="mt-3 text-sm text-slate-600">
-        The shop starts private and pending. Create the owner with a strong password, then share it through a trusted channel. Passwords are never placed in URLs or logs.
+        The shop starts private and pending. Commercial terms come only from an approved plan version; prices cannot be typed directly into tenant creation.
       </p>
       {params.error ? <div className="mt-4 rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessages[params.error] ?? errorMessages.invalid}</div> : null}
+      {!plans.length ? <div className="mt-4 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">No configured active plan is available. Submit and approve plan terms from Billing before creating a tenant.</div> : null}
       <form action={createSecureShopAction} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <input className="field" name="name" placeholder="Shop name" required />
@@ -52,17 +60,20 @@ export default async function NewShopPage({ searchParams }: Props) {
           </div>
           <textarea className="field mt-4 min-h-20" name="credentialAddress" placeholder="Registered business address" />
         </div>
-        <select className="field" name="planTier" defaultValue={PlanTier.BASIC}>
-          {Object.values(PlanTier).map((plan) => <option key={plan} value={plan}>{plan}</option>)}
-        </select>
-        <div className="grid gap-4 md:grid-cols-3">
-          <select className="field" name="billingCycle" defaultValue={BillingCycle.MONTHLY}>
-            {Object.values(BillingCycle).map((cycle) => <option key={cycle} value={cycle}>{cycle}</option>)}
-          </select>
-          <input className="field" name="monthlyPrice" type="number" min="0" step="0.01" placeholder="Monthly price" />
-          <input className="field" name="yearlyPrice" type="number" min="0" step="0.01" placeholder="Yearly price" />
+        <div className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
+          <h2 className="font-semibold">Approved subscription terms</h2>
+          <p className="mt-1 text-xs text-slate-500">The tenant begins on the selected plan&apos;s approved trial duration and price snapshot.</p>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <select className="field" name="planId" required defaultValue="">
+              <option value="">Select approved plan</option>
+              {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · v{plan.version} · {currency(plan.monthlyPrice?.toString() ?? "0")}/month · {currency(plan.yearlyPrice?.toString() ?? "0")}/year</option>)}
+            </select>
+            <select className="field" name="billingCycle" defaultValue={BillingCycle.MONTHLY}>
+              {Object.values(BillingCycle).map((cycle) => <option key={cycle} value={cycle}>{cycle}</option>)}
+            </select>
+          </div>
         </div>
-        <Button variant="secondary">Create tenant</Button>
+        <Button variant="secondary" disabled={!plans.length}>Create tenant</Button>
       </form>
     </div>
   );
