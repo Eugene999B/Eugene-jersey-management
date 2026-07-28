@@ -182,7 +182,7 @@ export async function sendDebtReminderAction(formData: FormData) {
   });
 
   const balance = Number(debt.principalAmount) - Number(debt.paidAmount);
-  await sendCustomerMessage({
+  const message = await sendCustomerMessage({
     shopId: session.shopId,
     customerId: debt.customerId,
     channel: parsed.data.channel,
@@ -191,8 +191,21 @@ export async function sendDebtReminderAction(formData: FormData) {
     recipientEmail: debt.customer.email,
     subject: "Debt payment reminder",
     body: `${debt.shop.name}: your outstanding balance is ${balance.toFixed(2)} ${debt.shop.currency}. Due date: ${debt.dueDate.toDateString()}.`,
-    metadata: { debtId: debt.id, balance },
+    metadata: { debtId: debt.id, balance, sentBy: session.id },
   });
+
+  if (message.providerReference === "INSUFFICIENT-CREDITS") {
+    await audit({
+      shopId: session.shopId,
+      userId: session.id,
+      action: "debt.reminder_blocked_no_credits",
+      entityType: "Debt",
+      entityId: debt.id,
+      metadata: { channel: parsed.data.channel },
+    });
+    revalidatePath("/dashboard/messages");
+    redirect(`/dashboard/debts?error=${parsed.data.channel === NotificationChannel.SMS ? "sms-credits" : "whatsapp-credits"}`);
+  }
 
   await prisma.debt.update({
     where: { id: debt.id },
@@ -209,7 +222,7 @@ export async function sendDebtReminderAction(formData: FormData) {
     action: "debt.reminder_sent",
     entityType: "Debt",
     entityId: debt.id,
-    metadata: { channel: parsed.data.channel },
+    metadata: { channel: parsed.data.channel, status: message.status },
   });
 
   revalidatePath("/dashboard/debts");
