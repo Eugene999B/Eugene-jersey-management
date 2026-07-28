@@ -37,7 +37,7 @@ export async function sendMessageAction(formData: FormData) {
     ? await prisma.customer.findFirst({ where: { id: parsed.data.customerId, shopId: session.shopId } })
     : null;
 
-  await sendCustomerMessage({
+  const message = await sendCustomerMessage({
     shopId: session.shopId,
     customerId: customer?.id,
     channel: parsed.data.channel,
@@ -52,10 +52,14 @@ export async function sendMessageAction(formData: FormData) {
   await audit({
     shopId: session.shopId,
     userId: session.id,
-    action: "message.sent",
+    action: message.providerReference === "INSUFFICIENT-CREDITS" ? "message.blocked_no_credits" : "message.sent",
     entityType: "CustomerMessage",
-    metadata: { channel: parsed.data.channel, customerId: customer?.id ?? null },
+    entityId: message.id,
+    metadata: { channel: parsed.data.channel, customerId: customer?.id ?? null, status: message.status },
   });
 
   revalidatePath("/dashboard/messages");
+  if (message.providerReference === "INSUFFICIENT-CREDITS") {
+    redirect(`/dashboard/messages?error=${parsed.data.channel === NotificationChannel.SMS ? "sms-credits" : "whatsapp-credits"}`);
+  }
 }

@@ -1,7 +1,8 @@
 import { createHmac } from "crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   amountToSubunit,
+  initializePlatformPaystackTransaction,
   isPaystackCheckoutReady,
   normalizePaystackChargeBearer,
   verifyPaystackWebhookSignature,
@@ -11,6 +12,7 @@ describe("Paystack helpers", () => {
   const previousKey = process.env.PAYSTACK_SECRET_KEY;
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     if (previousKey === undefined) delete process.env.PAYSTACK_SECRET_KEY;
     else process.env.PAYSTACK_SECRET_KEY = previousKey;
   });
@@ -30,6 +32,37 @@ describe("Paystack helpers", () => {
     expect(isPaystackCheckoutReady({ allowCard: true, paystackSubaccountCode: null })).toBe(false);
     expect(isPaystackCheckoutReady({ allowCard: true, paystackSubaccountCode: "wrong-account" })).toBe(false);
     expect(isPaystackCheckoutReady({ allowCard: true, paystackSubaccountCode: "ACCT_1" })).toBe(true);
+  });
+
+  it("initializes communication credits on the administrator account without a shop subaccount", async () => {
+    process.env.PAYSTACK_SECRET_KEY = "sk_test_platform";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: true, data: { authorization_url: "https://checkout.test/credit", reference: "EJM-CRED-1" } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await initializePlatformPaystackTransaction({
+      email: "owner@example.com",
+      amount: 80,
+      currency: "GHS",
+      reference: "EJM-CRED-1",
+      callbackUrl: "https://ejm.test/api/paystack/communication-credits/callback",
+      metadata: { shop_id: "shop-a" },
+    });
+
+    expect(result.authorizationUrl).toBe("https://checkout.test/credit");
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body)) as Record<string, unknown>;
+    expect(body.amount).toBe(8000);
+    expect(body).not.toHaveProperty("subaccount");
+    expect(body).not.toHaveProperty("transaction_charge");
+    expect(body.metadata).toMatchObject({
+      shop_id: "shop-a",
+      settlement_owner: "ejm_administrator",
+      platform_account: "ejm_administrator",
+      purchase_type: "communication_credits",
+    });
   });
 
   it("normalizes legacy fee-bearer values to safe Paystack choices", () => {

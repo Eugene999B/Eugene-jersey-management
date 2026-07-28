@@ -2,6 +2,11 @@ import "server-only";
 
 import { NotificationChannel, NotificationStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import {
+  creditChannelForNotification,
+  refundCommunicationCredit,
+  reserveCommunicationCredit,
+} from "@/lib/communication-credits";
 
 const PROVIDER_TIMEOUT_MS = Math.max(3_000, Math.min(30_000, Number(process.env.MESSAGE_PROVIDER_TIMEOUT_MS ?? 12_000)));
 
@@ -48,6 +53,18 @@ export function isSmsDeliveryConfigured() {
   return Boolean(config.url && config.token);
 }
 
+export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
+  const config = providerConfig(channel);
+  if (config.provider.toLowerCase() === "console") return false;
+  if (channel === NotificationChannel.SMS && config.provider.toLowerCase() === "arkesel") {
+    return Boolean(config.token && config.sender);
+  }
+  if (channel === NotificationChannel.SMS || channel === NotificationChannel.WHATSAPP) {
+    return Boolean(config.url && config.token);
+  }
+  return false;
+}
+
 async function sendViaArkesel(input: ProviderMessageInput, token: string, sender: string) {
   const response = await fetch("https://sms.arkesel.com/api/v2/sms/send", {
     method: "POST",
@@ -90,23 +107,65 @@ async function sendViaGenericProvider(input: ProviderMessageInput) {
   }
 }
 
+function sentByFromMetadata(metadata: Prisma.InputJsonValue | undefined) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const sentBy = (metadata as Record<string, unknown>).sentBy;
+  return typeof sentBy === "string" ? sentBy : null;
+}
+
 export async function sendCustomerMessage(input: SendMessageInput) {
-  const result = await sendViaGenericProvider(input);
-  return prisma.customerMessage.create({
+  const message = await prisma.customerMessage.create({
     data: {
       shopId: input.shopId,
       customerId: input.customerId ?? null,
       channel: input.channel,
-      status: result.status,
+      status: NotificationStatus.QUEUED,
       recipientName: input.recipientName ?? null,
       recipientPhone: input.recipientPhone ?? null,
       recipientEmail: input.recipientEmail ?? null,
       subject: input.subject ?? null,
       body: input.body,
-      providerReference: result.providerReference,
+      providerReference: "PENDING-DISPATCH",
       metadata: input.metadata ?? {},
     },
   });
+
+  const creditChannel = creditChannelForNotification(input.channel);
+  const chargeable = Boolean(creditChannel && isCommunicationDeliveryConfigured(input.channel));
+  let reserved = false;
+  if (creditChannel && chargeable) {
+    const reservation = await reserveCommunicationCredit({
+      shopId: input.shopId,
+      channel: creditChannel,
+      customerMessageId: message.id,
+      createdById: sentByFromMetadata(input.metadata),
+      metadata: { notificationChannel: input.channel },
+    });
+    if (!reservation.reserved) {
+      return prisma.customerMessage.update({
+        where: { id: message.id },
+        data: { status: NotificationStatus.FAILED, providerReference: "INSUFFICIENT-CREDITS" },
+      });
+    }
+    reserved = true;
+  }
+
+  const result = await sendViaGenericProvider(input);
+  const updated = await prisma.customerMessage.update({
+    where: { id: message.id },
+    data: { status: result.status, providerReference: result.providerReference },
+  });
+
+  if (reserved && creditChannel && result.status === NotificationStatus.FAILED) {
+    await refundCommunicationCredit({
+      shopId: input.shopId,
+      channel: creditChannel,
+      customerMessageId: message.id,
+      reason: `Refunded one ${creditChannel} credit because the provider did not accept the message.`,
+      metadata: { providerReference: result.providerReference },
+    });
+  }
+  return updated;
 }
 
 export async function sendDirectMessage(input: ProviderMessageInput) {

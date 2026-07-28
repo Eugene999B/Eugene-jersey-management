@@ -46,6 +46,12 @@ describe("structural tenant isolation", () => {
     expect(tenantDb).toContain('subscriptionPlanVersion: "SubscriptionPlanVersion"');
     expect(tenantDb).toContain('subscriptionPlanChangeRequest: "SubscriptionPlanChangeRequest"');
     expect(tenantDb).toContain('shopSubscriptionContract: "ShopSubscriptionContract"');
+    expect(tenantDb).toContain('communicationCreditPackage: "CommunicationCreditPackage"');
+    expect(tenantDb).toContain('communicationCreditPackageVersion: "CommunicationCreditPackageVersion"');
+    expect(tenantDb).toContain('communicationCreditPackageChangeRequest: "CommunicationCreditPackageChangeRequest"');
+    expect(tenantDb).toContain('shopCommunicationWallet: "ShopCommunicationWallet"');
+    expect(tenantDb).toContain('communicationCreditPurchase: "CommunicationCreditPurchase"');
+    expect(tenantDb).toContain('communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"');
     expect(tenantDb).toContain("createTenantTransactionDb(transaction, shopId)");
     expect(tenantDb).toContain("is platform-global or has an unsupported ownership rule");
     expect(tenantDb).toContain('model === "Announcement"');
@@ -82,6 +88,8 @@ describe("structural tenant isolation", () => {
     expect(workflow).toContain('TENANT_ISOLATION_TESTING: "true"');
     expect(verifier).toContain("Interactive transaction bypassed tenant scope");
     expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");
+    expect(verifier).toContain("Tenant client accessed the communication credit package catalogue");
+    expect(verifier).toContain("Interactive tenant transaction accessed communication credit wallets");
     expect(verifier).toContain("Tenant client accessed a platform-global model");
   });
 });
