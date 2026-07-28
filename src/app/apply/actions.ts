@@ -21,6 +21,10 @@ function applicationPath(type: BusinessApplicationType) {
   return type === BusinessApplicationType.SHOP ? "/apply/shop" : "/apply/supplier";
 }
 
+function isWithdrawableStatus(status: BusinessApplicationStatus) {
+  return status === BusinessApplicationStatus.SUBMITTED || status === BusinessApplicationStatus.CHANGES_REQUESTED;
+}
+
 async function enforcePublicApplicationLimits(duplicateFingerprint: string) {
   const requestFingerprint = await applicationRequestFingerprint();
   await Promise.all([
@@ -174,7 +178,7 @@ export async function withdrawBusinessApplicationAction() {
   if (!access) redirect("/apply/status?error=expired");
   const application = await findPublicApplicationByCredentials(access.reference, access.token);
   if (!application) redirect("/apply/status?error=expired");
-  if (![BusinessApplicationStatus.SUBMITTED, BusinessApplicationStatus.CHANGES_REQUESTED].includes(application.status)) {
+  if (!isWithdrawableStatus(application.status)) {
     redirect("/apply/status/result?error=withdraw");
   }
 
