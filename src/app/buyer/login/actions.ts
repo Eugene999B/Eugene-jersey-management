@@ -10,6 +10,7 @@ import {
   BUYER_SESSION_COOKIE,
   setBuyerSessionCookie,
 } from "@/lib/buyer-session";
+import { createBuyerEmailCode, isEmailDeliveryConfigured } from "@/lib/buyer-email-verification";
 import { prisma } from "@/lib/db";
 import { isSmsDeliveryConfigured } from "@/lib/messaging";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -65,7 +66,11 @@ async function requestIp() {
     || "unknown";
 }
 
-async function completeBuyerLogin(buyer: AuthenticatedBuyer, destinationValue: string | null | undefined) {
+async function completeBuyerLogin(
+  buyer: AuthenticatedBuyer,
+  destinationValue: string | null | undefined,
+  options: { offerEmailVerification?: boolean } = {},
+) {
   const destination = nextPath(destinationValue);
   let requiresTwoFactor = false;
   try {
@@ -117,6 +122,25 @@ async function completeBuyerLogin(buyer: AuthenticatedBuyer, destinationValue: s
     entityId: updated.id,
     metadata: { twoFactor: false },
   });
+
+  if (options.offerEmailVerification && updated.email) {
+    if (!isEmailDeliveryConfigured()) {
+      redirect(`/buyer/verify-email?error=provider&next=${encodeURIComponent(destination)}`);
+    }
+    try {
+      await createBuyerEmailCode({ buyerId: updated.id, email: updated.email, name: updated.name, minutes: 10 });
+      await audit({
+        action: "auth.buyer_email_verification_sent",
+        entityType: "BuyerAccount",
+        entityId: updated.id,
+        metadata: { emailDomain: updated.email.split("@")[1] ?? "unknown" },
+      });
+    } catch {
+      redirect(`/buyer/verify-email?error=send&next=${encodeURIComponent(destination)}`);
+    }
+    redirect(`/buyer/verify-email?sent=1&next=${encodeURIComponent(destination)}`);
+  }
+
   redirect(destination);
 }
 
@@ -129,8 +153,8 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
     email: formData.get("email") || undefined,
     next: formData.get("next") || undefined,
   });
-  if (!parsed.success) redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(nextPath(formData.get("next")))}`);
-  if (!isSmsDeliveryConfigured()) redirect(`/buyer/login?error=sms&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  if (!parsed.success) redirect(`/buyer/register?error=invalid&next=${encodeURIComponent(nextPath(formData.get("next")))}`);
+  if (!isSmsDeliveryConfigured()) redirect(`/buyer/register?error=sms&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 
   try {
     await Promise.all([
@@ -138,12 +162,12 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
       enforceRateLimit({ key: `buyer-login-code-ip:${await requestIp()}`, limit: 20, windowSeconds: 15 * 60 }),
     ]);
   } catch {
-    redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+    redirect(`/buyer/register?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
   const buyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
-  if (buyer && !buyer.isActive) redirect(`/buyer/login?error=invalid&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  if (buyer && !buyer.isActive) redirect(`/buyer/register?error=invalid&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 
   try {
     await createPhoneCode({
@@ -157,9 +181,9 @@ export async function requestBuyerLoginCodeAction(formData: FormData) {
       pendingPasswordHash: passwordHash,
     });
   } catch {
-    redirect(`/buyer/login?error=sms&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+    redirect(`/buyer/register?error=sms&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
-  redirect(`/buyer/login?sent=1&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  redirect(`/buyer/register?sent=1&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 }
 
 export async function buyerPasswordLoginAction(formData: FormData) {
@@ -196,7 +220,7 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
     code: formData.get("code"),
     next: formData.get("next") || undefined,
   });
-  if (!parsed.success) redirect("/buyer/login?error=invalid");
+  if (!parsed.success) redirect("/buyer/register?error=invalid");
 
   try {
     await Promise.all([
@@ -204,11 +228,11 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
       enforceRateLimit({ key: `buyer-login-verify-ip:${await requestIp()}`, limit: 30, windowSeconds: 15 * 60 }),
     ]);
   } catch {
-    redirect(`/buyer/login?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+    redirect(`/buyer/register?error=rate&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
   }
 
   const existingBuyer = await prisma.buyerAccount.findUnique({ where: { phone: parsed.data.phone } });
-  if (existingBuyer && !existingBuyer.isActive) redirect(`/buyer/login?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}`);
+  if (existingBuyer && !existingBuyer.isActive) redirect(`/buyer/register?error=invalid&phone=${encodeURIComponent(parsed.data.phone)}`);
 
   const consumed = await consumePhoneCode({
     buyerId: existingBuyer?.id,
@@ -216,10 +240,10 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
     purpose: PhoneVerificationPurpose.BUYER_LOGIN,
     code: parsed.data.code,
   });
-  if (!consumed?.pendingPasswordHash || !consumed.pendingName) redirect(`/buyer/login?error=code&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
+  if (!consumed?.pendingPasswordHash || !consumed.pendingName) redirect(`/buyer/register?error=code&phone=${encodeURIComponent(parsed.data.phone)}&next=${encodeURIComponent(parsed.data.next || "/shops")}`);
 
   const emailOwner = consumed.pendingEmail ? await prisma.buyerAccount.findUnique({ where: { email: consumed.pendingEmail } }) : null;
-  if (emailOwner && emailOwner.id !== existingBuyer?.id) redirect(`/buyer/login?error=email&phone=${encodeURIComponent(parsed.data.phone)}`);
+  if (emailOwner && emailOwner.id !== existingBuyer?.id) redirect(`/buyer/register?error=email&phone=${encodeURIComponent(parsed.data.phone)}`);
 
   const updated = existingBuyer
     ? await prisma.buyerAccount.update({
@@ -241,5 +265,5 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
         },
       });
 
-  await completeBuyerLogin(updated, parsed.data.next);
+  await completeBuyerLogin(updated, parsed.data.next, { offerEmailVerification: Boolean(updated.email) });
 }

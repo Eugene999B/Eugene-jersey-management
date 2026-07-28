@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Activity, BarChart3, BookOpen, ClipboardCheck, Coins, CreditCard, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { LogoutButton } from "@/components/auth/logout-button";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
 interface AdminNavigationProps {
@@ -62,11 +63,15 @@ export function AdminNavigation({ allowedPermissions, variant = "desktop" }: Adm
         {menuOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="All platform tools">
             <button type="button" aria-label="Close platform tools" className="absolute inset-0 bg-slate-950/60" onClick={() => setMenuOpen(false)} />
-            <aside className="absolute inset-y-0 left-0 flex w-[min(88vw,370px)] flex-col bg-[#081528] text-white shadow-2xl">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 p-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300/70">Platform control</p><h2 className="mt-1 text-lg font-semibold">All admin tools</h2></div><button type="button" aria-label="Close all platform tools" onClick={() => setMenuOpen(false)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/10"><X size={20} /></button></div>
-              <nav className="flex-1 overflow-y-auto p-3" aria-label="All admin navigation">
+            <aside className="absolute inset-y-0 left-0 flex w-[min(88vw,370px)] flex-col overflow-hidden bg-[#081528] text-white shadow-2xl">
+              <div className="shrink-0 flex items-center justify-between gap-3 border-b border-white/10 p-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300/70">Platform control</p><h2 className="mt-1 text-lg font-semibold">All admin tools</h2></div><button type="button" aria-label="Close all platform tools" onClick={() => setMenuOpen(false)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/10"><X size={20} /></button></div>
+              <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="All admin navigation">
                 <div className="space-y-1">{visibleItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link key={item.href} href={item.href} prefetch={false} onClick={() => setMenuOpen(false)} aria-current={active ? "page" : undefined} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${active ? "bg-cyan-300 text-[#081528]" : "text-white/75 active:bg-white/10"}`}><Icon size={18} />{item.label}</Link>; })}</div>
               </nav>
+              <div className="shrink-0 border-t border-white/10 p-3">
+                <Link href="/account/security" prefetch={false} onClick={() => setMenuOpen(false)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-white"><Shield size={17} /> Personal security</Link>
+                <LogoutButton className="mt-2 w-full bg-white text-slate-950 hover:bg-slate-100" />
+              </div>
             </aside>
           </div>
         ) : null}
@@ -75,14 +80,16 @@ export function AdminNavigation({ allowedPermissions, variant = "desktop" }: Adm
   }
 
   return (
-    <nav className="grid p-3" aria-label="Admin pages">
-      {visibleItems.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(pathname, item.href);
-        return (
-          <Link key={item.href} prefetch={false} aria-current={active ? "page" : undefined} className={`inline-flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-cyan-300/50 ${active ? "bg-cyan-300 text-[#081528]" : "text-white/68 hover:bg-white/10 hover:text-white"}`} href={item.href}><Icon size={17} />{item.label}</Link>
-        );
-      })}
+    <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Admin pages">
+      <div className="grid gap-1">
+        {visibleItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(pathname, item.href);
+          return (
+            <Link key={item.href} prefetch={false} aria-current={active ? "page" : undefined} className={`inline-flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-cyan-300/50 ${active ? "bg-cyan-300 text-[#081528]" : "text-white/68 hover:bg-white/10 hover:text-white"}`} href={item.href}><Icon size={17} />{item.label}</Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

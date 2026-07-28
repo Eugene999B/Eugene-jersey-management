@@ -1,0 +1,16 @@
+model BuyerEmailVerification {
+  id                String    @id @default(cuid())
+  buyerId           String    @unique
+  email             String
+  codeHash          String
+  expiresAt         DateTime
+  attempts          Int       @default(0)
+  usedAt            DateTime?
+  verifiedAt        DateTime?
+  providerReference String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([email, verifiedAt])
+  @@index([expiresAt, usedAt])
+}
