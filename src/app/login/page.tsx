@@ -16,6 +16,7 @@ const errorCopy: Record<string, string> = {
   "missing-shop": "This account is missing its shop assignment.",
   permission: "That account does not have access to the requested workspace.",
   "invalid-invite": "That staff invitation is invalid, expired, or already belongs to an account.",
+  "plan-staff-limit": "This shop has used all staff accounts included in its assigned subscription. Ask the shop owner or platform administrator before accepting this invitation.",
 };
 
 type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; reset?: string; loggedOut?: string; securityChanged?: string }> };
