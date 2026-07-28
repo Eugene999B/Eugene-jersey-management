@@ -66,6 +66,10 @@ function recoveryLink(resetPath: string, publicToken: string) {
   return url.toString();
 }
 
+function isFailedDelivery(status: EmailDeliveryStatus) {
+  return status === EmailDeliveryStatus.FAILED || status === EmailDeliveryStatus.BOUNCED;
+}
+
 export function recoveryChannelConfigured(channel: PasswordRecoveryChannel) {
   return channel === PasswordRecoveryChannel.EMAIL
     ? isEmailDeliveryConfigured()
@@ -188,7 +192,7 @@ export async function getPasswordRecoveryChallengeState(publicToken: string | nu
     usable: !challenge.usedAt
       && challenge.expiresAt > new Date()
       && challenge.attempts < 5
-      && ![EmailDeliveryStatus.FAILED, EmailDeliveryStatus.BOUNCED].includes(challenge.deliveryStatus),
+      && !isFailedDelivery(challenge.deliveryStatus),
   };
 }
 
@@ -205,8 +209,7 @@ export async function consumePasswordRecoveryChallenge(input: {
     || challenge.usedAt
     || challenge.expiresAt <= new Date()
     || challenge.attempts >= 5
-    || challenge.deliveryStatus === EmailDeliveryStatus.FAILED
-    || challenge.deliveryStatus === EmailDeliveryStatus.BOUNCED
+    || isFailedDelivery(challenge.deliveryStatus)
   ) return null;
 
   if (!safeHashEqual(challenge.codeHash, hashToken(input.code))) {
@@ -249,16 +252,38 @@ export async function applyEmailDeliveryEvent(input: {
   const deliveryStatus = mapping[input.eventType];
   if (!deliveryStatus) return;
   const deliveryDetail = input.detail?.replace(/[\r\n\t]+/g, " ").slice(0, 300) ?? null;
-  const deliveredAt = deliveryStatus === EmailDeliveryStatus.DELIVERED ? input.occurredAt : undefined;
+  const allowedCurrent: EmailDeliveryStatus[] = deliveryStatus === EmailDeliveryStatus.ACCEPTED
+    ? [EmailDeliveryStatus.PENDING, EmailDeliveryStatus.ACCEPTED]
+    : deliveryStatus === EmailDeliveryStatus.DELAYED
+      ? [EmailDeliveryStatus.PENDING, EmailDeliveryStatus.ACCEPTED, EmailDeliveryStatus.DELAYED]
+      : deliveryStatus === EmailDeliveryStatus.DELIVERED
+        ? [EmailDeliveryStatus.PENDING, EmailDeliveryStatus.ACCEPTED, EmailDeliveryStatus.DELAYED, EmailDeliveryStatus.DELIVERED]
+        : Object.values(EmailDeliveryStatus);
+  const data = {
+    deliveryStatus,
+    deliveryDetail,
+    ...(deliveryStatus === EmailDeliveryStatus.DELIVERED
+      ? { deliveredAt: input.occurredAt }
+      : isFailedDelivery(deliveryStatus)
+        ? { deliveredAt: null }
+        : {}),
+  };
 
   await Promise.all([
     platformDb.passwordRecoveryChallenge.updateMany({
-      where: { providerReference: input.providerReference, channel: PasswordRecoveryChannel.EMAIL },
-      data: { deliveryStatus, deliveryDetail, ...(deliveredAt ? { deliveredAt } : {}) },
+      where: {
+        providerReference: input.providerReference,
+        channel: PasswordRecoveryChannel.EMAIL,
+        deliveryStatus: { in: allowedCurrent },
+      },
+      data,
     }),
     platformDb.buyerEmailVerification.updateMany({
-      where: { providerReference: input.providerReference },
-      data: { deliveryStatus, deliveryDetail, ...(deliveredAt ? { deliveredAt } : {}) },
+      where: {
+        providerReference: input.providerReference,
+        deliveryStatus: { in: allowedCurrent },
+      },
+      data,
     }),
   ]);
 }
