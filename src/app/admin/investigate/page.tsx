@@ -80,7 +80,7 @@ export default async function InvestigationSearchPage({ searchParams }: Props) {
   return (
     <div className="space-y-6">
       <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Platform support</p><h1 className="mt-2 text-3xl font-semibold">Investigation search</h1><p className="mt-2 text-sm text-slate-600">Find businesses, people and operational references without impersonating a tenant or exposing provider secrets.</p></div>
-      <form className="panel flex flex-col gap-3 p-5 sm:flex-row"><input className="field flex-1" name="q" defaultValue={query} minLength={2} placeholder="Shop, Login ID, email, phone, receipt, provider reference or audit action" /><button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white"><Search size={17} /> Investigate</button></form>
+      <form className="panel flex flex-col gap-3 p-5 sm:flex-row"><input className="field flex-1" name="q" defaultValue={query} minLength={2} placeholder="Shop, Login ID, email, phone, receipt, provider reference or audit action" /><button type="submit" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white"><Search size={17} /> Investigate</button></form>
       {!active ? <div className="panel p-8 text-center text-sm text-slate-500">Enter at least two characters. Exact references and Login IDs produce the safest results.</div> : null}
       {active ? <p className="text-sm font-semibold text-slate-600">{resultCount} matching records for “{query}”</p> : null}
 
