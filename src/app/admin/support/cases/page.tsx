@@ -13,6 +13,10 @@ type Props = {
   searchParams?: Promise<{ q?: string; status?: string; priority?: string; assigned?: string; error?: string }>;
 };
 
+function isTerminalStatus(status: SupportCaseStatus) {
+  return status === SupportCaseStatus.RESOLVED || status === SupportCaseStatus.CLOSED;
+}
+
 function statusTone(status: SupportCaseStatus): "green" | "red" | "orange" | "blue" | "neutral" {
   if (status === SupportCaseStatus.RESOLVED) return "green";
   if (status === SupportCaseStatus.CLOSED) return "neutral";
@@ -58,9 +62,9 @@ export default async function SupportCasesPage({ searchParams }: Props) {
   ]);
   const shopNames = new Map(shops.map((shop) => [shop.id, shop.name]));
   const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
-  const openCount = cases.filter((item) => ![SupportCaseStatus.RESOLVED, SupportCaseStatus.CLOSED].includes(item.status)).length;
-  const urgentCount = cases.filter((item) => item.priority === SupportCasePriority.URGENT && ![SupportCaseStatus.RESOLVED, SupportCaseStatus.CLOSED].includes(item.status)).length;
-  const unassignedCount = cases.filter((item) => !item.assignedToId && ![SupportCaseStatus.RESOLVED, SupportCaseStatus.CLOSED].includes(item.status)).length;
+  const openCount = cases.filter((item) => !isTerminalStatus(item.status)).length;
+  const urgentCount = cases.filter((item) => item.priority === SupportCasePriority.URGENT && !isTerminalStatus(item.status)).length;
+  const unassignedCount = cases.filter((item) => !item.assignedToId && !isTerminalStatus(item.status)).length;
 
   return (
     <div className="space-y-6">
