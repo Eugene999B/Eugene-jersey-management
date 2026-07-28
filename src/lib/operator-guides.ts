@@ -21,6 +21,15 @@ const designStudioGuide: OperatorGuide = {
       "Confirm the correct machine profile, material width and material height.",
       "Download a project backup before major production changes.",
     ] },
+    { heading: "Machine identity and production route", paragraphs: [
+      "A machine profile records the shop's configured manufacturer, model, device category, bed dimensions, output format and production route. Browser-visible USB identifiers are additional serial-port evidence; they do not replace the configured manufacturer and model.",
+    ], steps: [
+      "Use Operating-system print for an installed desktop or production printer. The computer's printer driver selects and identifies the physical printer.",
+      "Use RIP software / full-colour file for DTF, sublimation, UV and large-format production controlled by RIP software.",
+      "Use Vendor software / exported file for SVG, DXF or PLT workflows handled by the machine manufacturer's application.",
+      "Use Direct browser serial connection only for a compatible HPGL/PLT cutter in current Chrome or Edge over HTTPS.",
+      "For a serial profile, use Test serial connection first. The preflight opens the selected port, checks configured USB IDs and writability, then closes without sending movement commands.",
+    ] },
     { heading: "Add and arrange artwork", steps: [
       "Add text, shapes or approved artwork using the studio tools.",
       "Click a layer to select it. Hold the modifier key to select more than one layer.",
@@ -40,8 +49,10 @@ const designStudioGuide: OperatorGuide = {
       "Opening an older version creates a working copy; it does not overwrite the current project until you save.",
     ] },
     { heading: "Production export", steps: [
-      "Select the shop machine profile that matches the cutter or RIP workflow.",
-      "Use full-colour SVG or print output for artwork workflows.",
+      "Select the exact shop machine profile before exporting or printing.",
+      "Use full-colour SVG or system print output for artwork and RIP workflows.",
+      "Use SVG, DXF or PLT export when the machine is controlled through vendor software.",
+      "Use direct serial sending only for a connected HPGL profile after a successful no-movement preflight and a small test job.",
       "Use cutter output only when the production check reports no blocked layers.",
       "Live text, raster images, external artwork and unsupported SVG elements must be converted to supported vector paths before HPGL, PLT or DXF export.",
       "Never ignore an out-of-sheet or unsupported-artwork warning; correct the design first.",
@@ -50,6 +61,8 @@ const designStudioGuide: OperatorGuide = {
       "Nothing moves: check whether the layer is locked or hidden.",
       "Cutter export is blocked: read the listed layer warning and convert or remove unsupported content.",
       "Wrong output size: confirm material dimensions, machine bed size and exact millimetre fields.",
+      "Serial preflight fails: use Chrome or Edge over HTTPS, confirm the driver or USB adapter, select the correct port and check any configured VID/PID values.",
+      "Printer is not listed inside the web page: use Print to open the operating-system dialog, where installed printers and drivers are managed.",
       "Work disappeared after a reload: check the recovery prompt and project version history.",
     ] },
   ],
