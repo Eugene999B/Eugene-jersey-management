@@ -20,6 +20,14 @@ Every update requires a written reason and records previous value, new value, ad
 
 `PlatformGovernanceSettings` is platform-global. Shop tenant clients and interactive tenant transactions must fail closed if they attempt direct access. Settings permission is required for the page and API.
 
+## Validation requirements
+
+- reversible Prisma migration
+- settings-permission and trusted-origin enforcement
+- audit diff, reason, IP and user-agent capture
+- normal and interactive tenant-client denial
+- unit tests, TypeScript, production build and mobile Chromium acceptance
+
 ## Scope boundary
 
 This release establishes the governance source of truth and audited editing experience. Subscription plan catalogues, communication-credit pricing, second-administrator approvals and enforcement of every policy across all public routes remain focused follow-up work within the confirmed roadmap.
