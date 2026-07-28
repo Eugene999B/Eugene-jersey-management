@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NotificationChannel, NotificationStatus, type Prisma } from "@prisma/client";
+import { formatArkeselRecipient, parseArkeselSendResponse } from "@/lib/arkesel";
 import { prisma } from "@/lib/db";
 import {
   creditChannelForNotification,
@@ -66,16 +67,24 @@ export function isCommunicationDeliveryConfigured(channel: NotificationChannel) 
 }
 
 async function sendViaArkesel(input: ProviderMessageInput, token: string, sender: string) {
+  const recipient = input.recipientPhone ? formatArkeselRecipient(input.recipientPhone) : "";
+  if (!recipient) return { status: NotificationStatus.FAILED, providerReference: "MISSING-RECIPIENT" };
+
   const response = await fetch("https://sms.arkesel.com/api/v2/sms/send", {
     method: "POST",
     headers: { "api-key": token, "Content-Type": "application/json" },
-    body: JSON.stringify({ sender, message: input.body, recipients: [input.recipientPhone] }),
+    body: JSON.stringify({ sender, message: input.body, recipients: [recipient] }),
     signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     cache: "no-store",
   });
   if (!response.ok) return { status: NotificationStatus.FAILED, providerReference: `ARKESEL-${response.status}` };
-  const payload = await response.json().catch(() => null) as { data?: { id?: string }; id?: string; reference?: string } | null;
-  return { status: NotificationStatus.SENT, providerReference: payload?.data?.id ?? payload?.id ?? payload?.reference ?? "ARKESEL-SENT" };
+
+  const payload = await response.json().catch(() => null);
+  const parsed = parseArkeselSendResponse(payload);
+  return {
+    status: parsed.accepted ? NotificationStatus.SENT : NotificationStatus.FAILED,
+    providerReference: parsed.providerReference,
+  };
 }
 
 async function sendViaGenericProvider(input: ProviderMessageInput) {
