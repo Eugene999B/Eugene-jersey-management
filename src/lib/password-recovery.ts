@@ -31,6 +31,10 @@ function safeName(value: string) {
   return value.replace(/[<>&"']/g, "").slice(0, 120);
 }
 
+function safeHtmlAttribute(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function safeDeliveryDetail(value: unknown) {
   return value instanceof Error
     ? value.message.replace(/[\r\n\t]+/g, " ").slice(0, 180)
@@ -52,6 +56,16 @@ function maskDestination(channel: PasswordRecoveryChannel, value: string) {
   return digits.length >= 4 ? `••••••${digits.slice(-4)}` : "your phone";
 }
 
+function recoveryLink(resetPath: string, publicToken: string) {
+  const appUrl = process.env.APP_URL?.trim();
+  if (!appUrl) throw new Error("APP_URL_NOT_CONFIGURED");
+  const base = new URL(appUrl);
+  const url = new URL(resetPath, base);
+  if (url.origin !== base.origin) throw new Error("INVALID_RECOVERY_PATH");
+  url.searchParams.set("challenge", publicToken);
+  return url.toString();
+}
+
 export function recoveryChannelConfigured(channel: PasswordRecoveryChannel) {
   return channel === PasswordRecoveryChannel.EMAIL
     ? isEmailDeliveryConfigured()
@@ -64,6 +78,7 @@ export async function createPasswordRecoveryChallenge(input: {
   channel: PasswordRecoveryChannel;
   destination: string;
   recipientName: string;
+  resetPath: string;
   minutes?: number;
 }) {
   if (!recoveryChannelConfigured(input.channel)) throw new Error("RECOVERY_CHANNEL_NOT_CONFIGURED");
@@ -72,6 +87,7 @@ export async function createPasswordRecoveryChallenge(input: {
   const publicToken = createPlainToken();
   const code = createCode();
   const codeHash = hashToken(code);
+  const link = recoveryLink(input.resetPath, publicToken);
   const now = new Date();
 
   await platformDb.passwordRecoveryChallenge.updateMany({
@@ -104,18 +120,19 @@ export async function createPasswordRecoveryChallenge(input: {
       const result = await sendDirectSms({
         recipientPhone: destination,
         recipientName: input.recipientName,
-        body: `Your Eugene Jersey Management password reset code is ${code}. It expires in ${minutes} minutes. Do not share it.`,
+        body: `EJM password reset code: ${code}. Open ${link} and enter the code within ${minutes} minutes. Do not share it.`,
         metadata: { purpose: "password_recovery", accountKind: input.accountKind },
       });
       if (result.status !== NotificationStatus.SENT) throw new Error(result.providerReference ?? "SMS_NOT_ACCEPTED");
       providerReference = result.providerReference ?? "SMS-ACCEPTED";
     } else {
+      const escapedLink = safeHtmlAttribute(link);
       const sent = await sendTransactionalEmail({
         to: destination,
         recipientName: input.recipientName,
         subject: "Reset your Eugene Jersey Management password",
-        text: `Hello ${input.recipientName}, your password reset code is ${code}. It expires in ${minutes} minutes. If you did not request this, ignore the message.`,
-        html: `<p>Hello ${safeName(input.recipientName)},</p><p>Your Eugene Jersey Management password reset code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${minutes} minutes. If you did not request this, ignore the message.</p>`,
+        text: `Hello ${input.recipientName}, open ${link} and enter password reset code ${code}. The link and code expire in ${minutes} minutes. If you did not request this, ignore the message.`,
+        html: `<p>Hello ${safeName(input.recipientName)},</p><p>Use the secure link below and enter this password reset code:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p><a href="${escapedLink}">Open secure password reset</a></p><p>The link and code expire in ${minutes} minutes. If you did not request this, ignore the message.</p>`,
         idempotencyKey: `password-recovery/${challenge.id}/${codeHash.slice(0, 20)}`,
         tags: { category: "password_recovery", account_kind: input.accountKind },
       });
