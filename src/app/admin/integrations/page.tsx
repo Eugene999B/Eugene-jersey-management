@@ -7,6 +7,7 @@ import {
   Cloud,
   CreditCard,
   Database,
+  Mail,
   MessageSquareText,
   RefreshCw,
   Store,
@@ -14,11 +15,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
 import { compactNumber, currency, shortDate } from "@/lib/format";
+import type { IntegrationHealthState } from "@/lib/integration-health";
 import {
   getProductionIntegrationHealth,
-  type IntegrationHealthCheck,
-  type IntegrationHealthState,
-} from "@/lib/integration-health";
+  type ProductionIntegrationHealthCheck,
+} from "@/lib/production-integration-health";
 import { requirePlatformPermission } from "@/lib/platform-admin";
 
 export const dynamic = "force-dynamic";
@@ -36,15 +37,16 @@ function stateLabel(state: IntegrationHealthState) {
   return "Not configured";
 }
 
-function icon(check: IntegrationHealthCheck) {
+function icon(check: ProductionIntegrationHealthCheck) {
   if (check.key === "database") return <Database size={20} />;
   if (check.key === "paystack") return <CreditCard size={20} />;
+  if (check.key === "email") return <Mail size={20} />;
   if (check.key === "arkesel" || check.key === "whatsapp") return <MessageSquareText size={20} />;
   if (check.key === "media") return <Cloud size={20} />;
   return <Clock3 size={20} />;
 }
 
-function metadataRows(check: IntegrationHealthCheck) {
+function metadataRows(check: ProductionIntegrationHealthCheck) {
   if (check.key === "paystack") {
     const balances = Array.isArray(check.metadata.balances)
       ? check.metadata.balances as Array<{ currency?: string; amount?: number }>
@@ -62,6 +64,14 @@ function metadataRows(check: IntegrationHealthCheck) {
       ["Sender ID", String(check.metadata.sender ?? "Not configured")],
       ["SMS balance", check.metadata.smsBalance === null || check.metadata.smsBalance === undefined ? "Not returned" : compactNumber(Number(check.metadata.smsBalance))],
       ["Main balance", String(check.metadata.mainBalance ?? "Not returned")],
+    ];
+  }
+  if (check.key === "email") {
+    return [
+      ["Provider", String(check.metadata.provider ?? "console")],
+      ["Sender domain", String(check.metadata.senderDomain ?? "Not configured")],
+      ["Domain status", String(check.metadata.domainStatus ?? "Not checked")],
+      ["Sending capability", String(check.metadata.sendingCapability ?? "Not checked")],
     ];
   }
   if (check.key === "whatsapp") {
@@ -107,7 +117,7 @@ export default async function AdminIntegrationsPage() {
       <header className="rounded-3xl bg-[#081528] p-5 text-white shadow-xl sm:p-7">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Release #17 · Production Integration Health</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Production Integration Health</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">Provider and settlement control centre</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">These checks are read-only. They verify authentication and reachability without creating payments, sending messages, uploading files or releasing stock.</p>
           </div>
@@ -157,7 +167,7 @@ export default async function AdminIntegrationsPage() {
             <p className="flex gap-3 rounded-xl bg-white p-4">{health.summary.unreachable === 0 ? <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-700" size={18} /> : <AlertTriangle className="mt-0.5 shrink-0 text-red-700" size={18} />}No provider may be unreachable when its production feature is enabled.</p>
             <p className="flex gap-3 rounded-xl bg-white p-4">{configuredShopAccounts >= cardEnabledShops ? <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-700" size={18} /> : <AlertTriangle className="mt-0.5 shrink-0 text-amber-700" size={18} />}Every card-enabled shop must have its own assigned subaccount.</p>
             <p className="flex gap-3 rounded-xl bg-white p-4"><Clock3 className="mt-0.5 shrink-0 text-slate-700" size={18} />The reservation-release job must report on its expected schedule before online stock reservations are trusted.</p>
-            <p className="flex gap-3 rounded-xl bg-white p-4"><MessageSquareText className="mt-0.5 shrink-0 text-slate-700" size={18} />Provider reachability does not replace a controlled delivery test, consent check or approved WhatsApp template.</p>
+            <p className="flex gap-3 rounded-xl bg-white p-4"><MessageSquareText className="mt-0.5 shrink-0 text-slate-700" size={18} />Provider reachability does not replace a controlled delivery test, consent check or approved messaging template.</p>
           </div>
         </div>
       </section>
