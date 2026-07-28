@@ -20,7 +20,7 @@ type Props = {
 function statusTone(status: SupportCaseStatus): "green" | "orange" | "blue" | "neutral" {
   if (status === SupportCaseStatus.RESOLVED) return "green";
   if (status === SupportCaseStatus.CLOSED) return "neutral";
-  if ([SupportCaseStatus.WAITING_ON_PROVIDER, SupportCaseStatus.WAITING_ON_SHOP].includes(status)) return "orange";
+  if (status === SupportCaseStatus.WAITING_ON_PROVIDER || status === SupportCaseStatus.WAITING_ON_SHOP) return "orange";
   return "blue";
 }
 
