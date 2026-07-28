@@ -42,6 +42,10 @@ describe("structural tenant isolation", () => {
     const tenantDb = source("lib/tenant-db.ts");
     expect(tenantDb).toContain('ProductVariant: (shopId) => ({ product: { shopId } })');
     expect(tenantDb).toContain('Payment: (shopId) => ({ order: { shopId } })');
+    expect(tenantDb).toContain('subscriptionPlan: "SubscriptionPlan"');
+    expect(tenantDb).toContain('subscriptionPlanVersion: "SubscriptionPlanVersion"');
+    expect(tenantDb).toContain('subscriptionPlanChangeRequest: "SubscriptionPlanChangeRequest"');
+    expect(tenantDb).toContain('shopSubscriptionContract: "ShopSubscriptionContract"');
     expect(tenantDb).toContain("createTenantTransactionDb(transaction, shopId)");
     expect(tenantDb).toContain("is platform-global or has an unsupported ownership rule");
     expect(tenantDb).toContain('model === "Announcement"');
@@ -77,6 +81,7 @@ describe("structural tenant isolation", () => {
     expect(workflow).toContain("Run two-shop tenant isolation verification");
     expect(workflow).toContain('TENANT_ISOLATION_TESTING: "true"');
     expect(verifier).toContain("Interactive transaction bypassed tenant scope");
+    expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");
     expect(verifier).toContain("Tenant client accessed a platform-global model");
   });
 });
