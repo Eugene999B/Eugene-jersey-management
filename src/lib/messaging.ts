@@ -55,6 +55,7 @@ export function isSmsDeliveryConfigured() {
 
 export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
   const config = providerConfig(channel);
+  if (config.provider.toLowerCase() === "console") return false;
   if (channel === NotificationChannel.SMS && config.provider.toLowerCase() === "arkesel") {
     return Boolean(config.token && config.sender);
   }

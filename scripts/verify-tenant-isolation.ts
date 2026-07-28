@@ -200,6 +200,37 @@ async function main() {
 
     await expectRejects(
       TenantDatabaseAccessError,
+      () => tenantA.communicationCreditPackage.findMany(),
+      "Tenant client accessed the communication credit package catalogue.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.communicationCreditPackageVersion.findMany(),
+      "Tenant client accessed immutable communication credit package versions.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.communicationCreditPackageChangeRequest.findMany(),
+      "Tenant client accessed communication credit commercial approval requests.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.shopCommunicationWallet.findMany()),
+      "Interactive tenant transaction accessed communication credit wallets.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.communicationCreditPurchase.findMany()),
+      "Interactive tenant transaction accessed communication credit purchases.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.communicationCreditLedgerEntry.findMany()),
+      "Interactive tenant transaction accessed communication credit ledger entries.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
       () => tenantA.designJobVersion.findMany(),
       "Tenant client accessed design versions outside the dedicated shop-filtered API.",
     );
@@ -235,7 +266,7 @@ async function main() {
     const tenantBCustomerAfter = await platformDb.customer.findUniqueOrThrow({ where: { id: tenantBData.customer.id } });
     assert(tenantBCustomerAfter.name === "Isolation Shop B customer" && tenantBCustomerAfter.notes === null, "Tenant B data changed during negative tests.");
 
-    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, governance denial, subscription-catalogue denial, two-factor global-model denial, and raw SQL denial.");
+    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, governance denial, subscription-catalogue denial, communication-credit denial, two-factor global-model denial, and raw SQL denial.");
   } finally {
     await deleteFixtures();
     await platformDb.$disconnect();

@@ -56,10 +56,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, ignored: true });
     }
 
-    let result = await settleCommunicationCreditPurchase(payload.data);
-    if (result.status === "ignored" && result.reason === "credit-purchase-not-found") {
-      result = await settlePaystackTransaction(payload.data);
-    }
+    const creditResult = await settleCommunicationCreditPurchase(payload.data);
+    const result = creditResult.status === "ignored" && creditResult.reason === "credit-purchase-not-found"
+      ? await settlePaystackTransaction(payload.data)
+      : creditResult;
     await prisma.paymentProviderEvent.update({
       where: { id: event.id },
       data: {

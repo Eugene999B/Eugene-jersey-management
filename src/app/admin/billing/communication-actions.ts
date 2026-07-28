@@ -77,7 +77,7 @@ export async function createCommunicationPackageShellAction(formData: FormData) 
         currency: "GHS",
         isConfigured: false,
         isPublic: false,
-        isActive: true,
+        isActive: false,
         version: 1,
         createdById: session.id,
         updatedById: session.id,

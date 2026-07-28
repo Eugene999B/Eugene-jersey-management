@@ -81,5 +81,6 @@ export async function purchaseCommunicationCreditsAction(formData: FormData) {
     messagesRedirect("credit-checkout");
   }
 
+  if (!authorizationUrl) messagesRedirect("credit-checkout");
   redirect(authorizationUrl);
 }

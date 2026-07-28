@@ -18,6 +18,8 @@ const debtErrors: Record<string, string> = {
   customer: "That customer could not be found in this shop.",
   payment: "Enter a valid payment amount and choose cash, card, or mobile money.",
   "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",
+  "sms-credits": "This shop has no SMS credits. An owner or manager can purchase an approved package from Messages.",
+  "whatsapp-credits": "This shop has no WhatsApp credits. An owner or manager can purchase an approved package from Messages.",
 };
 
 export default async function DebtsPage({ searchParams }: Props) {
@@ -43,7 +45,7 @@ export default async function DebtsPage({ searchParams }: Props) {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {params.error && debtErrors[params.error] ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{debtErrors[params.error]}</div> : null}
+      {params.error && debtErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{debtErrors[params.error]}</div> : null}
       <div>
         <h1 className="text-2xl font-semibold">Debts and installments</h1>
         <p className="mt-2 text-sm text-slate-500">Track customer credit, payment plans, reminders, and collection risk.</p>

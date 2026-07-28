@@ -10,11 +10,11 @@ Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc
 
 ## Status summary
 
-The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, a production Design Studio, suppliers, network, admin, Paystack settlement routing, messaging hooks, structural tenant isolation, desktop/mobile browser acceptance, optional personal two-factor authentication, read-only production integration health checks, interruption-safe local design recovery, group-aware editing, immutable design save history, direct layer transform handles, a shared mobile inspector, shop-owned machine profiles, fail-closed vector cut-path export, audited CEO governance controls and a versioned subscription-plan catalogue with second-administrator approval.
+The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, a production Design Studio, suppliers, network, admin, Paystack settlement routing, messaging hooks, structural tenant isolation, desktop/mobile browser acceptance, optional personal two-factor authentication, read-only production integration health checks, interruption-safe local design recovery, group-aware editing, immutable design save history, direct layer transform handles, a shared mobile inspector, shop-owned machine profiles, fail-closed vector cut-path export, audited CEO governance controls, a versioned subscription-plan catalogue with second-administrator approval, and isolated SMS/WhatsApp communication-credit wallets with verified administrator-account purchases.
 
 Production account activation is repository-controlled: Railway migrations are followed by `production:activate`, which creates the real administrator from Railway variables and retires seeded demo access.
 
-**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed, communication credits are built and remaining commercial launch controls are finished.
+**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed and remaining commercial launch controls are finished.
 
 ## Already resolved in code
 
@@ -46,6 +46,10 @@ Production account activation is repository-controlled: Railway migrations are f
 26. **Versioned subscription plan catalogue** — the fixed `FREE`, `BASIC`, `PRO` and `ENTERPRISE` tiers have approved prices, trial/grace periods, limits and features; a different billing administrator must approve every commercial change.
 27. **Tenant contract snapshots** — existing tenant prices are preserved during migration, catalogue changes never silently reprice shops, and explicit assignment stores an immutable plan-version snapshot.
 28. **Included staff enforcement** — active non-owner staff and open invites reserve assigned plan slots; direct creation, invitations and acceptance fail closed through serializable platform transactions when the limit is reached.
+29. **Communication package catalogue** — SMS and WhatsApp package prices, paid units, bonuses and availability use written proposals, second-administrator approval and immutable package versions.
+30. **Administrator-owned credit checkout** — communication packages use the EJM main Paystack account without a shop subaccount, while ordinary shop sales retain store-owned settlement.
+31. **Isolated shop wallets and ledger** — every shop has separate SMS and WhatsApp balances; verified purchases, message usage and provider-failure refunds are recorded through idempotent serializable ledger entries.
+32. **Fail-closed message charging** — real provider sends reserve one credit, insufficient balances block dispatch, failed sends refund automatically, and email or console queues remain free.
 
 ## Optional two-factor operating rules
 
@@ -66,7 +70,7 @@ Production account activation is repository-controlled: Railway migrations are f
 3. Customer payments for a store are initialized with that store's subaccount code.
 4. The store receives its settlement through its own Paystack subaccount.
 5. A configured flat EJM `transaction_charge` remains with the administrator main account.
-6. Platform subscriptions and future SMS/WhatsApp credit purchases belong to the administrator account.
+6. Platform subscriptions and SMS/WhatsApp credit purchases belong to the administrator account.
 7. Store users cannot change the assigned subaccount, EJM charge or Paystack fee bearer.
 8. Only platform administrators with Billing permission can verify and save payment routes.
 9. A non-empty subaccount is checked through a read-only provider request before replacing an existing route.
@@ -87,6 +91,21 @@ Production account activation is repository-controlled: Railway migrations are f
 10. Included staff counts active non-owner accounts and open invites. The owner account is excluded.
 11. Product, monthly-order and feature limits are recorded but wider route enforcement remains follow-up work.
 12. Catalogue, proposal, version and contract models are platform-commercial data and are denied through normal and interactive tenant clients.
+
+## Communication credit operating rules
+
+1. SMS and WhatsApp packages are channel-specific platform-commercial records.
+2. Migration placeholders contain no invented price or credit quantity and existing shops start with zero balances.
+3. Package edits require a written proposal, a different Billing administrator, version checking and an immutable approved snapshot.
+4. Credit purchases use the EJM administrator Paystack account without a shop subaccount; store customer payments remain unchanged.
+5. Callback and webhook settlement verify amount and currency and can credit a purchase only once.
+6. Every shop owns separate SMS and WhatsApp wallets and cannot access another tenant's balance, purchase or ledger.
+7. One configured-provider message reserves one channel credit atomically before dispatch.
+8. Insufficient credit blocks provider dispatch; provider failure refunds the reserved credit through an idempotent ledger entry.
+9. Email, console-mode queues and direct platform authentication messages do not consume shop credits.
+10. Automatic receipt messaging failure never rolls back a completed shop sale.
+11. Package, approval, wallet, purchase and ledger models remain inaccessible through normal and interactive tenant clients.
+12. Provider segment pricing, templates, consent, delivery status and cost reconciliation remain controlled rollout work.
 
 ## Design recovery operating rules
 
@@ -150,19 +169,19 @@ Production account activation is repository-controlled: Railway migrations are f
 7. Add an account session list, device history and per-session forced logout.
 8. Design Studio remaining work: multi-layer bounding-box transforms, version comparison/labels, simultaneous-edit protection and broader SVG compatibility based on real production files.
 9. Enforce recorded product, monthly-order and feature entitlements across relevant routes; add automated renewal, invoice, dunning and plan self-service workflows.
-10. Complete communication-credit packages, support investigations, public business applications and location-aware marketplace work.
+10. Complete support investigations, public business applications and location-aware marketplace work.
 11. Clean the Turbopack media-storage NFT warning.
 12. Refresh Google Drive docs after each major merge so they match repository source documentation.
 
 ## Recommended implementation order
 
 1. Verify Release #17 production integrations when provider accounts are ready.
-2. Build SMS and WhatsApp communication-credit packages using the EJM administrator payment account.
-3. Add the admin investigation centre and public shop/supplier application pipeline.
-4. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.
-5. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
-6. Complete Paystack refunds, POS gateway payments and settlement/retry operations.
-7. Finish Design Studio collaboration/version-comparison improvements.
+2. Add the admin investigation centre and public shop/supplier application pipeline.
+3. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.
+4. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
+5. Complete Paystack refunds, POS gateway payments and settlement/retry operations.
+6. Finish Design Studio collaboration/version-comparison improvements.
+7. Complete controlled communication-package payment and provider-delivery tests.
 8. Complete commercial launch hardening and a controlled real-shop pilot.
 
 ## Validation commands
@@ -180,7 +199,7 @@ npm.cmd run build
 
 ## AI handoff rules
 
-1. Read `README.md`, this diagnostic, `docs/source/11_Production_Activation.md`, `docs/source/14_Production_Integration_Health.md`, `docs/source/15_Design_Studio_Reliability.md`, `docs/source/16_Design_Studio_Grouping_and_Version_History.md`, `docs/source/17_Design_Studio_Transform_Handles_and_Mobile_Inspector.md`, `docs/source/18_Design_Studio_Machine_Profiles_and_Cut_Paths.md`, `docs/source/20_CEO_Settings_and_Platform_Governance.md`, and `docs/source/21_Subscription_Plans_and_Commercial_Approval.md` before production changes.
+1. Read `README.md`, this diagnostic, `docs/source/11_Production_Activation.md`, `docs/source/14_Production_Integration_Health.md`, `docs/source/15_Design_Studio_Reliability.md`, `docs/source/16_Design_Studio_Grouping_and_Version_History.md`, `docs/source/17_Design_Studio_Transform_Handles_and_Mobile_Inspector.md`, `docs/source/18_Design_Studio_Machine_Profiles_and_Cut_Paths.md`, `docs/source/20_CEO_Settings_and_Platform_Governance.md`, and `docs/source/21_Subscription_Plans_and_Commercial_Approval.md`, and `docs/source/22_Communication_Credits_and_Wallets.md` before production changes.
 2. Never touch Chalin projects.
 3. Keep frontend/backend together in this Next.js app unless deliberately splitting later.
 4. Prisma migrations are required for schema changes.
@@ -197,4 +216,6 @@ npm.cmd run build
 15. Commercial plan changes require a written proposal, another billing administrator, version checking and an immutable approved snapshot.
 16. Existing tenant prices must never change merely because a plan catalogue entry changes.
 17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.
-18. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.
+18. Communication package, approval, wallet, purchase and ledger models must remain inaccessible through shop tenant clients and interactive tenant transactions.
+19. Communication purchases must settle to the EJM administrator account; normal shop customer payments must retain store-owned subaccount settlement.
+20. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.

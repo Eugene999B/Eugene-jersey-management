@@ -62,7 +62,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
   return (
     <div className="space-y-5">
       {params.error ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">{errorMessages[params.error] ?? "The message or credit action could not be completed."}</div> : null}
-      {params.credits === "success" ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{params.channel ? `${titleCase(params.channel)} credits` : "Communication credits"} purchased successfully. The verified units are now available.</div> : null}
+      {params.credits === "success" ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Communication credits purchased successfully. The verified units are now available.</div> : null}
       {params.credits === "failed" || params.credits === "invalid" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">The credit payment was not verified. No units were added to this shop.</div> : null}
 
       <section className="grid gap-3 sm:grid-cols-2">
