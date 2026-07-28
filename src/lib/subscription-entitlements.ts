@@ -15,7 +15,7 @@ export class SubscriptionLimitError extends Error {
 }
 
 export class SubscriptionEntitlementError extends Error {
-  constructor(public readonly code: "EMAIL_EXISTS" | "INVITE_INVALID") {
+  constructor(public readonly code: "EMAIL_EXISTS" | "INVITE_INVALID" | "STAFF_NOT_FOUND") {
     super(code);
     this.name = "SubscriptionEntitlementError";
   }
@@ -103,6 +103,18 @@ export async function createStaffAccountWithinPlan(input: {
         passwordHash: input.passwordHash,
         isActive: true,
       },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function toggleStaffAccessWithinPlan(input: { shopId: string; userId: string }): Promise<User> {
+  return platformDb.$transaction(async (tx) => {
+    const user = await tx.user.findFirst({ where: { id: input.userId, shopId: input.shopId } });
+    if (!user) throw new SubscriptionEntitlementError("STAFF_NOT_FOUND");
+    if (!user.isActive && user.role !== Role.OWNER) await assertStaffReservationAvailable(tx, input.shopId);
+    return tx.user.update({
+      where: { id: user.id },
+      data: { isActive: !user.isActive, sessionVersion: { increment: 1 } },
     });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
