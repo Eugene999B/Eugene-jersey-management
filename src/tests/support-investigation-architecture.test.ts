@@ -36,10 +36,11 @@ describe("Release 26 investigation and support cases", () => {
   });
 
   it("retains append-only notes and platform-only tenant denial", () => {
-    const models = source("../../prisma/models/support-applications.prisma");
+    const models = source("../prisma/models/support-applications.prisma");
+    const noteModel = models.split("model SupportCaseNote")[1]?.split("model BusinessApplication")[0] ?? "";
     const tenantDb = source("lib/tenant-db.ts");
-    expect(models).toContain("model SupportCaseNote");
-    expect(models).not.toMatch(/model SupportCaseNote[\s\S]*?updatedAt/);
+    expect(noteModel).toContain("createdAt");
+    expect(noteModel).not.toContain("updatedAt");
     expect(tenantDb).toContain('supportCase: "SupportCase"');
     expect(tenantDb).toContain('supportCaseNote: "SupportCaseNote"');
     expect(tenantDb).toContain('businessApplication: "BusinessApplication"');
