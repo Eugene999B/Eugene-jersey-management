@@ -17,7 +17,7 @@ describe("Release 26 public business applications", () => {
     expect(helpers).toContain('httpOnly: true');
     expect(helpers).toContain('sameSite: "lax"');
     expect(helpers).toContain("timingSafeEqual");
-    expect(submitted).toContain("private status token");
+    expect(submitted.toLowerCase()).toContain("private status token");
   });
 
   it("rate-limits submission and status lookup and blocks duplicate open applications", () => {
@@ -75,9 +75,9 @@ describe("Release 26 administrator application approvals", () => {
 
   it("keeps application models platform-only in normal and interactive tenant clients", () => {
     const tenantDb = source("lib/tenant-db.ts");
-    const verifier = source("../scripts/verify-tenant-isolation.ts");
+    const verifier = source("../scripts/verify-release26-platform-isolation.ts");
     expect(tenantDb).toContain('businessApplication: "BusinessApplication"');
-    expect(verifier).toContain("Tenant client accessed platform business applications");
-    expect(verifier).toContain("Interactive tenant transaction accessed business applications");
+    expect(verifier).toContain("Tenant client accessed Release 26 business applications");
+    expect(verifier).toContain("Interactive tenant transaction accessed Release 26 business applications");
   });
 });
