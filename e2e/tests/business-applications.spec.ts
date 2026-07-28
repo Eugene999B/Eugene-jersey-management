@@ -101,8 +101,9 @@ test("public shop application becomes a controlled tenant with a working public 
   await approvalForm.getByRole("button", { name: "Approve and create shop" }).click();
   await expect(page).toHaveURL(/approved=shop/);
   await expect(page.getByText(/The shop and owner account were created/)).toBeVisible();
-  await expect(page.getByText(receipt.loginId, { exact: true })).toBeVisible();
-  await expect(page.getByText(/Pending/).first()).toBeVisible();
+  const approvedShopRecord = page.getByRole("heading", { name: "Approved shop record" }).locator("..");
+  await expect(approvedShopRecord).toContainText(receipt.loginId);
+  await expect(approvedShopRecord).toContainText("Pending");
 
   await openStatus(page, receipt.reference, receipt.token);
   await expect(page.getByText("Approved", { exact: true })).toBeVisible();
@@ -138,6 +139,7 @@ test("supplier application remains tied to one shop and exposes only an applican
   await page.getByRole("link", { name: reference }).click();
   await expect(page.getByText("EJM Browser Test Shop", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Start or resume review" }).click();
+  await expect(page).toHaveURL(/reviewing=true/);
 
   const changesForm = page.getByRole("heading", { name: "Request changes" }).locator("..");
   await changesForm.locator('[name="decisionReason"]').fill("Please provide an updated registration document and confirm the exact products you intend to supply.");
