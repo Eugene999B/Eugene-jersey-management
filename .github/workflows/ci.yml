@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           tenant = Path("src/lib/tenant-db.ts")
@@ -35,29 +36,27 @@ jobs:
 
           verify = Path("scripts/verify-tenant-isolation.ts")
           text = verify.read_text()
-          anchor = '''    await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.$transaction(async (transaction) => transaction.accountTwoFactor.findMany()),
-              "Interactive transaction accessed platform-global two-factor records.",
-            );
-          '''
-          addition = anchor + '''
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.platformGovernanceSettings.findMany(),
-              "Tenant client accessed platform governance settings.",
-            );
-
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.$transaction(async (transaction) => transaction.platformGovernanceSettings.findMany()),
-              "Interactive transaction accessed platform governance settings.",
-            );
-          '''
           if "Tenant client accessed platform governance settings." not in text:
-              if anchor not in text:
+              pattern = re.compile(
+                  r'(\n\s*await expectRejects\(\n\s*TenantDatabaseAccessError,\n\s*\(\) => tenantA\.\$transaction\(async \(transaction\) => transaction\.accountTwoFactor\.findMany\(\)\),\n\s*"Interactive transaction accessed platform-global two-factor records\.",\n\s*\);\n)'
+              )
+              match = pattern.search(text)
+              if not match:
                   raise SystemExit("isolation assertion anchor missing")
-              text = text.replace(anchor, addition, 1)
+              addition = match.group(1) + '''
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.platformGovernanceSettings.findMany(),
+      "Tenant client accessed platform governance settings.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.platformGovernanceSettings.findMany()),
+      "Interactive transaction accessed platform governance settings.",
+    );
+'''
+              text = text[:match.start()] + addition + text[match.end():]
           text = text.replace(
               "design-version denial, two-factor global-model denial, and raw SQL denial.",
               "design-version denial, platform-governance denial, two-factor global-model denial, and raw SQL denial.",
