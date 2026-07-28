@@ -68,6 +68,7 @@ const modelPropertyNames: Record<string, string> = {
   productVariant: "ProductVariant",
   customer: "Customer",
   buyerAccount: "BuyerAccount",
+  buyerEmailVerification: "BuyerEmailVerification",
   accountTwoFactor: "AccountTwoFactor",
   platformGovernanceSettings: "PlatformGovernanceSettings",
   subscriptionPlan: "SubscriptionPlan",
@@ -350,6 +351,25 @@ async function scopeOperationArguments(model: string, operation: string, argsVal
   return scopedArgs;
 }
 
+function looksLikePrismaDelegate(value: unknown) {
+  if (typeof value !== "object" || value === null) return false;
+  return ["findUnique", "findFirst", "findMany", "create", "update", "delete"].some(
+    (operation) => typeof Reflect.get(value, operation) === "function",
+  );
+}
+
+function blockedUnknownDelegate(property: string, delegate: object) {
+  return new Proxy(delegate, {
+    get(delegateTarget, operation, delegateReceiver) {
+      const method = Reflect.get(delegateTarget, operation, delegateReceiver);
+      if (typeof operation !== "string" || typeof method !== "function") return method;
+      return () => {
+        throw new TenantDatabaseAccessError(`${property}.${operation} is not registered for tenant access.`);
+      };
+    },
+  });
+}
+
 function createTenantTransactionDb(transaction: Prisma.TransactionClient, shopId: string) {
   return new Proxy(transaction, {
     get(target, property, receiver) {
@@ -360,9 +380,9 @@ function createTenantTransactionDb(transaction: Prisma.TransactionClient, shopId
         };
       }
 
-      const model = modelPropertyNames[property];
-      if (!model) return Reflect.get(target, property, receiver);
       const delegate = Reflect.get(target, property, target);
+      const model = modelPropertyNames[property];
+      if (!model) return looksLikePrismaDelegate(delegate) ? blockedUnknownDelegate(property, delegate) : Reflect.get(target, property, receiver);
       if (typeof delegate !== "object" || delegate === null) return delegate;
 
       return new Proxy(delegate, {
