@@ -81,6 +81,68 @@ canvas {
   scrollbar-width: thin;
 }
 
+.mobile-design-studio > div > div.grid > main > div:nth-child(2) {
+  background-color: #e2e8f0;
+  background-image: radial-gradient(circle at 1px 1px, rgb(71 85 105 / 0.16) 1px, transparent 0);
+  background-size: 22px 22px;
+}
+
+@media (min-width: 1200px) and (max-width: 1535px) {
+  .mobile-design-studio > div > div.grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .mobile-design-studio > div > div.grid > main,
+  .mobile-design-studio > div > div.grid > aside {
+    min-width: 0;
+    align-self: start;
+  }
+
+  .mobile-design-studio > div > div.grid > main {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .mobile-design-studio > div > div.grid > aside:first-of-type {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .mobile-design-studio > div > div.grid > aside:last-of-type {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .mobile-design-studio > div > div.grid > main > div:nth-child(2) {
+    min-height: clamp(500px, 64vh, 660px);
+    padding: 1rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .mobile-design-studio > div > div.grid {
+    align-items: start;
+  }
+
+  .mobile-design-studio > div > div.grid > main,
+  .mobile-design-studio > div > div.grid > aside {
+    min-width: 0;
+    align-self: start;
+  }
+
+  .mobile-design-studio > div > div.grid > main {
+    position: sticky;
+    top: 1rem;
+    box-shadow: 0 20px 48px rgb(15 23 42 / 0.12);
+  }
+
+  .mobile-design-studio > div > div.grid > main > div:nth-child(2) {
+    min-height: clamp(500px, 68vh, 700px);
+    padding: 1rem;
+  }
+}
+
 @media (max-width: 1199px) {
   .mobile-design-studio > div > div.grid > main {
     order: -1;
