@@ -1,0 +1,170 @@
+name: Apply Release 24 guard patches
+
+on:
+  push:
+    branches:
+      - work/release-24-communication-credits
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact guard patches
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected text not found in {path}: {old[:100]!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace(
+              "src/lib/tenant-db.ts",
+              '  shopSubscriptionContract: "ShopSubscriptionContract",\n',
+              '  shopSubscriptionContract: "ShopSubscriptionContract",\n'
+              '  communicationCreditPackage: "CommunicationCreditPackage",\n'
+              '  communicationCreditPackageVersion: "CommunicationCreditPackageVersion",\n'
+              '  communicationCreditPackageChangeRequest: "CommunicationCreditPackageChangeRequest",\n'
+              '  shopCommunicationWallet: "ShopCommunicationWallet",\n'
+              '  communicationCreditPurchase: "CommunicationCreditPurchase",\n'
+              '  communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry",\n',
+          )
+
+          replace(
+              "src/tests/tenant-isolation-architecture.test.ts",
+              '    expect(tenantDb).toContain(\'shopSubscriptionContract: "ShopSubscriptionContract"\');\n',
+              '    expect(tenantDb).toContain(\'shopSubscriptionContract: "ShopSubscriptionContract"\');\n'
+              '    expect(tenantDb).toContain(\'communicationCreditPackage: "CommunicationCreditPackage"\');\n'
+              '    expect(tenantDb).toContain(\'communicationCreditPackageVersion: "CommunicationCreditPackageVersion"\');\n'
+              '    expect(tenantDb).toContain(\'communicationCreditPackageChangeRequest: "CommunicationCreditPackageChangeRequest"\');\n'
+              '    expect(tenantDb).toContain(\'shopCommunicationWallet: "ShopCommunicationWallet"\');\n'
+              '    expect(tenantDb).toContain(\'communicationCreditPurchase: "CommunicationCreditPurchase"\');\n'
+              '    expect(tenantDb).toContain(\'communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"\');\n',
+          )
+          replace(
+              "src/tests/tenant-isolation-architecture.test.ts",
+              '    expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");\n',
+              '    expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");\n'
+              '    expect(verifier).toContain("Tenant client accessed the communication credit package catalogue");\n'
+              '    expect(verifier).toContain("Interactive tenant transaction accessed communication credit wallets");\n',
+          )
+
+          subscription_block = '''    await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.$transaction(async (transaction) => transaction.shopSubscriptionContract.findMany()),
+              "Interactive tenant transaction accessed shop subscription contracts.",
+            );
+'''
+          communication_block = subscription_block + '''
+            await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.communicationCreditPackage.findMany(),
+              "Tenant client accessed the communication credit package catalogue.",
+            );
+
+            await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.communicationCreditPackageVersion.findMany(),
+              "Tenant client accessed immutable communication credit package versions.",
+            );
+
+            await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.communicationCreditPackageChangeRequest.findMany(),
+              "Tenant client accessed communication credit commercial approval requests.",
+            );
+
+            await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.$transaction(async (transaction) => transaction.shopCommunicationWallet.findMany()),
+              "Interactive tenant transaction accessed communication credit wallets.",
+            );
+
+            await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.$transaction(async (transaction) => transaction.communicationCreditPurchase.findMany()),
+              "Interactive tenant transaction accessed communication credit purchases.",
+            );
+
+            await expectRejects(
+              TenantDatabaseAccessError,
+              () => tenantA.$transaction(async (transaction) => transaction.communicationCreditLedgerEntry.findMany()),
+              "Interactive tenant transaction accessed communication credit ledger entries.",
+            );
+'''
+          replace("scripts/verify-tenant-isolation.ts", subscription_block, communication_block)
+          replace(
+              "scripts/verify-tenant-isolation.ts",
+              'governance denial, subscription-catalogue denial, two-factor global-model denial',
+              'governance denial, subscription-catalogue denial, communication-credit denial, two-factor global-model denial',
+          )
+
+          replace(
+              "src/app/api/paystack/webhook/route.ts",
+              '''    let result = await settleCommunicationCreditPurchase(payload.data);
+              if (result.status === "ignored" && result.reason === "credit-purchase-not-found") {
+                result = await settlePaystackTransaction(payload.data);
+              }
+''',
+              '''    const creditResult = await settleCommunicationCreditPurchase(payload.data);
+              const result = creditResult.status === "ignored" && creditResult.reason === "credit-purchase-not-found"
+                ? await settlePaystackTransaction(payload.data)
+                : creditResult;
+''',
+          )
+
+          replace(
+              "src/lib/messaging.ts",
+              '''export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
+              const config = providerConfig(channel);
+''',
+              '''export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
+              const config = providerConfig(channel);
+              if (config.provider.toLowerCase() === "console") return false;
+''',
+          )
+
+          replace(
+              "src/app/admin/billing/communication-actions.ts",
+              '        isActive: true,\n        version: 1,',
+              '        isActive: false,\n        version: 1,',
+          )
+
+          replace(
+              "src/app/dashboard/messages/credit-actions.ts",
+              '  redirect(authorizationUrl);\n',
+              '  if (!authorizationUrl) messagesRedirect("credit-checkout");\n  redirect(authorizationUrl);\n',
+          )
+
+          replace(
+              "src/app/dashboard/debts/page.tsx",
+              '  "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",\n',
+              '  "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",\n'
+              '  "sms-credits": "This shop has no SMS credits. An owner or manager can purchase an approved package from Messages.",\n'
+              '  "whatsapp-credits": "This shop has no WhatsApp credits. An owner or manager can purchase an approved package from Messages.",\n',
+          )
+          replace(
+              "src/app/dashboard/debts/page.tsx",
+              '{params.error && debtErrors[params.error] ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">',
+              '{params.error && debtErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">',
+          )
+
+          Path(".github/workflows/release-24-apply-guard-patches.yml").unlink()
+          PY
+      - name: Commit guard patches and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Harden communication credit isolation and UI guards"
+          git push origin HEAD:work/release-24-communication-credits
