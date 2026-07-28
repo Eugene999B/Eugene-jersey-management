@@ -96,6 +96,6 @@ export async function requestBuyerPasswordResetAction(formData: FormData) {
       entityId: buyer.id,
       metadata: { channel: parsed.data.channel, deliveryAccepted: false },
     });
-    redirect(`/buyer/forgot-password?error=send&next=${encodeURIComponent(next)}`);
+    redirect(`/buyer/forgot-password?sent=1&next=${encodeURIComponent(next)}`);
   }
 }
