@@ -176,6 +176,30 @@ async function main() {
 
     await expectRejects(
       TenantDatabaseAccessError,
+      () => tenantA.subscriptionPlan.findMany(),
+      "Tenant client accessed the platform subscription plan catalogue.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.subscriptionPlanVersion.findMany(),
+      "Tenant client accessed immutable subscription plan versions.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.subscriptionPlanChangeRequest.findMany(),
+      "Tenant client accessed commercial approval requests.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.shopSubscriptionContract.findMany()),
+      "Interactive tenant transaction accessed shop subscription contracts.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
       () => tenantA.designJobVersion.findMany(),
       "Tenant client accessed design versions outside the dedicated shop-filtered API.",
     );
@@ -211,7 +235,7 @@ async function main() {
     const tenantBCustomerAfter = await platformDb.customer.findUniqueOrThrow({ where: { id: tenantBData.customer.id } });
     assert(tenantBCustomerAfter.name === "Isolation Shop B customer" && tenantBCustomerAfter.notes === null, "Tenant B data changed during negative tests.");
 
-    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, platform-governance denial, two-factor global-model denial, and raw SQL denial.");
+    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, governance denial, subscription-catalogue denial, two-factor global-model denial, and raw SQL denial.");
   } finally {
     await deleteFixtures();
     await platformDb.$disconnect();
