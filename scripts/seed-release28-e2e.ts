@@ -1,11 +1,11 @@
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import {
   AccountKind,
   EmailDeliveryStatus,
   PasswordRecoveryChannel,
   Role,
 } from "@prisma/client";
-import { hashPassword } from "@/lib/auth";
 import { platformDb } from "@/lib/platform-db";
 import { hashToken } from "@/lib/tokens";
 
@@ -24,7 +24,7 @@ async function main() {
   if (process.env.NODE_ENV === "production") throw new Error("Release 28 browser seed must never run in production.");
   const password = process.env.E2E_PASSWORD;
   if (!password || password.length < 12) throw new Error("E2E_PASSWORD of at least 12 characters is required.");
-  const passwordHash = await hashPassword(password);
+  const passwordHash = await bcrypt.hash(password, 12);
 
   const staff = await platformDb.user.upsert({
     where: { email: RELEASE28_STAFF_EMAIL },
