@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import { Building2, MessageCircle, ShieldCheck, UsersRound } from "lucide-react";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
+import { AdminPageHelp } from "@/components/admin/admin-page-help";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireRole } from "@/lib/auth";
 import { canAccessPlatformPermission, getAllowedPlatformPermissions, platformAdminHomePath } from "@/lib/platform-admin";
@@ -13,6 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireRole(permissions.superAdmin);
   const allowedPermissions = await getAllowedPlatformPermissions(session.id);
+  const pathname = (await headers()).get("x-pathname") || "/admin";
   const homePath = platformAdminHomePath(allowedPermissions);
   const canManageShops = canAccessPlatformPermission(allowedPermissions, "shops");
   const canSupport = canAccessPlatformPermission(allowedPermissions, "support");
@@ -53,7 +56,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               </div>
             </div>
           </header>
-          <main className="p-3 sm:p-4 lg:p-6">{children}</main>
+          <main className="p-3 sm:p-4 lg:p-6">{allowedPermissions === null ? <AdminPageHelp pathname={pathname} /> : null}{children}</main>
         </div>
       </div>
     </div>

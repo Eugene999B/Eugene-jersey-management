@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { staffSlotState } from "@/lib/subscription-entitlements";
 import {
   DEFAULT_PLAN_CATALOGUE,
-  canApproveCommercialChange,
   resolvePlanPrice,
   subscriptionDates,
   subscriptionPlanSnapshot,
@@ -52,11 +51,13 @@ describe("subscription plan catalogue", () => {
     }
   });
 
-  it("requires a different administrator for commercial approval", () => {
-    expect(canApproveCommercialChange("admin-a", "admin-a")).toBe(false);
-    expect(canApproveCommercialChange("admin-a", "admin-b")).toBe(true);
-    expect(canApproveCommercialChange("", "admin-b")).toBe(false);
+  it("keeps immutable version snapshots while the sole administrator saves directly", () => {
+    const snapshot = subscriptionPlanSnapshot(plan({ updatedById: "admin-a", version: 5 }));
+    expect(snapshot.version).toBe(5);
+    expect(snapshot.monthlyPrice).toBe("150.00");
+    expect(snapshot.yearlyPrice).toBe("1500.00");
   });
+
 
   it("serializes an immutable approved plan snapshot with decimal prices", () => {
     expect(subscriptionPlanSnapshot(plan())).toEqual({

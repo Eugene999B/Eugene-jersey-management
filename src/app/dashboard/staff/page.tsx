@@ -83,7 +83,7 @@ export default async function StaffPage({ searchParams }: Props) {
           {users.map((user) => (
             <article key={user.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">
               <div className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0"><p className="truncate font-semibold">{user.name}</p><p className="break-all text-sm text-slate-500">{user.email}</p></div>
+                <div className="min-w-0"><p className="truncate font-semibold">{user.name}</p><p className="break-all text-sm text-slate-500">Login ID: {user.adminLoginId ?? user.email}</p><p className="break-all text-xs text-slate-400">Email: {user.email}</p></div>
                 <Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm"><Badge>{roleLabels[user.role]}</Badge><span className="text-slate-500">Last login: {user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</span></div>
@@ -98,7 +98,7 @@ export default async function StaffPage({ searchParams }: Props) {
             <tbody className="divide-y divide-[#ded8cd] bg-white">
               {users.map((user) => (
                 <tr key={user.id}>
-                  <td className="p-4"><p className="font-semibold">{user.name}</p><p className="text-slate-500">{user.email}</p></td>
+                  <td className="p-4"><p className="font-semibold">{user.name}</p><p className="text-slate-500">Login ID: {user.adminLoginId ?? user.email}</p><p className="text-xs text-slate-400">{user.email}</p></td>
                   <td className="p-4"><Badge>{roleLabels[user.role]}</Badge></td>
                   <td className="p-4"><Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge></td>
                   <td className="p-4 text-slate-500">{user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</td>

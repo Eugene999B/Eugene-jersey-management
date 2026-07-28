@@ -1,19 +1,29 @@
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, CircleOff, Cloud, CreditCard, LockKeyhole, MessageSquareText } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleOff, Cloud, CreditCard, Eye, EyeOff, Globe2, KeyRound, LockKeyhole, MessageSquareText, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { updateShopSettingsAction } from "@/app/dashboard/settings/actions";
+import { CopyLoginIdButton } from "@/components/auth/copy-login-id-button";
+import { Badge } from "@/components/ui/badge";
+import { updateShopSettingsAction, updateStorefrontVisibilityAction } from "@/app/dashboard/settings/actions";
 import { prisma } from "@/lib/db";
 import { currency } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
-export default async function SettingsPage() {
-  await requireRole(permissions.settings);
+type Props = { searchParams?: Promise<{ error?: string; storefront?: string }> };
+
+export default async function SettingsPage({ searchParams }: Props) {
+  const params = (await searchParams) ?? {};
+  const session = await requireRole(permissions.settings);
   const { shop } = await getTenantContext();
   if (!shop) return null;
-  const paymentConfig = await prisma.shopPaymentConfig.findUnique({ where: { shopId: shop.id } });
+  const [paymentConfig, account] = await Promise.all([
+    prisma.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
+    prisma.user.findUnique({ where: { id: session.id }, select: { adminLoginId: true } }),
+  ]);
+  const loginId = account?.adminLoginId ?? session.email;
+  const storefrontMode = !shop.storefrontEnabled ? "OFFLINE" : shop.publicOrderingEnabled ? "ONLINE" : "BROWSE";
   const paystackServerReady = Boolean(process.env.PAYSTACK_SECRET_KEY);
   const paystackShopReady = Boolean(paymentConfig?.paystackSubaccountCode);
   const smsProvider = (process.env.SMS_PROVIDER ?? "console").toLowerCase();
@@ -36,6 +46,28 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-5">
+      {params.error === "verification-required" ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Your shop is registered, but the platform administrator must verify it before you can place it on the public marketplace.</div> : null}
+      {params.error === "storefront-mode" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Choose a valid online shop status.</div> : null}
+      {params.storefront ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Online shop status updated successfully.</div> : null}
+
+      <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+        <div className="panel p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><Globe2 size={20} /><h1 className="text-xl font-semibold">Online shop status</h1></div><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Registration keeps your private shop workspace active. This separate control decides whether customers can see and order from your public shop.</p></div><Badge tone={storefrontMode === "ONLINE" ? "green" : storefrontMode === "BROWSE" ? "blue" : "orange"}>{storefrontMode}</Badge></div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <form action={updateStorefrontVisibilityAction}><input type="hidden" name="mode" value="ONLINE" /><button type="submit" className={`min-h-28 w-full rounded-xl border p-4 text-left ${storefrontMode === "ONLINE" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}><ShoppingBag size={20} /><strong className="mt-3 block">Online + ordering</strong><span className="mt-1 block text-xs leading-5 text-slate-600">Customers can find the shop and place orders.</span></button></form>
+            <form action={updateStorefrontVisibilityAction}><input type="hidden" name="mode" value="BROWSE" /><button type="submit" className={`min-h-28 w-full rounded-xl border p-4 text-left ${storefrontMode === "BROWSE" ? "border-cyan-400 bg-cyan-50" : "border-slate-200 bg-white"}`}><Eye size={20} /><strong className="mt-3 block">Visible, orders paused</strong><span className="mt-1 block text-xs leading-5 text-slate-600">Customers can browse, but cannot checkout.</span></button></form>
+            <form action={updateStorefrontVisibilityAction}><input type="hidden" name="mode" value="OFFLINE" /><button type="submit" className={`min-h-28 w-full rounded-xl border p-4 text-left ${storefrontMode === "OFFLINE" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}><EyeOff size={20} /><strong className="mt-3 block">Offline</strong><span className="mt-1 block text-xs leading-5 text-slate-600">Private workspace stays active; public shop is hidden.</span></button></form>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3 text-sm"><span><strong>Registration:</strong> {shop.isActive ? "Active" : "Suspended"}</span><span><strong>Verification:</strong> {shop.verificationStatus}</span>{shop.storefrontEnabled ? <Link href={`/shop/${shop.slug}`} className="font-semibold text-[var(--shop-primary)]">Open public link</Link> : <span className="text-slate-500">Public link hidden by owner choice</span>}</div>
+        </div>
+
+        <div className="panel p-5">
+          <div className="flex items-center gap-2"><KeyRound size={20} /><h2 className="text-xl font-semibold">Your Login ID</h2></div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Use this ID or your email on the EJM sign-in page. Keep it with your password instructions.</p>
+          <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-cyan-700">Login ID</p><p className="mt-2 break-all text-xl font-semibold text-cyan-950">{loginId}</p><div className="mt-3"><CopyLoginIdButton loginId={loginId} /></div></div>
+        </div>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-3">
         <div className={`rounded-lg border p-4 ${paystackServerReady && paystackShopReady ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
           <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><CreditCard size={18} /><h2 className="font-semibold">Paystack readiness</h2></div>{paystackServerReady && paystackShopReady ? <CheckCircle2 size={19} className="text-emerald-700" /> : <AlertTriangle size={19} className="text-amber-700" />}</div>
@@ -71,8 +103,6 @@ export default async function SettingsPage() {
               <label className="block"><span className="mb-1 block text-sm font-semibold">Secondary color</span><input className="field h-12" name="secondaryColor" type="color" defaultValue={shop.secondaryColor} /></label>
             </div>
             <div className="grid gap-3 rounded-[8px] bg-white p-3 text-sm">
-              <label className="flex items-center gap-2"><input name="storefrontEnabled" type="checkbox" defaultChecked={shop.storefrontEnabled} />Storefront link is visible</label>
-              <label className="flex items-center gap-2"><input name="publicOrderingEnabled" type="checkbox" defaultChecked={shop.publicOrderingEnabled} />Customers can place online orders</label>
               <label className="block"><span className="mb-1 block text-sm font-semibold">Cash order hold minutes</span><input className="field" name="cashOrderHoldMinutes" type="number" min="15" max="10080" defaultValue={shop.cashOrderHoldMinutes} /></label>
             </div>
 
@@ -98,7 +128,7 @@ export default async function SettingsPage() {
         </section>
 
         <section className="panel overflow-hidden">
-          <div className="bg-[var(--shop-primary)] p-6 text-white"><Image src={shop.logoUrl || "/brand/accra-pro.svg"} alt={shop.name} width={56} height={56} className="rounded-[8px]" /><h2 className="mt-5 text-3xl font-semibold">{shop.name}</h2><p className="mt-2 text-white/75">Brand preview for dashboards, receipts, and tracking pages.</p><Link className="mt-5 inline-flex rounded-[8px] bg-white px-4 py-2 text-sm font-semibold text-slate-900" href={`/shop/${shop.slug}`}>Open public shop</Link></div>
+          <div className="bg-[var(--shop-primary)] p-6 text-white"><Image src={shop.logoUrl || "/brand/accra-pro.svg"} alt={shop.name} width={56} height={56} className="rounded-[8px]" /><h2 className="mt-5 text-3xl font-semibold">{shop.name}</h2><p className="mt-2 text-white/75">Brand preview for dashboards, receipts, and tracking pages.</p>{shop.storefrontEnabled ? <Link className="mt-5 inline-flex rounded-[8px] bg-white px-4 py-2 text-sm font-semibold text-slate-900" href={`/shop/${shop.slug}`}>Open public shop</Link> : <p className="mt-5 rounded-lg bg-white/10 px-4 py-3 text-sm">The public shop is currently offline. Your private dashboard remains active.</p>}</div>
           <div className="grid gap-3 p-5 md:grid-cols-3">{["Catalog", "POS", "Orders"].map((item) => <div key={item} className="rounded-[8px] border border-[#ded8cd] bg-white p-4"><p className="text-sm text-slate-500">{item}</p><div className="mt-4 h-2 rounded-full bg-[var(--shop-secondary)]" /></div>)}</div>
         </section>
       </div>

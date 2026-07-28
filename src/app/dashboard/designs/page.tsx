@@ -1,4 +1,4 @@
-import { Palette, ShieldCheck } from "lucide-react";
+import { Download, Palette, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DesignStudioAdvanced } from "@/components/design/production-studio-advanced";
 import { ensureShopMachineProfiles } from "@/lib/design-machine-profile-server";
@@ -30,7 +30,7 @@ export default async function DesignsPage() {
           <h1 className="text-2xl font-semibold">Design Studio</h1>
           <p className="mt-2 text-sm text-slate-500">Create layered artwork on the real production material, preserve immutable shop versions, and produce vector-only cut files through this shop&apos;s own machine profiles.</p>
         </div>
-        <Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge>
+<div className="flex flex-wrap gap-2"><a href="/api/guides/design-studio" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Download size={16} /> Download quick guide</a><Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge></div>
       </div>
 
       <div className="mobile-design-studio">

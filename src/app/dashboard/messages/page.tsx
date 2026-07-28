@@ -19,8 +19,8 @@ type MessagesPageProps = {
 
 const errorMessages: Record<string, string> = {
   invalid: "Check the recipient, channel and message body.",
-  "sms-credits": "This shop has no SMS credits. An owner or manager can purchase an approved package below.",
-  "whatsapp-credits": "This shop has no WhatsApp credits. An owner or manager can purchase an approved package below.",
+  "sms-credits": "This shop has no SMS credits. An owner or manager can purchase a configured package below.",
+  "whatsapp-credits": "This shop has no WhatsApp credits. An owner or manager can purchase a configured package below.",
   "credit-package": "That communication credit package is unavailable or incomplete.",
   "credit-paystack-unavailable": "Paystack is not configured for administrator-owned credit purchases.",
   "credit-checkout": "The communication credit checkout could not be initialized.",
@@ -81,18 +81,18 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
       {canPurchaseCredits ? (
         <section className="panel p-4 sm:p-5">
           <div className="flex items-center gap-2"><WalletCards size={19} className="text-[var(--shop-primary)]" /><h2 className="text-xl font-semibold">Purchase communication credits</h2></div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Approved packages are paid through the EJM administrator Paystack account. Store sales still settle separately to this shop’s own subaccount.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Configured packages are paid through the EJM administrator Paystack account. Store sales still settle separately to this shop’s own subaccount.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {credits.packages.map((creditPackage) => (
               <article key={creditPackage.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">
                 <div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{creditPackage.name}</p><p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{creditPackage.channel} · version {creditPackage.version}</p></div><Badge>{creditPackage.channel}</Badge></div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{creditPackage.description || "Approved communication package."}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{creditPackage.description || "Configured communication package."}</p>
                 <p className="mt-3 text-2xl font-semibold">{currency(creditPackage.price?.toString() ?? 0, creditPackage.currency)}</p>
                 <p className="mt-1 text-sm text-slate-500">{((creditPackage.creditUnits ?? 0) + creditPackage.bonusUnits).toLocaleString("en-GB")} total credits{creditPackage.bonusUnits ? ` · ${creditPackage.bonusUnits.toLocaleString("en-GB")} bonus` : ""}</p>
                 <form action={purchaseCommunicationCreditsAction} className="mt-4"><input type="hidden" name="packageId" value={creditPackage.id} /><Button type="submit" className="w-full">Buy with Paystack</Button></form>
               </article>
             ))}
-            {!credits.packages.length ? <p className="rounded-xl border border-dashed border-[#ded8cd] p-4 text-sm text-slate-500">No approved public packages are available yet. The platform administrator must configure and approve them first.</p> : null}
+            {!credits.packages.length ? <p className="rounded-xl border border-dashed border-[#ded8cd] p-4 text-sm text-slate-500">No configured public packages are available yet. The platform administrator must configure, activate and publish them first.</p> : null}
           </div>
         </section>
       ) : null}

@@ -66,7 +66,7 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
         <div>
           <Link className="text-sm font-semibold text-slate-500 hover:text-slate-950" href="/admin">Back to shops</Link>
           <h1 className="mt-2 text-3xl font-semibold">{shop.name}</h1>
-          <p className="mt-1 text-sm text-slate-600">/{shop.slug} - network {shop.networkCode ?? "not assigned"} - staff ID {shop.staffLoginId ?? "not assigned"} - created {shortDate(shop.createdAt)}</p>
+          <p className="mt-1 text-sm text-slate-600">/{shop.slug} - network {shop.networkCode ?? "not assigned"} - owner Login ID {shop.staffLoginId ?? "not assigned"} - created {shortDate(shop.createdAt)}</p>
         </div>
         <form action={toggleShopAction}><input type="hidden" name="shopId" value={shop.id} /><Button variant={shop.isActive ? "outline" : "primary"}>{shop.isActive ? "Suspend shop" : "Reactivate shop"}</Button></form>
       </div>
@@ -84,7 +84,7 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Shop access</p><h2 className="mt-2 text-xl font-semibold">{shop.staffLoginId ?? "Missing staff ID"}</h2><p className="mt-2 text-sm text-slate-500">Staff must enter this ID before email and password access opens.</p></div>
+        <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Shop access</p><h2 className="mt-2 text-xl font-semibold">{shop.staffLoginId ?? "Missing staff ID"}</h2><p className="mt-2 text-sm text-slate-500">The owner can use this Login ID or their email on the sign-in page. Individual staff accounts use their own Login ID when assigned, otherwise their email.</p></div>
         <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Store payment account</p><h2 className="mt-2 text-xl font-semibold">{routingHealthy ? "Verified subaccount" : titleCase(paystackHealth.state)}</h2><p className="mt-2 text-sm text-slate-500">{paystackHealth.detail}</p></div>
         <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Mobile money</p><h2 className="mt-2 text-xl font-semibold">{shop.paymentConfig?.shopMomoNumber ?? "Not set"}</h2><p className="mt-2 text-sm text-slate-500">{shop.paymentConfig?.shopMomoNetwork ?? "Shop can add its own settlement line."}</p></div>
         <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Billing</p><h2 className="mt-2 text-xl font-semibold">{shop.billingCycle}</h2><p className="mt-2 text-sm text-slate-500">{shop.subscriptionStatus} - {shop.billingCycle === "YEARLY" ? currency(shop.yearlyPrice?.toString() ?? "0") : currency(shop.monthlyPrice?.toString() ?? "0")}</p></div>
@@ -132,7 +132,7 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
           {shop.credentialDocumentUrl ? <Link className="mt-4 inline-flex text-sm font-semibold text-[var(--shop-primary)]" href={shop.credentialDocumentUrl}>Open credential document</Link> : null}
           <div className="mt-5 flex flex-wrap gap-2"><form action={verifyShopCredentialsAction}><input type="hidden" name="shopId" value={shop.id} /><Button>Verify shop</Button></form><form action={rejectShopCredentialsAction}><input type="hidden" name="shopId" value={shop.id} /><Button variant="outline">Reject credentials</Button></form></div>
         </div>
-        <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Approval record</p><h2 className="mt-2 text-xl font-semibold">{shop.verifiedAt ? shortDate(shop.verifiedAt) : "Not verified"}</h2><p className="mt-2 text-sm text-slate-500">Verified shops appear in the public marketplace. Pending and rejected shops stay hidden from buyers.</p><div className="mt-4 grid gap-2 text-sm"><div className="rounded-[8px] bg-white px-3 py-2">Network code: <span className="font-semibold">{shop.networkCode ?? "Not assigned"}</span></div><div className="rounded-[8px] bg-white px-3 py-2">Staff login ID: <span className="font-semibold">{shop.staffLoginId ?? "Not assigned"}</span></div></div></div>
+        <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Verification record</p><h2 className="mt-2 text-xl font-semibold">{shop.verifiedAt ? shortDate(shop.verifiedAt) : "Not verified"}</h2><p className="mt-2 text-sm text-slate-500">Verification makes a shop eligible for the public marketplace. The shop owner still chooses whether the storefront is visible, ordering is paused, or the shop is fully online.</p><div className="mt-4 grid gap-2 text-sm"><div className="rounded-[8px] bg-white px-3 py-2">Network code: <span className="font-semibold">{shop.networkCode ?? "Not assigned"}</span></div><div className="rounded-[8px] bg-white px-3 py-2">Owner Login ID: <span className="font-semibold">{shop.staffLoginId ?? "Not assigned"}</span></div></div></div>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">

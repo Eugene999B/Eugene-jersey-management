@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Bell, CircleUserRound, Search, ShieldCheck } from "lucide-react";
+import { Bell, CircleUserRound, KeyRound, Search, ShieldCheck } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { CopyLoginIdButton } from "@/components/auth/copy-login-id-button";
 import { hasRole, permissions, type SessionUser } from "@/lib/rbac";
 
 type TopbarProps = {
@@ -9,7 +10,7 @@ type TopbarProps = {
 };
 
 export async function DashboardTopbar({ session, shopId }: TopbarProps) {
-  const [announcement, unreadNotifications] = await Promise.all([
+  const [announcement, unreadNotifications, account] = await Promise.all([
     prisma.announcement.findFirst({
       where: {
         OR: [{ shopId }, { isGlobal: true }],
@@ -20,7 +21,9 @@ export async function DashboardTopbar({ session, shopId }: TopbarProps) {
     prisma.notification.count({
       where: { shopId, OR: [{ userId: session.id }, { userId: null }], readAt: null },
     }),
+    prisma.user.findUnique({ where: { id: session.id }, select: { adminLoginId: true } }),
   ]);
+  const loginId = account?.adminLoginId ?? session.email;
 
   return (
     <header className="border-b border-[#ded8cd] bg-[#f6f4ef]/95 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3">
@@ -35,6 +38,7 @@ export async function DashboardTopbar({ session, shopId }: TopbarProps) {
           <h1 className="truncate text-base font-semibold text-slate-950 sm:text-xl">{session.name}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <div className="hidden items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-950 sm:flex" title="Use this Login ID or your email on the sign-in page"><KeyRound size={15} /><span><span className="block text-[10px] font-bold uppercase tracking-wide text-cyan-700">Login ID</span><strong>{loginId}</strong></span><CopyLoginIdButton loginId={loginId} compact /></div>
           <form action="/dashboard/orders" className="hidden min-w-[300px] items-center gap-2 rounded-lg border border-[#ded8cd] bg-white px-3 md:flex">
             <Search size={16} className="text-slate-400" />
             <input name="q" aria-label="Search orders" className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Receipt, customer, item or SKU" />

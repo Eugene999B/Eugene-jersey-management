@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { NotificationChannel, PaymentMethod, PaymentStatus, OrderStatus, Role } from "@prisma/client";
+import { DebtStatus, NotificationChannel, PaymentMethod, PaymentStatus, OrderStatus, Role } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -159,6 +159,13 @@ export async function POST(request: NextRequest) {
             },
           })
         : null);
+      const debtTotals = isCredit && customer
+        ? await tx.debt.aggregate({
+            where: { shopId: session.shopId!, customerId: customer.id, status: { notIn: [DebtStatus.PAID, DebtStatus.WRITTEN_OFF] } },
+            _sum: { principalAmount: true, paidAmount: true },
+          })
+        : null;
+      const previousOutstanding = Number(debtTotals?._sum.principalAmount ?? 0) - Number(debtTotals?._sum.paidAmount ?? 0);
 
     for (const item of parsed.data.items) {
       const variant = variantById.get(item.variantId);
@@ -235,7 +242,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-      return { order: createdOrder, customer };
+      return {
+        order: createdOrder,
+        customer,
+        creditSummary: isCredit && customer
+          ? { customerId: customer.id, customerName: customer.name, previousOutstanding, addedDebt: totalAmount, newOutstanding: previousOutstanding + totalAmount }
+          : null,
+      };
     });
   } catch (error) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
@@ -244,7 +257,7 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
-  const { order, customer } = checkoutResult;
+  const { order, customer, creditSummary } = checkoutResult;
 
   await audit({
     shopId: session.shopId,
@@ -299,5 +312,6 @@ export async function POST(request: NextRequest) {
     receiptNumber: order.receiptNumber,
     totalAmount,
     receiptUrl: `/api/receipts/${order.id}`,
+    creditSummary,
   });
 }

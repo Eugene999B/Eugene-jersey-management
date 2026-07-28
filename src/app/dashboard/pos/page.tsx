@@ -10,7 +10,7 @@ export default async function PosPage() {
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
-  const [products, customers] = await Promise.all([
+  const [products, customers, openDebts] = await Promise.all([
     prisma.product.findMany({
       where: { shopId: shop.id },
       include: { category: true, variants: { orderBy: { createdAt: "asc" } } },
@@ -22,12 +22,23 @@ export default async function PosPage() {
       orderBy: { updatedAt: "desc" },
       take: 500,
     }),
+    prisma.debt.findMany({
+      where: { shopId: shop.id, status: { notIn: ["PAID", "WRITTEN_OFF"] } },
+      select: { customerId: true, principalAmount: true, paidAmount: true },
+    }),
   ]);
+  const outstandingByCustomer = new Map<string, number>();
+  for (const debt of openDebts) {
+    outstandingByCustomer.set(
+      debt.customerId,
+      (outstandingByCustomer.get(debt.customerId) ?? 0) + Number(debt.principalAmount) - Number(debt.paidAmount),
+    );
+  }
 
   return (
     <PosTerminal
       currencyCode={shop.currency}
-      customers={customers}
+      customers={customers.map((customer) => ({ ...customer, outstandingBalance: outstandingByCustomer.get(customer.id) ?? 0 }))}
       products={products.map((product) => ({
         id: product.id,
         name: product.name,

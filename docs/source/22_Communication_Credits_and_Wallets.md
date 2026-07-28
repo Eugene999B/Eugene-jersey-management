@@ -23,19 +23,19 @@ This is not a shared tenant cash balance. It is a channel-specific allowance for
 2. Each package stores its code, channel, currency, price, paid units, bonus units, availability and version.
 3. Migration placeholders contain no invented price or credit quantity and cannot be purchased.
 4. A package shell may be created without commercial terms, but it remains inactive and private.
-5. A Billing administrator submits a written package proposal.
-6. The requester cannot approve their own proposal.
-7. A different Billing administrator approves or rejects it with a decision note.
-8. Approval fails closed when the package version changed after the proposal was submitted.
-9. Every approved change creates an immutable package-version snapshot.
-10. A pending purchase keeps the exact approved package version, price and unit quantity that the shop selected.
+5. The authenticated Billing administrator enters the price, units, state and written reason.
+6. Saving applies the package terms immediately.
+7. The save stores a before/after commercial history record and creates an immutable package-version snapshot.
+8. A stale save fails closed when the package version changed after the page loaded.
+9. There is no second-administrator or self-approval step.
+10. A pending purchase keeps the exact saved package version, price and unit quantity that the shop selected.
 
 ## Wallet isolation
 
 1. Every shop has one SMS wallet and one WhatsApp wallet.
 2. Existing shops start at zero in both wallets.
 3. One shop can never spend, read or alter another shop's credits.
-4. Package catalogue, approval, purchase, wallet and ledger models are blocked from the generic shop tenant client and interactive tenant transactions.
+4. Package catalogue, history, purchase, wallet and ledger models are blocked from the generic shop tenant client and interactive tenant transactions.
 5. Shop pages access balances and purchases only through dedicated reviewed repositories that require an explicit `shopId`.
 6. Wallet balance can never fall below zero.
 
@@ -67,7 +67,7 @@ This is not a shared tenant cash balance. It is a channel-specific allowance for
 1. Owners and managers open **Messages** to see SMS and WhatsApp balances.
 2. Only owners and managers can initiate a package purchase.
 3. Cashiers may send authorised customer messages but cannot purchase credits.
-4. The shop selects an approved public package and continues to Paystack.
+4. The shop selects a configured public package and continues to Paystack.
 5. After verified payment, the selected channel wallet receives paid plus bonus units.
 6. Purchase history and the credit ledger remain visible in the shop workspace.
 7. Debt reminders blocked for insufficient credits do not increment the debt reminder counter.
@@ -75,10 +75,10 @@ This is not a shared tenant cash balance. It is a channel-specific allowance for
 ## Administrator workflow
 
 1. Open **Administrator → Communication credits**.
-2. Create package shells when another size or campaign package is required.
-3. Submit the real price, paid units, bonus units and availability as a proposal.
-4. Sign in as a different administrator with Billing permission.
-5. Approve or reject the proposal with a decision note.
+2. Create an inactive package shell when another size or campaign package is required.
+3. Enter the real price, paid units, bonus units and availability.
+4. Enter the business reason and select **Save changes now**.
+5. The new terms apply immediately and a version/history record is created automatically.
 6. Monitor wallet balances, verified package revenue and recent Paystack purchases.
 7. Never edit a shop wallet directly outside a reviewed adjustment workflow with a ledger entry.
 
@@ -96,8 +96,7 @@ It uses the existing variables:
 
 Before shops can purchase credits:
 
-1. Configure and approve at least one package for the required channel.
-2. Confirm the package is configured, active and public.
-3. Confirm the EJM administrator Paystack integration is healthy.
-4. Complete a controlled package purchase and verify that exactly one purchase ledger entry is created.
-5. Complete controlled SMS and WhatsApp delivery tests before enabling broad paid messaging.
+1. Configure, activate and publish at least one package for the required channel.
+2. Confirm the EJM administrator Paystack integration is healthy.
+3. Complete a controlled package purchase and verify that exactly one purchase ledger entry is created.
+4. Complete controlled SMS and WhatsApp delivery tests before enabling broad paid messaging.

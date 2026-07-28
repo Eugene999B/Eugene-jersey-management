@@ -13,8 +13,8 @@ const errorMessages: Record<string, string> = {
   "email-exists": "That owner email already belongs to an account. Existing users cannot be transferred between shops.",
   "slug-exists": "That shop web address is already in use.",
   "login-id-exists": "That staff login ID is already in use.",
-  plan: "Choose an approved, configured and active subscription plan.",
-  "plan-price": "The chosen plan is missing an approved price for that billing cycle.",
+  plan: "Choose a configured and active subscription plan.",
+  "plan-price": "The chosen plan is missing a saved price for that billing cycle.",
 };
 
 export default async function NewShopPage({ searchParams }: Props) {
@@ -26,10 +26,10 @@ export default async function NewShopPage({ searchParams }: Props) {
       <p className="text-sm font-semibold uppercase text-slate-500">New tenant</p>
       <h1 className="mt-2 text-3xl font-semibold">Create shop, owner, and verification file</h1>
       <p className="mt-3 text-sm text-slate-600">
-        The shop starts private and pending. Commercial terms come only from an approved plan version; prices cannot be typed directly into tenant creation.
+        The shop starts private and pending. Commercial terms come only from a saved plan version; prices cannot be typed directly into tenant creation.
       </p>
       {params.error ? <div className="mt-4 rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessages[params.error] ?? errorMessages.invalid}</div> : null}
-      {!plans.length ? <div className="mt-4 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">No configured active plan is available. Submit and approve plan terms from Billing before creating a tenant.</div> : null}
+      {!plans.length ? <div className="mt-4 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">No configured active plan is available. Save and activate plan terms from Billing before creating a tenant.</div> : null}
       <form action={createSecureShopAction} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <input className="field" name="name" placeholder="Shop name" required />
@@ -39,7 +39,7 @@ export default async function NewShopPage({ searchParams }: Props) {
           <input className="field" name="ownerName" placeholder="Owner full name" required />
           <input className="field" name="ownerEmail" type="email" placeholder="owner@example.com" autoComplete="off" required />
           <input className="field" name="ownerPhone" placeholder="Owner phone" autoComplete="off" />
-          <input className="field uppercase" name="staffLoginId" placeholder="Staff login ID, e.g. APS-STAFF" />
+          <input className="field uppercase" name="staffLoginId" placeholder="Owner Login ID, e.g. APS-OWNER" />
         </div>
         <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-4">
           <span className="font-semibold">Initial owner password</span>
@@ -61,11 +61,11 @@ export default async function NewShopPage({ searchParams }: Props) {
           <textarea className="field mt-4 min-h-20" name="credentialAddress" placeholder="Registered business address" />
         </div>
         <div className="rounded-[8px] border border-[#ded8cd] bg-white p-4">
-          <h2 className="font-semibold">Approved subscription terms</h2>
-          <p className="mt-1 text-xs text-slate-500">The tenant begins on the selected plan&apos;s approved trial duration and price snapshot.</p>
+          <h2 className="font-semibold">Saved subscription terms</h2>
+          <p className="mt-1 text-xs text-slate-500">The tenant begins on the selected plan&apos;s saved trial duration and price snapshot.</p>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <select className="field" name="planId" required defaultValue="">
-              <option value="">Select approved plan</option>
+              <option value="">Select saved plan</option>
               {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · v{plan.version} · {currency(plan.monthlyPrice?.toString() ?? "0")}/month · {currency(plan.yearlyPrice?.toString() ?? "0")}/year</option>)}
             </select>
             <select className="field" name="billingCycle" defaultValue={BillingCycle.MONTHLY}>

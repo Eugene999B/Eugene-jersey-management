@@ -35,7 +35,7 @@ export const subscriptionPlanSnapshotSchema = z.object({
 export type SubscriptionPlanSnapshot = z.infer<typeof subscriptionPlanSnapshotSchema>;
 
 export const DEFAULT_PLAN_CATALOGUE = [
-  { tier: PlanTier.FREE, name: "Free", description: "Migration placeholder. Submit and approve commercial terms before offering this plan publicly.", trialDays: 0, gracePeriodDays: 0 },
+  { tier: PlanTier.FREE, name: "Free", description: "Migration placeholder. Configure and save commercial terms before offering this plan publicly.", trialDays: 0, gracePeriodDays: 0 },
   { tier: PlanTier.BASIC, name: "Basic", description: "Migration placeholder. Existing tenant prices remain unchanged until reassigned.", trialDays: 14, gracePeriodDays: 7 },
   { tier: PlanTier.PRO, name: "Pro", description: "Migration placeholder. Existing tenant prices remain unchanged until reassigned.", trialDays: 14, gracePeriodDays: 7 },
   { tier: PlanTier.ENTERPRISE, name: "Enterprise", description: "Migration placeholder. Existing tenant prices remain unchanged until reassigned.", trialDays: 14, gracePeriodDays: 14 },
@@ -89,9 +89,6 @@ export function parseSubscriptionPlanSnapshot(value: Prisma.JsonValue) {
   return subscriptionPlanSnapshotSchema.safeParse(value);
 }
 
-export function canApproveCommercialChange(requestedById: string, approverId: string) {
-  return Boolean(requestedById && approverId && requestedById !== approverId);
-}
 
 export function resolvePlanPrice(plan: Pick<SubscriptionPlan, "monthlyPrice" | "yearlyPrice">, cycle: BillingCycle) {
   const value = cycle === BillingCycle.YEARLY ? plan.yearlyPrice : plan.monthlyPrice;
