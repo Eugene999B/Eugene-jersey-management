@@ -58,7 +58,7 @@ test("stores compressed shop, product and Design Studio images durably in Postgr
 
   await page.locator('input[name="logoFile"]').setInputFiles(uploadedFile("release30-logo.png"));
   await page.getByRole("button", { name: "Save settings" }).click();
-  const logo = page.getByAltText("EJM Release 30 Media Shop");
+  const logo = page.getByRole("main").getByRole("img", { name: "EJM Release 30 Media Shop" });
   await expect(logo).toBeVisible();
   await expect.poll(async () => databasePathFromImageSource(await logo.getAttribute("src"))).not.toBeNull();
   await expectCompressedWebp(page, databasePathFromImageSource(await logo.getAttribute("src")));
