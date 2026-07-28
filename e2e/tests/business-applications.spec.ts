@@ -1,9 +1,15 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 function password() {
   const value = process.env.E2E_PASSWORD;
   if (!value) throw new Error("E2E_PASSWORD is required for browser acceptance tests.");
   return value;
+}
+
+async function selectOptionContaining(select: Locator, text: string) {
+  const value = await select.locator("option").filter({ hasText: text }).first().getAttribute("value");
+  if (!value) throw new Error(`No selectable option contains: ${text}`);
+  await select.selectOption(value);
 }
 
 async function signInAsApplicationsAdmin(page: Page) {
@@ -19,15 +25,20 @@ async function signInAsApplicationsAdmin(page: Page) {
   await expect(page).toHaveURL(/\/admin\/shops$/);
 }
 
-async function submitShopApplication(page: Page) {
+async function submitShopApplication(page: Page, retry: number) {
+  const retrySuffix = retry ? ` Retry ${retry}` : "";
+  const idSuffix = retry ? `-R${retry}` : "";
+  const businessName = `Release 26 Approved Shop${retrySuffix}`;
+  const email = `release26-shop-applicant${retry ? `-r${retry}` : ""}@ejm.test`;
+
   await page.goto("/apply/shop");
-  await page.getByLabel("Business name", { exact: true }).fill("Release 26 Approved Shop");
-  await page.getByLabel("Legal business name", { exact: true }).fill("Release 26 Approved Shop Limited");
-  await page.getByLabel("Business registration number").fill("R26-SHOP-001");
-  await page.getByLabel("Tax identification number").fill("R26-TIN-001");
+  await page.getByLabel("Business name", { exact: true }).fill(businessName);
+  await page.getByLabel("Legal business name", { exact: true }).fill(`${businessName} Limited`);
+  await page.getByLabel("Business registration number").fill(`R26-SHOP-001${idSuffix}`);
+  await page.getByLabel("Tax identification number").fill(`R26-TIN-001${idSuffix}`);
   await page.getByLabel("Contact name").fill("Release Twenty Six Owner");
-  await page.getByLabel("Phone").fill("+233200026001");
-  await page.getByLabel("Email").fill("release26-shop-applicant@ejm.test");
+  await page.getByLabel("Phone").fill(`+2332000260${String(retry + 1).padStart(2, "0")}`);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Business address").fill("Application Test Street");
   await page.getByLabel("City or town").fill("Accra");
   await page.getByLabel("Region").fill("Greater Accra");
@@ -38,7 +49,13 @@ async function submitShopApplication(page: Page) {
   await expect(page).toHaveURL(/\/apply\/submitted$/);
   const credentials = await page.locator("code").allTextContents();
   expect(credentials).toHaveLength(2);
-  return { reference: credentials[0].trim(), token: credentials[1].trim() };
+  return {
+    businessName,
+    reference: credentials[0].trim(),
+    token: credentials[1].trim(),
+    slug: `ejm-e2e-approved-shop${retry ? `-r${retry}` : ""}`,
+    loginId: `EJM-E2E-APPROVED-SHOP${idSuffix}`,
+  };
 }
 
 async function openStatus(page: Page, reference: string, token: string) {
@@ -59,32 +76,32 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(widths.body).toBeLessThanOrEqual(widths.viewport + 1);
 }
 
-test("public shop application becomes a controlled tenant with a working public status", async ({ page }) => {
-  const receipt = await submitShopApplication(page);
+test("public shop application becomes a controlled tenant with a working public status", async ({ page }, testInfo) => {
+  const receipt = await submitShopApplication(page, testInfo.retry);
   expect(receipt.reference).toMatch(/^APP-SHP-\d{8}-[A-Z0-9]+$/);
   expect(receipt.token.length).toBeGreaterThanOrEqual(32);
 
   await openStatus(page, receipt.reference, receipt.token);
   await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Release 26 Approved Shop" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: receipt.businessName })).toBeVisible();
 
   await signInAsApplicationsAdmin(page);
-  await page.goto("/admin/applications?q=Release+26+Approved+Shop");
+  await page.goto(`/admin/applications?q=${encodeURIComponent(receipt.businessName)}`);
   await page.getByRole("link", { name: receipt.reference }).click();
-  await expect(page.getByRole("heading", { name: "Release 26 Approved Shop" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: receipt.businessName })).toBeVisible();
   await page.getByRole("button", { name: "Start or resume review" }).click();
   await expect(page).toHaveURL(/reviewing=true/);
 
   const approvalForm = page.getByRole("heading", { name: "Approve and create shop" }).locator("..");
-  await approvalForm.locator('[name="slug"]').fill("ejm-e2e-approved-shop");
-  await approvalForm.locator('[name="staffLoginId"]').fill("EJM-E2E-APPROVED-SHOP");
-  await approvalForm.locator('[name="planId"]').selectOption({ label: /E2E Application Plan/ });
+  await approvalForm.locator('[name="slug"]').fill(receipt.slug);
+  await approvalForm.locator('[name="staffLoginId"]').fill(receipt.loginId);
+  await selectOptionContaining(approvalForm.locator('[name="planId"]'), "E2E Application Plan");
   await approvalForm.locator('[name="billingCycle"]').selectOption("MONTHLY");
   await approvalForm.locator('[name="temporaryPassword"]').fill("Temp-EJM-Application-2026!");
   await approvalForm.getByRole("button", { name: "Approve and create shop" }).click();
   await expect(page).toHaveURL(/approved=shop/);
   await expect(page.getByText(/The shop and owner account were created/)).toBeVisible();
-  await expect(page.getByText("EJM-E2E-APPROVED-SHOP", { exact: true })).toBeVisible();
+  await expect(page.getByText(receipt.loginId, { exact: true })).toBeVisible();
   await expect(page.getByText(/Pending/).first()).toBeVisible();
 
   await openStatus(page, receipt.reference, receipt.token);
@@ -92,15 +109,20 @@ test("public shop application becomes a controlled tenant with a working public 
   await expect(page.getByText(/Onboarding details will be delivered through a separate secure channel/)).toBeVisible();
 });
 
-test("supplier application remains tied to one shop and exposes only an applicant-facing changes request", async ({ page }) => {
+test("supplier application remains tied to one shop and exposes only an applicant-facing changes request", async ({ page }, testInfo) => {
+  const retrySuffix = testInfo.retry ? ` Retry ${testInfo.retry}` : "";
+  const idSuffix = testInfo.retry ? `-R${testInfo.retry}` : "";
+  const businessName = `Release 26 Supplier Applicant${retrySuffix}`;
+  const email = `release26-supplier-applicant${testInfo.retry ? `-r${testInfo.retry}` : ""}@ejm.test`;
+
   await page.goto("/apply/supplier");
-  await page.getByLabel("Business name", { exact: true }).fill("Release 26 Supplier Applicant");
-  await page.getByLabel("Legal business name", { exact: true }).fill("Release 26 Supplier Applicant Limited");
-  await page.getByLabel("Business registration number").fill("R26-SUP-001");
-  await page.getByLabel("Shop you want to supply").selectOption({ label: /EJM Browser Test Shop/ });
+  await page.getByLabel("Business name", { exact: true }).fill(businessName);
+  await page.getByLabel("Legal business name", { exact: true }).fill(`${businessName} Limited`);
+  await page.getByLabel("Business registration number").fill(`R26-SUP-001${idSuffix}`);
+  await selectOptionContaining(page.getByLabel("Shop you want to supply"), "EJM Browser Test Shop");
   await page.getByLabel("Contact name").fill("Release Twenty Six Supplier");
-  await page.getByLabel("Phone").fill("+233200026002");
-  await page.getByLabel("Email").fill("release26-supplier-applicant@ejm.test");
+  await page.getByLabel("Phone").fill(`+2332000261${String(testInfo.retry + 1).padStart(2, "0")}`);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("City or town").fill("Kumasi");
   await page.getByLabel("Categories").fill("Jerseys, vinyl and sports equipment");
   await page.getByLabel("Requested services").fill("Supply the selected verified shop only");
@@ -112,7 +134,7 @@ test("supplier application remains tied to one shop and exposes only an applican
   const token = credentials[1].trim();
 
   await signInAsApplicationsAdmin(page);
-  await page.goto("/admin/applications?q=Release+26+Supplier+Applicant");
+  await page.goto(`/admin/applications?q=${encodeURIComponent(businessName)}`);
   await page.getByRole("link", { name: reference }).click();
   await expect(page.getByText("EJM Browser Test Shop", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Start or resume review" }).click();
