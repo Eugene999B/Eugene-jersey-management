@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ImageInputCompatibility } from "@/components/media/image-input-compatibility";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -47,7 +48,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-[#f4f7fb] text-slate-950">{children}</body>
+      <body className="min-h-full flex flex-col bg-[#f4f7fb] text-slate-950">
+        <ImageInputCompatibility />
+        {children}
+      </body>
     </html>
   );
 }
