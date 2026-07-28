@@ -10,6 +10,13 @@ import { strongPasswordSchema } from "@/lib/password-policy";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createPlainToken, hashToken, minutesFromNow } from "@/lib/tokens";
+import {
+  createStaffAccountWithinPlan,
+  createStaffInviteWithinPlan,
+  SubscriptionEntitlementError,
+  SubscriptionLimitError,
+  toggleStaffAccessWithinPlan,
+} from "@/lib/subscription-entitlements";
 
 const allowedStaffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER] as const;
 
@@ -26,6 +33,16 @@ const staffSchema = z.object({
   role: z.nativeEnum(Role).refine((role) => allowedStaffRoles.includes(role as (typeof allowedStaffRoles)[number])),
 });
 
+function staffRedirect(error: string): never {
+  redirect(`/dashboard/staff?error=${encodeURIComponent(error)}`);
+}
+
+function handleStaffWriteError(error: unknown): never {
+  if (error instanceof SubscriptionLimitError) staffRedirect("plan-staff-limit");
+  if (error instanceof SubscriptionEntitlementError && error.code === "EMAIL_EXISTS") staffRedirect("email-exists");
+  staffRedirect("staff");
+}
+
 export async function createStaffAccountAction(formData: FormData) {
   const session = await requireRole(permissions.staff);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
@@ -38,22 +55,16 @@ export async function createStaffAccountAction(formData: FormData) {
     password: formData.get("password"),
     role: formData.get("role"),
   });
-  if (!parsed.success) redirect("/dashboard/staff?error=staff");
+  if (!parsed.success) staffRedirect("staff");
 
-  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
-  if (existing) redirect("/dashboard/staff?error=email-exists");
-
-  const user = await prisma.user.create({
-    data: {
-      shopId,
-      name: parsed.data.name,
-      email: parsed.data.email,
-      phone: parsed.data.phone,
-      role: parsed.data.role,
-      passwordHash: await hashPassword(parsed.data.password),
-      isActive: true,
-    },
-  });
+  const user = await createStaffAccountWithinPlan({
+    shopId,
+    name: parsed.data.name,
+    email: parsed.data.email,
+    phone: parsed.data.phone,
+    role: parsed.data.role,
+    passwordHash: await hashPassword(parsed.data.password),
+  }).catch(handleStaffWriteError);
 
   await audit({
     shopId,
@@ -75,11 +86,7 @@ export async function toggleStaffAccessAction(formData: FormData) {
   const user = await prisma.user.findFirstOrThrow({ where: { id: userId, shopId } });
   if (user.id === session.id) redirect("/dashboard/staff?error=self");
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { isActive: !user.isActive, sessionVersion: { increment: 1 } },
-  });
-
+  const updated = await toggleStaffAccessWithinPlan({ shopId, userId }).catch(handleStaffWriteError);
   await audit({
     shopId,
     userId: session.id,
@@ -99,26 +106,17 @@ export async function createInviteAction(formData: FormData) {
     email: formData.get("email"),
     role: formData.get("role"),
   });
-  if (!parsed.success) redirect("/dashboard/staff?error=invite");
+  if (!parsed.success) staffRedirect("invite");
 
-  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
-  if (existing) redirect("/dashboard/staff?error=email-exists");
-
-  await prisma.inviteToken.updateMany({
-    where: { shopId, email: parsed.data.email, usedAt: null },
-    data: { expiresAt: new Date() },
-  });
   const token = createPlainToken();
-  const invite = await prisma.inviteToken.create({
-    data: {
-      shopId,
-      email: parsed.data.email,
-      role: parsed.data.role,
-      tokenHash: hashToken(token),
-      expiresAt: minutesFromNow(60 * 24 * 7),
-      createdById: session.id,
-    },
-  });
+  const invite = await createStaffInviteWithinPlan({
+    shopId,
+    email: parsed.data.email,
+    role: parsed.data.role,
+    tokenHash: hashToken(token),
+    expiresAt: minutesFromNow(60 * 24 * 7),
+    createdById: session.id,
+  }).catch(handleStaffWriteError);
 
   await audit({
     shopId,

@@ -1,6 +1,6 @@
 # Eugene Jersey Management - System Diagnostic, Progress, and Roadmap
 
-Updated: 2026-07-27
+Updated: 2026-07-28
 
 Live app: https://web-production-8ee56.up.railway.app
 
@@ -10,11 +10,11 @@ Google Drive documentation pack: https://drive.google.com/drive/folders/1oe55Rtc
 
 ## Status summary
 
-The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, a production Design Studio, suppliers, network, admin, Paystack settlement routing, messaging hooks, structural tenant isolation, desktop/mobile browser acceptance, optional personal two-factor authentication, read-only production integration health checks, interruption-safe local design recovery, group-aware editing, immutable design save history, direct layer transform handles, a shared mobile inspector, shop-owned machine profiles and fail-closed vector cut-path export.
+The platform is a full-stack Next.js App Router multi-tenant sports shop SaaS. It builds, deploys on Railway, and covers storefronts, POS, debts, a production Design Studio, suppliers, network, admin, Paystack settlement routing, messaging hooks, structural tenant isolation, desktop/mobile browser acceptance, optional personal two-factor authentication, read-only production integration health checks, interruption-safe local design recovery, group-aware editing, immutable design save history, direct layer transform handles, a shared mobile inspector, shop-owned machine profiles, fail-closed vector cut-path export, audited CEO governance controls and a versioned subscription-plan catalogue with second-administrator approval.
 
 Production account activation is repository-controlled: Railway migrations are followed by `production:activate`, which creates the real administrator from Railway variables and retires seeded demo access.
 
-**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed, and the remaining commercial controls are finished.
+**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed, communication credits are built and remaining commercial launch controls are finished.
 
 ## Already resolved in code
 
@@ -42,6 +42,10 @@ Production account activation is repository-controlled: Railway migrations are f
 22. **Administrator-controlled payment routing** — stores may update their settlement details and accepted methods, but only a platform administrator with Billing permission can assign the subaccount, EJM flat charge or Paystack fee bearer.
 23. **Scheduled-job monitoring** — reservation-release runs are bearer-token protected and record started, successful and failed heartbeats in the platform audit log.
 24. **GitHub validation** — pull requests run dependency audit, Prisma generation and migrations, guarded lifecycle checks, lint, TypeScript, the complete unit suite, tenant-isolation attacks, production build and Chromium journeys.
+25. **CEO platform governance** — `/admin/settings` stores audited platform identity, support, legal, marketplace, maintenance, incident, security, retention and upload policies without exposing provider secrets.
+26. **Versioned subscription plan catalogue** — the fixed `FREE`, `BASIC`, `PRO` and `ENTERPRISE` tiers have approved prices, trial/grace periods, limits and features; a different billing administrator must approve every commercial change.
+27. **Tenant contract snapshots** — existing tenant prices are preserved during migration, catalogue changes never silently reprice shops, and explicit assignment stores an immutable plan-version snapshot.
+28. **Included staff enforcement** — active non-owner staff and open invites reserve assigned plan slots; direct creation, invitations and acceptance fail closed through serializable platform transactions when the limit is reached.
 
 ## Optional two-factor operating rules
 
@@ -68,6 +72,21 @@ Production account activation is repository-controlled: Railway migrations are f
 9. A non-empty subaccount is checked through a read-only provider request before replacing an existing route.
 10. Full settlement account numbers must not be displayed or written to audit metadata.
 11. One store's funds must never be represented as another tenant's money.
+
+## Subscription catalogue and commercial approval rules
+
+1. The catalogue contains exactly `FREE`, `BASIC`, `PRO` and `ENTERPRISE` tiers.
+2. Migration placeholders do not invent prices and cannot be assigned until configured and approved.
+3. A billing administrator submits a written proposal containing previous and proposed terms.
+4. The requester cannot approve their own proposal; another billing administrator must approve or reject it with a note.
+5. Approval fails closed if the plan version changed after the proposal was submitted.
+6. Every approved change creates an immutable `SubscriptionPlanVersion`.
+7. Existing tenant price/status records are backfilled without modification.
+8. Catalogue changes do not reprice existing shops; explicit assignment copies the approved version into `ShopSubscriptionContract`.
+9. New shops can only start from a configured active plan and no longer accept arbitrary typed prices.
+10. Included staff counts active non-owner accounts and open invites. The owner account is excluded.
+11. Product, monthly-order and feature limits are recorded but wider route enforcement remains follow-up work.
+12. Catalogue, proposal, version and contract models are platform-commercial data and are denied through normal and interactive tenant clients.
 
 ## Design recovery operating rules
 
@@ -114,7 +133,7 @@ Production account activation is repository-controlled: Railway migrations are f
 3. Every shop retains at least one active profile and one default profile.
 4. Design saves resolve the selected profile server-side and store an authoritative machine-settings snapshot in project version 6.
 5. Editing or deleting a profile never rewrites immutable historical snapshots.
-6. Native rectangle/circle layers and supported embedded vector SVG geometry can produce path-only SVG, HPGL/PLT and DXF.
+6. Native rectangle/circle layers and supported embedded SVG geometry can produce path-only SVG, HPGL/PLT and DXF.
 7. Live text, raster images, external artwork, unsupported SVG elements and malformed or out-of-sheet geometry fail closed before cutter output.
 8. HPGL uses the selected profile's units per millimetre, origin and mirror setting; DXF uses millimetres and lightweight polylines.
 9. Multiple copies must be arranged as separate artwork before cutter export.
@@ -130,19 +149,20 @@ Production account activation is repository-controlled: Railway migrations are f
 6. Schedule `POST /api/jobs/release-reservations` with `JOBS_API_TOKEN` and confirm recurring successful heartbeats.
 7. Add an account session list, device history and per-session forced logout.
 8. Design Studio remaining work: multi-layer bounding-box transforms, version comparison/labels, simultaneous-edit protection and broader SVG compatibility based on real production files.
-9. Complete CEO-level settings, communication-credit packages, support investigations, public business applications and location-aware marketplace work.
-10. Clean the Turbopack media-storage NFT warning.
-11. Refresh Google Drive docs after each major merge so they match repository source documentation.
+9. Enforce recorded product, monthly-order and feature entitlements across relevant routes; add automated renewal, invoice, dunning and plan self-service workflows.
+10. Complete communication-credit packages, support investigations, public business applications and location-aware marketplace work.
+11. Clean the Turbopack media-storage NFT warning.
+12. Refresh Google Drive docs after each major merge so they match repository source documentation.
 
 ## Recommended implementation order
 
 1. Verify Release #17 production integrations when provider accounts are ready.
-2. Add Design Studio version comparison/labels and simultaneous-edit protection.
-3. Complete controlled Paystack subaccount settlement and webhook reconciliation testing.
-4. Add Paystack refunds, POS gateway payments and settlement/retry operations.
-5. Build SMS and WhatsApp credit packages using the EJM administrator payment account.
-6. Build CEO settings, the admin investigation centre and public shop/supplier application pipeline.
-7. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
+2. Build SMS and WhatsApp communication-credit packages using the EJM administrator payment account.
+3. Add the admin investigation centre and public shop/supplier application pipeline.
+4. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.
+5. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
+6. Complete Paystack refunds, POS gateway payments and settlement/retry operations.
+7. Finish Design Studio collaboration/version-comparison improvements.
 8. Complete commercial launch hardening and a controlled real-shop pilot.
 
 ## Validation commands
@@ -160,7 +180,7 @@ npm.cmd run build
 
 ## AI handoff rules
 
-1. Read `README.md`, this diagnostic, `docs/source/11_Production_Activation.md`, `docs/source/14_Production_Integration_Health.md`, `docs/source/15_Design_Studio_Reliability.md`, `docs/source/16_Design_Studio_Grouping_and_Version_History.md`, `docs/source/17_Design_Studio_Transform_Handles_and_Mobile_Inspector.md`, and `docs/source/18_Design_Studio_Machine_Profiles_and_Cut_Paths.md` before production changes.
+1. Read `README.md`, this diagnostic, `docs/source/11_Production_Activation.md`, `docs/source/14_Production_Integration_Health.md`, `docs/source/15_Design_Studio_Reliability.md`, `docs/source/16_Design_Studio_Grouping_and_Version_History.md`, `docs/source/17_Design_Studio_Transform_Handles_and_Mobile_Inspector.md`, `docs/source/18_Design_Studio_Machine_Profiles_and_Cut_Paths.md`, `docs/source/20_CEO_Settings_and_Platform_Governance.md`, and `docs/source/21_Subscription_Plans_and_Commercial_Approval.md` before production changes.
 2. Never touch Chalin projects.
 3. Keep frontend/backend together in this Next.js app unless deliberately splitting later.
 4. Prisma migrations are required for schema changes.
@@ -174,4 +194,7 @@ npm.cmd run build
 12. Design transforms must test exact dimensions, rotation, sheet clamping, undo behavior, grouped movement, save/history/recovery persistence and mobile inspector layout.
 13. Machine profiles must remain shop-scoped, server-resolved on save and immutable inside historical version snapshots.
 14. Cutter export must fail closed rather than guessing paths for live text, raster artwork or unsupported SVG geometry.
-15. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.
+15. Commercial plan changes require a written proposal, another billing administrator, version checking and an immutable approved snapshot.
+16. Existing tenant prices must never change merely because a plan catalogue entry changes.
+17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.
+18. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.

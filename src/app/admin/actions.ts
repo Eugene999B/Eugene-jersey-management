@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { BillingCycle, OrderChannel, OrderStatus, PaymentStatus, PlanTier, ReturnRequestStatus, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { OrderChannel, OrderStatus, PaymentStatus, ReturnRequestStatus, Role, ShopVerificationStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
@@ -68,54 +68,6 @@ export async function createGlobalAnnouncementAction(formData: FormData) {
   await audit({ userId: session.id, action: "admin.global_announcement_created", entityType: "Announcement", entityId: announcement.id });
   revalidatePath("/admin");
   revalidatePath("/admin/broadcast");
-}
-
-const subscriptionSchema = z.object({
-  shopId: z.string().min(1),
-  planTier: z.nativeEnum(PlanTier),
-  billingCycle: z.nativeEnum(BillingCycle),
-  subscriptionStatus: z.nativeEnum(SubscriptionStatus),
-  monthlyPrice: z.coerce.number().min(0).optional(),
-  yearlyPrice: z.coerce.number().min(0).optional(),
-  subscriptionRenewalAt: z.coerce.date().optional(),
-});
-
-export async function updateShopSubscriptionAction(formData: FormData) {
-  const session = await requirePlatformPermission("billing");
-  const parsed = subscriptionSchema.safeParse({
-    shopId: formData.get("shopId"),
-    planTier: formData.get("planTier"),
-    billingCycle: formData.get("billingCycle"),
-    subscriptionStatus: formData.get("subscriptionStatus"),
-    monthlyPrice: formData.get("monthlyPrice") || undefined,
-    yearlyPrice: formData.get("yearlyPrice") || undefined,
-    subscriptionRenewalAt: formData.get("subscriptionRenewalAt") || undefined,
-  });
-  if (!parsed.success) redirect("/admin/billing?error=subscription");
-
-  const shop = await prisma.shop.update({
-    where: { id: parsed.data.shopId },
-    data: {
-      planTier: parsed.data.planTier,
-      billingCycle: parsed.data.billingCycle,
-      subscriptionStatus: parsed.data.subscriptionStatus,
-      monthlyPrice: parsed.data.monthlyPrice,
-      yearlyPrice: parsed.data.yearlyPrice,
-      subscriptionRenewalAt: parsed.data.subscriptionRenewalAt,
-    },
-  });
-  await audit({
-    shopId: shop.id,
-    userId: session.id,
-    action: "admin.subscription_updated",
-    entityType: "Shop",
-    entityId: shop.id,
-    metadata: { planTier: shop.planTier, billingCycle: shop.billingCycle, subscriptionStatus: shop.subscriptionStatus },
-  });
-  revalidatePath("/admin");
-  revalidatePath("/admin/billing");
-  revalidatePath("/admin/shops");
-  revalidatePath(`/admin/shops/${shop.id}`);
 }
 
 const platformWorkerSchema = z.object({
