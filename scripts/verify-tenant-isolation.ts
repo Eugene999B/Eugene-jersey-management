@@ -231,6 +231,22 @@ async function main() {
 
     await expectRejects(
       TenantDatabaseAccessError,
+      () => tenantA.supportCase.findMany(),
+      "Tenant client accessed Release 26 support cases.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.supportCaseNote.findMany()),
+      "Interactive tenant transaction accessed Release 26 support case notes.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.businessApplication.findMany(),
+      "Tenant client accessed Release 26 business applications.",
+    );
+
+    await expectRejects(
+      TenantDatabaseAccessError,
       () => tenantA.designJobVersion.findMany(),
       "Tenant client accessed design versions outside the dedicated shop-filtered API.",
     );
@@ -266,7 +282,7 @@ async function main() {
     const tenantBCustomerAfter = await platformDb.customer.findUniqueOrThrow({ where: { id: tenantBData.customer.id } });
     assert(tenantBCustomerAfter.name === "Isolation Shop B customer" && tenantBCustomerAfter.notes === null, "Tenant B data changed during negative tests.");
 
-    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, governance denial, subscription-catalogue denial, communication-credit denial, two-factor global-model denial, and raw SQL denial.");
+    console.log("Tenant isolation verification passed for direct models, machine profiles, child relations, transactions, design-version denial, governance denial, subscription-catalogue denial, communication-credit denial, Release 26 support/application denial, two-factor global-model denial, and raw SQL denial.");
   } finally {
     await deleteFixtures();
     await platformDb.$disconnect();
