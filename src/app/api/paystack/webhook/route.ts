@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentProviderEventStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { settleCommunicationCreditPurchase } from "@/lib/communication-credits";
 import { settlePaystackTransaction, verifyPaystackWebhookSignature, type PaystackTransactionData } from "@/lib/payments";
 
 export async function POST(request: NextRequest) {
@@ -55,7 +56,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, ignored: true });
     }
 
-    const result = await settlePaystackTransaction(payload.data);
+    let result = await settleCommunicationCreditPurchase(payload.data);
+    if (result.status === "ignored" && result.reason === "credit-purchase-not-found") {
+      result = await settlePaystackTransaction(payload.data);
+    }
     await prisma.paymentProviderEvent.update({
       where: { id: event.id },
       data: {
