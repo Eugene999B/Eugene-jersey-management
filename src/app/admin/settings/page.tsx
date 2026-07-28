@@ -29,7 +29,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">CEO control centre</p><h1 className="mt-2 text-3xl font-semibold">Platform Governance</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Control platform policies and operating defaults without exposing Paystack, Arkesel, WhatsApp or storage secrets. Provider health remains read-only in Integrations.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">CEO control centre</p><h1 className="mt-2 text-3xl font-semibold">Settings</h1><h2 className="mt-2 text-xl font-semibold text-slate-800">Platform Governance</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Control platform policies and operating defaults without exposing Paystack, Arkesel, WhatsApp or storage secrets. Provider health remains read-only in Integrations.</p></div>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {statusCard("Paystack", paymentConfigured, paymentConfigured ? "Server credentials are present; settlement routes remain administrator controlled." : "No server key is configured, so online payments remain unavailable.", <WalletCards size={20} />)}
         {statusCard("SMS", smsConfigured, smsConfigured ? `${smsProvider} credentials are present; controlled delivery testing is still required.` : "SMS remains console-only or incomplete.", <MessageSquareText size={20} />)}
