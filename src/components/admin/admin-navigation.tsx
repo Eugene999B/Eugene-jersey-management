@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Activity, BarChart3, CreditCard, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { Activity, BarChart3, Coins, CreditCard, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Settings, Shield, Store, UserCog, X } from "lucide-react";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
 interface AdminNavigationProps {
@@ -17,6 +17,7 @@ const adminNav = [
   { href: "/admin/staff", label: "Admin staff", shortLabel: "Staff", icon: UserCog, permission: "workers" },
   { href: "/admin/support", label: "Support desk", shortLabel: "Support", icon: LifeBuoy, permission: "support" },
   { href: "/admin/billing", label: "Billing", shortLabel: "Billing", icon: CreditCard, permission: "billing" },
+  { href: "/admin/billing/communications", label: "Communication credits", shortLabel: "Credits", icon: Coins, permission: "billing" },
   { href: "/admin/broadcast", label: "Broadcast", shortLabel: "Broadcast", icon: Megaphone, permission: "broadcast" },
   { href: "/admin/activity", label: "Activity logs", shortLabel: "Activity", icon: Activity, permission: "activity" },
   { href: "/admin/security", label: "Security", shortLabel: "Security", icon: Shield, permission: "security" },
@@ -25,7 +26,9 @@ const adminNav = [
 ] as const satisfies ReadonlyArray<{ href: string; label: string; shortLabel: string; icon: typeof BarChart3; permission: PlatformPermission | null }>;
 
 function isActive(pathname: string, href: string) {
-  return href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
+  if (href === "/admin") return pathname === "/admin";
+  if (href === "/admin/billing") return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function AdminNavigation({ allowedPermissions, variant = "desktop" }: AdminNavigationProps) {
