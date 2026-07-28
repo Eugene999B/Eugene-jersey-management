@@ -34,9 +34,9 @@ test("records a plan proposal and blocks requester self-approval", async ({ page
   await basicPlan.getByLabel("Included staff accounts").fill("3");
   await basicPlan.getByLabel("Maximum products").fill("500");
   await basicPlan.getByLabel("Monthly order limit").fill("1000");
-  await basicPlan.getByLabel("Feature entitlements").getByText("POS", { exact: true }).click();
-  await basicPlan.getByText("Configured", { exact: true }).click();
-  await basicPlan.getByText("Publicly offered", { exact: true }).click();
+  await basicPlan.locator('input[name="features"][value="POS"]').check();
+  await basicPlan.locator('input[name="isConfigured"]').check();
+  await basicPlan.locator('input[name="isPublic"]').check();
   await basicPlan.getByLabel("Commercial change reason").fill("Set the controlled E2E Basic plan terms");
   await basicPlan.getByRole("button", { name: "Submit for second-admin approval" }).click();
 
