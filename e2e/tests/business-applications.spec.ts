@@ -21,8 +21,8 @@ async function signInAsApplicationsAdmin(page: Page) {
 
 async function submitShopApplication(page: Page) {
   await page.goto("/apply/shop");
-  await page.getByLabel("Business name").fill("Release 26 Approved Shop");
-  await page.getByLabel("Legal business name").fill("Release 26 Approved Shop Limited");
+  await page.getByLabel("Business name", { exact: true }).fill("Release 26 Approved Shop");
+  await page.getByLabel("Legal business name", { exact: true }).fill("Release 26 Approved Shop Limited");
   await page.getByLabel("Business registration number").fill("R26-SHOP-001");
   await page.getByLabel("Tax identification number").fill("R26-TIN-001");
   await page.getByLabel("Contact name").fill("Release Twenty Six Owner");
@@ -94,8 +94,8 @@ test("public shop application becomes a controlled tenant with a working public 
 
 test("supplier application remains tied to one shop and exposes only an applicant-facing changes request", async ({ page }) => {
   await page.goto("/apply/supplier");
-  await page.getByLabel("Business name").fill("Release 26 Supplier Applicant");
-  await page.getByLabel("Legal business name").fill("Release 26 Supplier Applicant Limited");
+  await page.getByLabel("Business name", { exact: true }).fill("Release 26 Supplier Applicant");
+  await page.getByLabel("Legal business name", { exact: true }).fill("Release 26 Supplier Applicant Limited");
   await page.getByLabel("Business registration number").fill("R26-SUP-001");
   await page.getByLabel("Shop you want to supply").selectOption({ label: /EJM Browser Test Shop/ });
   await page.getByLabel("Contact name").fill("Release Twenty Six Supplier");
