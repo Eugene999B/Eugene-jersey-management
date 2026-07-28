@@ -17,10 +17,10 @@ jobs:
               target = desired or new
               if target in text:
                   return
-              if old not in text:
-                  print(f"Skipped reformatted target in {path}: {old[:80]!r}")
-                  return
-              file.write_text(text.replace(old, new, 1))
+              if old in text:
+                  file.write_text(text.replace(old, new, 1))
+              else:
+                  print(f"Skipped reformatted target in {path}: {old[:90]!r}")
 
           replace_once(
               "src/lib/tenant-db.ts",
@@ -56,79 +56,68 @@ jobs:
           )
 
           verifier = Path("scripts/verify-tenant-isolation.ts")
-          verifier_text = verifier.read_text()
-          if "Tenant client accessed the communication credit package catalogue." not in verifier_text:
-              marker = '''    await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.$transaction(async (transaction) => transaction.shopSubscriptionContract.findMany()),
-              "Interactive tenant transaction accessed shop subscription contracts.",
-            );
-'''
-              addition = marker + '''
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.communicationCreditPackage.findMany(),
-              "Tenant client accessed the communication credit package catalogue.",
-            );
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.communicationCreditPackageVersion.findMany(),
-              "Tenant client accessed immutable communication credit package versions.",
-            );
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.communicationCreditPackageChangeRequest.findMany(),
-              "Tenant client accessed communication credit commercial approval requests.",
-            );
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.$transaction(async (transaction) => transaction.shopCommunicationWallet.findMany()),
-              "Interactive tenant transaction accessed communication credit wallets.",
-            );
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.$transaction(async (transaction) => transaction.communicationCreditPurchase.findMany()),
-              "Interactive tenant transaction accessed communication credit purchases.",
-            );
-            await expectRejects(
-              TenantDatabaseAccessError,
-              () => tenantA.$transaction(async (transaction) => transaction.communicationCreditLedgerEntry.findMany()),
-              "Interactive tenant transaction accessed communication credit ledger entries.",
-            );
-'''
-              if marker in verifier_text:
-                  verifier_text = verifier_text.replace(marker, addition, 1)
-              else:
-                  raise SystemExit("Subscription contract isolation marker not found")
-          verifier_text = verifier_text.replace(
+          text = verifier.read_text()
+          if "Tenant client accessed the communication credit package catalogue." not in text:
+              anchor = '      "Interactive tenant transaction accessed shop subscription contracts.",\n    );'
+              if anchor not in text:
+                  raise SystemExit("Subscription isolation anchor not found")
+              addition = anchor + '''
+
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.communicationCreditPackage.findMany(),
+      "Tenant client accessed the communication credit package catalogue.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.communicationCreditPackageVersion.findMany(),
+      "Tenant client accessed immutable communication credit package versions.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.communicationCreditPackageChangeRequest.findMany(),
+      "Tenant client accessed communication credit commercial approval requests.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.shopCommunicationWallet.findMany()),
+      "Interactive tenant transaction accessed communication credit wallets.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.communicationCreditPurchase.findMany()),
+      "Interactive tenant transaction accessed communication credit purchases.",
+    );
+    await expectRejects(
+      TenantDatabaseAccessError,
+      () => tenantA.$transaction(async (transaction) => transaction.communicationCreditLedgerEntry.findMany()),
+      "Interactive tenant transaction accessed communication credit ledger entries.",
+    );'''
+              text = text.replace(anchor, addition, 1)
+          text = text.replace(
               "governance denial, subscription-catalogue denial, two-factor global-model denial",
               "governance denial, subscription-catalogue denial, communication-credit denial, two-factor global-model denial",
           )
-          verifier.write_text(verifier_text)
+          verifier.write_text(text)
 
           replace_once(
               "src/app/api/paystack/webhook/route.ts",
               '''    let result = await settleCommunicationCreditPurchase(payload.data);
-              if (result.status === "ignored" && result.reason === "credit-purchase-not-found") {
-                result = await settlePaystackTransaction(payload.data);
-              }
+    if (result.status === "ignored" && result.reason === "credit-purchase-not-found") {
+      result = await settlePaystackTransaction(payload.data);
+    }
 ''',
               '''    const creditResult = await settleCommunicationCreditPurchase(payload.data);
-              const result = creditResult.status === "ignored" && creditResult.reason === "credit-purchase-not-found"
-                ? await settlePaystackTransaction(payload.data)
-                : creditResult;
+    const result = creditResult.status === "ignored" && creditResult.reason === "credit-purchase-not-found"
+      ? await settlePaystackTransaction(payload.data)
+      : creditResult;
 ''',
               "const creditResult = await settleCommunicationCreditPurchase",
           )
           replace_once(
               "src/lib/messaging.ts",
-              '''export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
-              const config = providerConfig(channel);
-''',
-              '''export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
-              const config = providerConfig(channel);
-              if (config.provider.toLowerCase() === "console") return false;
-''',
+              'export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {\n  const config = providerConfig(channel);\n',
+              'export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {\n  const config = providerConfig(channel);\n  if (config.provider.toLowerCase() === "console") return false;\n',
               'if (config.provider.toLowerCase() === "console") return false;',
           )
           replace_once(
@@ -173,7 +162,7 @@ jobs:
               '29. **Communication package catalogue**',
           )
           replace_once(roadmap, "6. Platform subscriptions and future SMS/WhatsApp credit purchases belong to the administrator account.", "6. Platform subscriptions and SMS/WhatsApp credit purchases belong to the administrator account.")
-          communication_rules = '''## Communication credit operating rules
+          rules = '''## Communication credit operating rules
 
 1. SMS and WhatsApp packages are channel-specific platform-commercial records.
 2. Migration placeholders contain no invented price or credit quantity and existing shops start with zero balances.
@@ -189,7 +178,7 @@ jobs:
 12. Provider segment pricing, templates, consent, delivery status and cost reconciliation remain controlled rollout work.
 
 '''
-          replace_once(roadmap, "## Design recovery operating rules\n", communication_rules + "## Design recovery operating rules\n", "## Communication credit operating rules")
+          replace_once(roadmap, "## Design recovery operating rules\n", rules + "## Design recovery operating rules\n", "## Communication credit operating rules")
           replace_once(roadmap, "10. Complete communication-credit packages, support investigations, public business applications and location-aware marketplace work.", "10. Complete support investigations, public business applications and location-aware marketplace work.")
           replace_once(roadmap, "2. Build SMS and WhatsApp communication-credit packages using the EJM administrator payment account.\n3. Add the admin investigation centre and public shop/supplier application pipeline.\n4. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.\n5. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.\n6. Complete Paystack refunds, POS gateway payments and settlement/retry operations.\n7. Finish Design Studio collaboration/version-comparison improvements.\n8. Complete commercial launch hardening and a controlled real-shop pilot.", "2. Add the admin investigation centre and public shop/supplier application pipeline.\n3. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.\n4. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.\n5. Complete Paystack refunds, POS gateway payments and settlement/retry operations.\n6. Finish Design Studio collaboration/version-comparison improvements.\n7. Complete controlled communication-package payment and provider-delivery tests.\n8. Complete commercial launch hardening and a controlled real-shop pilot.", "7. Complete controlled communication-package payment")
           replace_once(roadmap, '`docs/source/21_Subscription_Plans_and_Commercial_Approval.md` before production changes.', '`docs/source/21_Subscription_Plans_and_Commercial_Approval.md`, and `docs/source/22_Communication_Credits_and_Wallets.md` before production changes.')
