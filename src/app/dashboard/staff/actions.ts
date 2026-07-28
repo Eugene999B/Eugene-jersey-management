@@ -3,14 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { Prisma, Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { strongPasswordSchema } from "@/lib/password-policy";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createPlainToken, hashToken, minutesFromNow } from "@/lib/tokens";
-import { assertStaffReservationAvailable, SubscriptionLimitError } from "@/lib/subscription-entitlements";
+import {
+  createStaffAccountWithinPlan,
+  createStaffInviteWithinPlan,
+  SubscriptionEntitlementError,
+  SubscriptionLimitError,
+} from "@/lib/subscription-entitlements";
 
 const allowedStaffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER] as const;
 
@@ -33,7 +38,7 @@ function staffRedirect(error: string): never {
 
 function handleStaffWriteError(error: unknown): never {
   if (error instanceof SubscriptionLimitError) staffRedirect("plan-staff-limit");
-  if (error instanceof Error && error.message === "EMAIL_EXISTS") staffRedirect("email-exists");
+  if (error instanceof SubscriptionEntitlementError && error.code === "EMAIL_EXISTS") staffRedirect("email-exists");
   staffRedirect("staff");
 }
 
@@ -51,23 +56,14 @@ export async function createStaffAccountAction(formData: FormData) {
   });
   if (!parsed.success) staffRedirect("staff");
 
-  const passwordHash = await hashPassword(parsed.data.password);
-  const user = await prisma.$transaction(async (tx) => {
-    const existing = await tx.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
-    if (existing) throw new Error("EMAIL_EXISTS");
-    await assertStaffReservationAvailable(tx, shopId);
-    return tx.user.create({
-      data: {
-        shopId,
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone,
-        role: parsed.data.role,
-        passwordHash,
-        isActive: true,
-      },
-    });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(handleStaffWriteError);
+  const user = await createStaffAccountWithinPlan({
+    shopId,
+    name: parsed.data.name,
+    email: parsed.data.email,
+    phone: parsed.data.phone,
+    role: parsed.data.role,
+    passwordHash: await hashPassword(parsed.data.password),
+  }).catch(handleStaffWriteError);
 
   await audit({
     shopId,
@@ -116,25 +112,14 @@ export async function createInviteAction(formData: FormData) {
   if (!parsed.success) staffRedirect("invite");
 
   const token = createPlainToken();
-  const invite = await prisma.$transaction(async (tx) => {
-    const existing = await tx.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
-    if (existing) throw new Error("EMAIL_EXISTS");
-    await tx.inviteToken.updateMany({
-      where: { shopId, email: parsed.data.email, usedAt: null },
-      data: { expiresAt: new Date() },
-    });
-    await assertStaffReservationAvailable(tx, shopId);
-    return tx.inviteToken.create({
-      data: {
-        shopId,
-        email: parsed.data.email,
-        role: parsed.data.role,
-        tokenHash: hashToken(token),
-        expiresAt: minutesFromNow(60 * 24 * 7),
-        createdById: session.id,
-      },
-    });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(handleStaffWriteError);
+  const invite = await createStaffInviteWithinPlan({
+    shopId,
+    email: parsed.data.email,
+    role: parsed.data.role,
+    tokenHash: hashToken(token),
+    expiresAt: minutesFromNow(60 * 24 * 7),
+    createdById: session.id,
+  }).catch(handleStaffWriteError);
 
   await audit({
     shopId,
