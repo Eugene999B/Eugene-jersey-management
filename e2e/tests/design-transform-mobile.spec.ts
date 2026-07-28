@@ -24,6 +24,12 @@ async function addRectangle(page: Page) {
   await expect(page.getByRole("button", { name: "Resize Rectangle from south east" })).toBeVisible();
 }
 
+async function visibleBoundingBox(locator: ReturnType<Page["getByRole"]>) {
+  await locator.scrollIntoViewIfNeeded();
+  await expect(locator).toBeVisible();
+  return locator.boundingBox();
+}
+
 test("resizes and rotates one unlocked layer with canvas handles", async ({ page }) => {
   await signIn(page, "EJM-E2E-OWNER");
   await page.goto("/dashboard/designs");
@@ -34,7 +40,7 @@ test("resizes and rotates one unlocked layer with canvas handles", async ({ page
   const startingWidth = Number(await widthField.inputValue());
 
   const resizeHandle = page.getByRole("button", { name: "Resize Rectangle from south east" });
-  const resizeBox = await resizeHandle.boundingBox();
+  const resizeBox = await visibleBoundingBox(resizeHandle);
   expect(resizeBox).not.toBeNull();
   if (!resizeBox) return;
   await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
@@ -44,7 +50,7 @@ test("resizes and rotates one unlocked layer with canvas handles", async ({ page
   await expect.poll(async () => Number(await widthField.inputValue())).toBeGreaterThan(startingWidth);
 
   const rotateHandle = page.getByRole("button", { name: "Rotate Rectangle" });
-  const rotateBox = await rotateHandle.boundingBox();
+  const rotateBox = await visibleBoundingBox(rotateHandle);
   expect(rotateBox).not.toBeNull();
   if (!rotateBox) return;
   await page.mouse.move(rotateBox.x + rotateBox.width / 2, rotateBox.y + rotateBox.height / 2);
