@@ -1,0 +1,1 @@
+Apply the reviewed Release #24 guard patches and remove this trigger.
