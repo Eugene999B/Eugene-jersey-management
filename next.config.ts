@@ -35,6 +35,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   images: { remotePatterns: durableMediaPatterns() },
+  experimental: {
+    serverActions: { bodySizeLimit: "25mb" },
+    proxyClientMaxBodySize: "25mb",
+  },
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",
