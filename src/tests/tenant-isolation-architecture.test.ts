@@ -82,11 +82,12 @@ describe("structural tenant isolation", () => {
     }
   });
 
-  it("keeps a guarded two-shop PostgreSQL verification in the release pipeline", () => {
+  it("keeps guarded PostgreSQL tenant attacks in the release pipeline", () => {
     const packageJson = source("../package.json");
     const workflow = source("../.github/workflows/ci.yml");
     const verifier = source("../scripts/verify-tenant-isolation.ts");
-    expect(packageJson).toContain('"test:tenant-isolation": "tsx scripts/verify-tenant-isolation.ts"');
+    const release26Verifier = source("../scripts/verify-release26-platform-isolation.ts");
+    expect(packageJson).toContain("tsx scripts/verify-tenant-isolation.ts && tsx scripts/verify-release26-platform-isolation.ts");
     expect(workflow).toContain("Run two-shop tenant isolation verification");
     expect(workflow).toContain('TENANT_ISOLATION_TESTING: "true"');
     expect(verifier).toContain("Interactive transaction bypassed tenant scope");
@@ -96,6 +97,7 @@ describe("structural tenant isolation", () => {
     expect(verifier).toContain("Tenant client accessed Release 26 support cases");
     expect(verifier).toContain("Interactive tenant transaction accessed Release 26 support case notes");
     expect(verifier).toContain("Tenant client accessed Release 26 business applications");
+    expect(release26Verifier).toContain("Interactive tenant transaction accessed Release 26 business applications");
     expect(verifier).toContain("Tenant client accessed a platform-global model");
   });
 });
