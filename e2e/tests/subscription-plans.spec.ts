@@ -52,7 +52,7 @@ test("records a plan proposal and blocks requester self-approval", async ({ page
   const decisionForm = decisionNote.locator("xpath=ancestor::form");
   await decisionForm.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/billing\?error=self-approval$/);
-  await expect(page.getByRole("alert")).toContainText("cannot approve");
+  await expect(page.getByText("The administrator who requested a commercial change cannot approve it.", { exact: true })).toBeVisible();
   await expect(page.getByText("Basic · proposed version 2")).toBeVisible();
 });
 
