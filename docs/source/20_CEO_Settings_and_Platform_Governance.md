@@ -18,7 +18,7 @@ Every update requires a written reason and records previous value, new value, ad
 
 ## Security boundary
 
-`PlatformGovernanceSettings` is platform-global. Shop tenant clients and interactive tenant transactions must fail closed if they attempt direct access. Settings permission is required for the page and API.
+`PlatformGovernanceSettings` is platform-global. Shop tenant clients and interactive tenant transactions must fail closed if they attempt direct access. Settings permission is required for the page and API. The dedicated platform repository is the only approved database access path.
 
 ## Validation requirements
 
