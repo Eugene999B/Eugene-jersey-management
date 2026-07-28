@@ -22,9 +22,9 @@ export default async function StaffPage({ searchParams }: Props) {
   const [users, invites, capacity] = await Promise.all([
     prisma.user.findMany({ where: { shopId: shop.id }, orderBy: { createdAt: "desc" } }),
     prisma.inviteToken.findMany({ where: { shopId: shop.id, usedAt: null }, orderBy: { createdAt: "desc" }, take: 10 }),
-    staffCapacity(prisma, shop.id),
+    staffCapacity(shop.id),
   ]);
-  const atLimit = capacity.limit !== null && capacity.remaining === 0;
+  const atLimit = capacity.atLimit;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
