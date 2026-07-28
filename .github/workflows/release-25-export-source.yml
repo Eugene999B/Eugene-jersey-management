@@ -1,6 +1,9 @@
 name: Export Release 25 source
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - agent/release-25-solo-admin-help-centre
