@@ -19,7 +19,7 @@ const schema = z.object({
   password: strongPasswordSchema,
 });
 
-function errorRedirect(challenge: string) {
+function errorRedirect(challenge: string): never {
   redirect(`/reset-password?error=invalid&challenge=${encodeURIComponent(challenge)}`);
 }
 
