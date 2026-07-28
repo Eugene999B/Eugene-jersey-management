@@ -15,6 +15,7 @@ import {
   createStaffInviteWithinPlan,
   SubscriptionEntitlementError,
   SubscriptionLimitError,
+  toggleStaffAccessWithinPlan,
 } from "@/lib/subscription-entitlements";
 
 const allowedStaffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER] as const;
@@ -85,11 +86,7 @@ export async function toggleStaffAccessAction(formData: FormData) {
   const user = await prisma.user.findFirstOrThrow({ where: { id: userId, shopId } });
   if (user.id === session.id) redirect("/dashboard/staff?error=self");
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { isActive: !user.isActive, sessionVersion: { increment: 1 } },
-  });
-
+  const updated = await toggleStaffAccessWithinPlan({ shopId, userId }).catch(handleStaffWriteError);
   await audit({
     shopId,
     userId: session.id,
