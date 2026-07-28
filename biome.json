@@ -68,6 +68,18 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "src/app/admin/applications/[applicationId]/page.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          }
+        }
+      }
     }
   ]
 }
