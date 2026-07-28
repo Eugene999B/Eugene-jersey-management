@@ -7,12 +7,21 @@ import path from "path";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { MediaKind, StorageProvider, type Prisma } from "@prisma/client";
 import { nanoid } from "nanoid";
-import sharp from "sharp";
 import { prisma } from "@/lib/db";
+import {
+  DEFAULT_MAX_IMAGE_INPUT_PIXELS,
+  DEFAULT_MAX_IMAGE_UPLOAD_BYTES,
+  optimizeUploadedImage,
+} from "@/lib/media-image";
 
-const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-const maxUploadBytes = Math.max(1_000_000, Math.min(25_000_000, Number(process.env.MAX_IMAGE_UPLOAD_BYTES ?? 8 * 1024 * 1024)));
-const maxInputPixels = Math.max(1_000_000, Math.min(100_000_000, Number(process.env.MAX_IMAGE_INPUT_PIXELS ?? 40_000_000)));
+const maxUploadBytes = Math.max(
+  1_000_000,
+  Math.min(50_000_000, Number(process.env.MAX_IMAGE_UPLOAD_BYTES ?? DEFAULT_MAX_IMAGE_UPLOAD_BYTES)),
+);
+const maxInputPixels = Math.max(
+  1_000_000,
+  Math.min(100_000_000, Number(process.env.MAX_IMAGE_INPUT_PIXELS ?? DEFAULT_MAX_IMAGE_INPUT_PIXELS)),
+);
 
 type MediaUploadInput = {
   file: File;
@@ -21,19 +30,23 @@ type MediaUploadInput = {
   kind?: MediaKind;
   altText?: string | null;
 };
-type StoredObject = { provider: StorageProvider; key: string; url: string };
+type ExternalStoredObject = { provider: StorageProvider; key: string; url: string };
+export type MediaStorageMode = "database" | "local" | "r2" | "s3";
 
-function storageProvider() {
-  const provider = (process.env.MEDIA_STORAGE_PROVIDER ?? "local").toLowerCase();
-  if (provider === "r2") return StorageProvider.R2;
-  if (provider === "s3") return StorageProvider.S3;
-  return StorageProvider.LOCAL;
-}
-
-function assertProductionStorage(provider: StorageProvider) {
-  if (process.env.NODE_ENV === "production" && provider === StorageProvider.LOCAL && process.env.ALLOW_EPHEMERAL_MEDIA !== "true") {
-    throw new Error("Production media uploads require S3/R2 storage. Set MEDIA_STORAGE_PROVIDER=r2 or s3. Local Railway storage is ephemeral.");
+export function resolveMediaStorageMode(input: {
+  configured?: string | null;
+  nodeEnv?: string | null;
+  allowEphemeral?: string | null;
+} = {}): MediaStorageMode {
+  const configured = (input.configured ?? process.env.MEDIA_STORAGE_PROVIDER ?? "database").trim().toLowerCase();
+  const nodeEnv = input.nodeEnv ?? process.env.NODE_ENV;
+  const allowEphemeral = input.allowEphemeral ?? process.env.ALLOW_EPHEMERAL_MEDIA;
+  if (configured === "r2") return "r2";
+  if (configured === "s3") return "s3";
+  if (configured === "local") {
+    return nodeEnv === "production" && allowEphemeral !== "true" ? "database" : "local";
   }
+  return "database";
 }
 
 function localMediaRoot() {
@@ -52,6 +65,10 @@ function publicMediaUrl(key: string) {
   return `/api/media/local/${key}`;
 }
 
+function databaseMediaUrl(id: string, variant: "main" | "thumb") {
+  return `/api/media/database/${encodeURIComponent(id)}/${variant}`;
+}
+
 function safeKey(input: { shopId?: string | null; kind: MediaKind; suffix: string }) {
   const shopPart = (input.shopId ?? "platform").replace(/[^a-zA-Z0-9_-]/g, "");
   return `${shopPart}/${input.kind.toLowerCase()}/${input.suffix}`;
@@ -66,28 +83,36 @@ function s3Client() {
   return new S3Client({ endpoint, region, credentials: { accessKeyId, secretAccessKey }, forcePathStyle: true });
 }
 
-async function storeObject(key: string, body: Buffer, contentType: string): Promise<StoredObject> {
-  const provider = storageProvider();
-  assertProductionStorage(provider);
-  if (provider === StorageProvider.LOCAL) {
+async function storeExternalObject(mode: Exclude<MediaStorageMode, "database">, key: string, body: Buffer, contentType: string): Promise<ExternalStoredObject> {
+  if (mode === "local") {
     const root = localMediaRoot();
     const target = path.resolve(root, key);
     const relative = path.relative(root, target);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Invalid local media key.");
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, body, { flag: "wx" });
-    return { provider, key, url: publicMediaUrl(key) };
+    return { provider: StorageProvider.LOCAL, key, url: publicMediaUrl(key) };
   }
 
   const bucket = process.env.S3_BUCKET ?? process.env.R2_BUCKET;
   if (!bucket) throw new Error("S3/R2 bucket is missing.");
   if (!process.env.MEDIA_PUBLIC_URL) throw new Error("MEDIA_PUBLIC_URL is required for S3/R2 uploads.");
-  await s3Client().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType, CacheControl: "public, max-age=31536000, immutable" }));
-  return { provider, key, url: publicMediaUrl(key) };
+  await s3Client().send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    CacheControl: "public, max-age=31536000, immutable",
+  }));
+  return {
+    provider: mode === "r2" ? StorageProvider.R2 : StorageProvider.S3,
+    key,
+    url: publicMediaUrl(key),
+  };
 }
 
 export async function readLocalMedia(keyParts: string[]) {
-  if (storageProvider() !== StorageProvider.LOCAL) return null;
+  if (resolveMediaStorageMode() !== "local") return null;
   const key = keyParts.join("/");
   if (!key || key.includes("\0")) return null;
   const root = localMediaRoot();
@@ -97,30 +122,100 @@ export async function readLocalMedia(keyParts: string[]) {
   return readFile(filePath).catch(() => null);
 }
 
+export async function readDatabaseMedia(id: string, variant: "main" | "thumb") {
+  if (!/^[A-Za-z0-9_-]{12,100}$/.test(id)) return null;
+  const rows = await prisma.$queryRaw<Array<{
+    mimeType: string;
+    checksum: string | null;
+    contentData: Uint8Array | null;
+    thumbnailData: Uint8Array | null;
+  }>>`
+    SELECT "mimeType", "checksum", "contentData", "thumbnailData"
+    FROM "MediaAsset"
+    WHERE "id" = ${id}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  const data = variant === "thumb" ? row?.thumbnailData : row?.contentData;
+  if (!row || !data) return null;
+  return {
+    body: Buffer.from(data),
+    mimeType: row.mimeType || "image/webp",
+    etag: `"${row.checksum ?? id}-${variant}"`,
+  };
+}
+
+async function createDatabaseAsset(input: {
+  id: string;
+  upload: MediaUploadInput;
+  kind: MediaKind;
+  checksum: string;
+  optimized: Awaited<ReturnType<typeof optimizeUploadedImage>>;
+}) {
+  const url = databaseMediaUrl(input.id, "main");
+  const thumbnailUrl = databaseMediaUrl(input.id, "thumb");
+  return prisma.$transaction(async (transaction) => {
+    const asset = await transaction.mediaAsset.create({
+      data: {
+        id: input.id,
+        shopId: input.upload.shopId ?? null,
+        uploadedById: input.upload.uploadedById ?? null,
+        kind: input.kind,
+        provider: StorageProvider.LOCAL,
+        key: `database/${input.id}/main.webp`,
+        url,
+        thumbnailUrl,
+        originalName: input.upload.file.name.slice(0, 200),
+        mimeType: "image/webp",
+        width: input.optimized.width,
+        height: input.optimized.height,
+        sizeBytes: input.optimized.main.length,
+        checksum: input.checksum,
+      } satisfies Prisma.MediaAssetUncheckedCreateInput,
+    });
+    await transaction.$executeRaw`
+      UPDATE "MediaAsset"
+      SET "contentData" = ${input.optimized.main}, "thumbnailData" = ${input.optimized.thumbnail}
+      WHERE "id" = ${input.id}
+    `;
+    return asset;
+  });
+}
+
 export async function createOptimizedMediaAsset(input: MediaUploadInput) {
   if (!input.file || input.file.size <= 0) return null;
-  assertProductionStorage(storageProvider());
-  if (input.file.size > maxUploadBytes) throw new Error(`Image is too large. Maximum allowed size is ${Math.round(maxUploadBytes / 1024 / 1024)}MB.`);
-  if (!allowedImageTypes.has(input.file.type)) throw new Error("Only JPG, PNG, WebP, and AVIF images are allowed.");
-
-  const original = Buffer.from(await input.file.arrayBuffer());
-  const originalMetadata = await sharp(original, { limitInputPixels: maxInputPixels }).metadata();
-  if (!originalMetadata.width || !originalMetadata.height || originalMetadata.width * originalMetadata.height > maxInputPixels) {
-    throw new Error("Image dimensions are invalid or too large.");
+  if (input.file.size > maxUploadBytes) {
+    throw new Error(`Image is too large to process. Maximum upload size is ${Math.round(maxUploadBytes / 1024 / 1024)} MB.`);
   }
 
-  const checksum = createHash("sha256").update(original).digest("hex");
-  const optimized = await sharp(original, { limitInputPixels: maxInputPixels }).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
-  const thumb = await sharp(original, { limitInputPixels: maxInputPixels }).rotate().resize({ width: 480, height: 480, fit: "cover", withoutEnlargement: false }).webp({ quality: 76 }).toBuffer();
-  const metadata = await sharp(optimized).metadata();
+  const original = Buffer.from(await input.file.arrayBuffer());
   const kind = input.kind ?? MediaKind.PRODUCT;
-  const id = nanoid(16);
+  const checksum = createHash("sha256").update(original).digest("hex");
+  let optimized: Awaited<ReturnType<typeof optimizeUploadedImage>>;
+  try {
+    optimized = await optimizeUploadedImage({ original, kind, maxInputPixels });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unsupported image format")) throw error;
+    throw new Error(error instanceof Error && error.message.includes("dimensions")
+      ? error.message
+      : "This file could not be decoded as a safe image. Use JPG, PNG, WebP, AVIF, GIF, TIFF, HEIC/HEIF, or SVG.");
+  }
+
+  const mode = resolveMediaStorageMode();
+  const id = nanoid(20);
+  if (mode === "database") {
+    return createDatabaseAsset({ id, upload: input, kind, checksum, optimized });
+  }
+
   const base = safeKey({ shopId: input.shopId, kind, suffix: id });
-  const main = await storeObject(`${base}.webp`, optimized, "image/webp");
-  const thumbnail = await storeObject(`${base}-thumb.webp`, thumb, "image/webp");
+  const [main, thumbnail] = await Promise.all([
+    storeExternalObject(mode, `${base}.webp`, optimized.main, "image/webp"),
+    storeExternalObject(mode, `${base}-thumb.webp`, optimized.thumbnail, "image/webp"),
+  ]);
 
   return prisma.mediaAsset.create({
     data: {
+      id,
       shopId: input.shopId ?? null,
       uploadedById: input.uploadedById ?? null,
       kind,
@@ -130,9 +225,9 @@ export async function createOptimizedMediaAsset(input: MediaUploadInput) {
       thumbnailUrl: thumbnail.url,
       originalName: input.file.name.slice(0, 200),
       mimeType: "image/webp",
-      width: metadata.width,
-      height: metadata.height,
-      sizeBytes: optimized.length,
+      width: optimized.width,
+      height: optimized.height,
+      sizeBytes: optimized.main.length,
       checksum,
     } satisfies Prisma.MediaAssetUncheckedCreateInput,
   });

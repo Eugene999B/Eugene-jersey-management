@@ -13,7 +13,7 @@
     "test:release26-isolation": "tsx scripts/verify-release26-platform-isolation.ts",
     "test:release27-isolation": "tsx scripts/verify-release27-email-isolation.ts",
     "test:release28-isolation": "tsx scripts/verify-release28-recovery-isolation.ts",
-    "e2e:seed": "tsx scripts/seed-e2e.ts && tsx scripts/seed-release25-e2e.ts && tsx scripts/seed-release26-e2e.ts && tsx scripts/seed-release28-e2e.ts",
+    "e2e:seed": "tsx scripts/seed-e2e.ts && tsx scripts/seed-release25-e2e.ts && tsx scripts/seed-release26-e2e.ts && tsx scripts/seed-release28-e2e.ts && tsx scripts/seed-release30-e2e.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

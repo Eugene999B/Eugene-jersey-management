@@ -30,13 +30,24 @@ export default async function SettingsPage({ searchParams }: Props) {
   const smsReady = smsProvider === "arkesel"
     ? Boolean(process.env.ARKESEL_API_KEY && process.env.ARKESEL_SENDER_ID)
     : Boolean(process.env.SMS_API_URL && process.env.SMS_API_TOKEN);
-  const mediaProvider = (process.env.MEDIA_STORAGE_PROVIDER ?? "local").toLowerCase();
-  const mediaReady = ["r2", "s3"].includes(mediaProvider)
+  const configuredMediaProvider = (process.env.MEDIA_STORAGE_PROVIDER ?? "database").toLowerCase();
+  const mediaProvider = configuredMediaProvider === "local" && process.env.NODE_ENV === "production" && process.env.ALLOW_EPHEMERAL_MEDIA !== "true"
+    ? "database"
+    : configuredMediaProvider;
+  const externalMediaReady = ["r2", "s3"].includes(mediaProvider)
     && Boolean((process.env.S3_ENDPOINT ?? process.env.R2_ENDPOINT)
       && (process.env.S3_ACCESS_KEY_ID ?? process.env.R2_ACCESS_KEY_ID)
       && (process.env.S3_SECRET_ACCESS_KEY ?? process.env.R2_SECRET_ACCESS_KEY)
       && (process.env.S3_BUCKET ?? process.env.R2_BUCKET)
       && process.env.MEDIA_PUBLIC_URL);
+  const mediaReady = mediaProvider === "database" || mediaProvider === "local" || externalMediaReady;
+  const mediaStatus = mediaProvider === "database"
+    ? "PostgreSQL compressed media ready"
+    : mediaProvider === "local"
+      ? "Local development media ready"
+      : externalMediaReady
+        ? `${mediaProvider.toUpperCase()} persistent storage ready`
+        : `${mediaProvider.toUpperCase()} credentials incomplete`;
   const platformCharge = paymentConfig?.paystackTransactionCharge
     ? currency(Number(paymentConfig.paystackTransactionCharge) / 100, shop.currency)
     : "No flat platform charge";
@@ -81,8 +92,8 @@ export default async function SettingsPage({ searchParams }: Props) {
         </div>
         <div className={`rounded-lg border p-4 ${mediaReady ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
           <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Cloud size={18} /><h2 className="font-semibold">Media storage</h2></div>{mediaReady ? <CheckCircle2 size={19} className="text-emerald-700" /> : <AlertTriangle size={19} className="text-amber-700" />}</div>
-          <p className="mt-3 text-sm font-semibold">{mediaReady ? `${mediaProvider.toUpperCase()} persistent storage ready` : "Local storage is temporary on Railway"}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-600">Product photos, logos, and design artwork need S3 or R2 credentials plus a public media URL before production launch.</p>
+          <p className="mt-3 text-sm font-semibold">{mediaStatus}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600">Logos, product photos and raster design artwork are resized and compressed automatically. The large original is discarded; only the small optimized image and thumbnail are stored.</p>
         </div>
       </section>
 
@@ -97,7 +108,7 @@ export default async function SettingsPage({ searchParams }: Props) {
           <form action={updateShopSettingsAction} encType="multipart/form-data" className="mt-5 space-y-4">
             <label className="block"><span className="mb-1 block text-sm font-semibold">Shop name</span><input className="field" name="name" defaultValue={shop.name} required /></label>
             <label className="block"><span className="mb-1 block text-sm font-semibold">Logo URL</span><input className="field" name="logoUrl" defaultValue={shop.logoUrl ?? ""} placeholder="/brand/accra-pro.svg" /></label>
-            <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm"><span className="mb-2 block font-semibold text-slate-700">Upload shop logo</span><input className="block w-full text-sm" name="logoFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif" /><span className="mt-2 block text-xs text-slate-500">Uploaded logos are optimized and replace the URL above.</span></label>
+            <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm"><span className="mb-2 block font-semibold text-slate-700">Upload shop logo</span><input className="block w-full text-sm" name="logoFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs text-slate-500">JPG, PNG, WebP, AVIF, GIF, TIFF, HEIC/HEIF and SVG are converted to a small durable WebP automatically.</span></label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block"><span className="mb-1 block text-sm font-semibold">Primary color</span><input className="field h-12" name="primaryColor" type="color" defaultValue={shop.primaryColor} /></label>
               <label className="block"><span className="mb-1 block text-sm font-semibold">Secondary color</span><input className="field h-12" name="secondaryColor" type="color" defaultValue={shop.secondaryColor} /></label>
