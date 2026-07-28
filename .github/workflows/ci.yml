@@ -46,9 +46,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Apply reviewed Release 25 patch
-        if: ${{ github.event_name == 'push' && github.actor != 'github-actions[bot]' && hashFiles('.github/release25-patch/00.txt') != '' }}
+        if: ${{ github.actor != 'github-actions[bot]' && hashFiles('.github/release25-patch/00.txt') != '' }}
         shell: bash
         run: |
           cat .github/release25-patch/*.txt | base64 -d | gzip -d > /tmp/release-25.patch
@@ -100,7 +103,8 @@ jobs:
             src/tests/solo-admin-usability-architecture.test.ts \
             src/tests/subscription-plans.test.ts
           git commit -m "Implement sole-admin controls and operator help"
-          git push origin HEAD:${GITHUB_REF_NAME}
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          git push origin "HEAD:${branch}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
