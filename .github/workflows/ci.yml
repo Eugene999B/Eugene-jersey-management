@@ -1,74 +1,225 @@
-name: Apply CEO Governance Safety Patch
+name: Validate Eugene Jersey Management
 
 on:
   pull_request:
+  push:
     branches:
       - main
+      - "agent/**"
+
+concurrency:
+  group: ejm-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
-    if: github.event.pull_request.head.ref == 'work/roadmap-ceo-settings-governance'
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sports_shop_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sports_shop_platform"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sports_shop_platform?schema=public
+      SESSION_SECRET: github-actions-validation-secret-at-least-32-characters
+      TWO_FACTOR_ENCRYPTION_KEY: github-actions-two-factor-encryption-key-at-least-32-characters
+      APP_URL: http://localhost:3000
+      MEDIA_STORAGE_PROVIDER: local
+      SMS_PROVIDER: console
+      WHATSAPP_PROVIDER: console
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          ref: work/roadmap-ceo-settings-governance
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Apply platform-global tenant denial
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            e2e/package-lock.json
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Audit high-severity dependencies
         shell: bash
         run: |
-          python - <<'PY'
-          import re
-          from pathlib import Path
+          set +e
+          npm audit --audit-level=high --json > npm-audit.json
+          exit_code=$?
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
+          exit "$exit_code"
 
-          tenant = Path("src/lib/tenant-db.ts")
-          text = tenant.read_text()
-          anchor = '  accountTwoFactor: "AccountTwoFactor",\n'
-          if 'platformGovernanceSettings: "PlatformGovernanceSettings"' not in text:
-              if anchor not in text:
-                  raise SystemExit("tenant-db anchor missing")
-              text = text.replace(anchor, anchor + '  platformGovernanceSettings: "PlatformGovernanceSettings",\n', 1)
-          tenant.write_text(text)
+      - name: Upload dependency audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-diagnostics
+          path: npm-audit.json
+          if-no-files-found: ignore
+          retention-days: 3
 
-          verify = Path("scripts/verify-tenant-isolation.ts")
-          text = verify.read_text()
-          if "Tenant client accessed platform governance settings." not in text:
-              pattern = re.compile(
-                  r'(\n\s*await expectRejects\(\n\s*TenantDatabaseAccessError,\n\s*\(\) => tenantA\.\$transaction\(async \(transaction\) => transaction\.accountTwoFactor\.findMany\(\)\),\n\s*"Interactive transaction accessed platform-global two-factor records\.",\n\s*\);\n)'
-              )
-              match = pattern.search(text)
-              if not match:
-                  raise SystemExit("isolation assertion anchor missing")
-              addition = match.group(1) + '''
-    await expectRejects(
-      TenantDatabaseAccessError,
-      () => tenantA.platformGovernanceSettings.findMany(),
-      "Tenant client accessed platform governance settings.",
-    );
+      - name: Reject retired demo credentials
+        shell: bash
+        run: |
+          forbidden='Ghana''123'
+          if grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude='package-lock.json' "$forbidden" .; then
+            echo "A retired demo credential was found in the repository."
+            exit 1
+          fi
 
-    await expectRejects(
-      TenantDatabaseAccessError,
-      () => tenantA.$transaction(async (transaction) => transaction.platformGovernanceSettings.findMany()),
-      "Interactive transaction accessed platform governance settings.",
-    );
-'''
-              text = text[:match.start()] + addition + text[match.end():]
-          text = text.replace(
-              "design-version denial, two-factor global-model denial, and raw SQL denial.",
-              "design-version denial, platform-governance denial, two-factor global-model denial, and raw SQL denial.",
-          )
-          verify.write_text(text)
-          PY
-          git fetch origin main
-          git checkout origin/main -- .github/workflows/ci.yml
-          rm -f .github/workflows/apply-governance-isolation.yml
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/tenant-db.ts scripts/verify-tenant-isolation.ts .github/workflows/ci.yml .github/workflows/apply-governance-isolation.yml
-          git commit -m "Enforce platform governance tenant isolation"
-          git push origin HEAD:work/roadmap-ceo-settings-governance
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Validate guarded demo purge
+        env:
+          NODE_ENV: test
+          SEED_DEMO_PASSWORD: ci-demo-password-2026
+          ADMIN_EMAIL: ci-admin@example.test
+          ADMIN_LOGIN_ID: EJM-CI-ADMIN
+          ADMIN_NAME: CI Platform Admin
+          ADMIN_PASSWORD: ci-admin-password-2026
+          ADMIN_FORCE_RESET: "false"
+          PURGE_DEMO_DATA: PURGE-ACC-PRO-DEMO-2026
+          PURGE_DEMO_ALLOW_NON_PRODUCTION: "true"
+        run: |
+          npm run db:seed:demo
+          npm run production:activate
+          npm run production:purge-demo
+
+      - name: Lint
+        shell: bash
+        run: |
+          set +e
+          npm run lint 2>&1 | tee lint.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-diagnostics
+          path: lint.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Type-check application
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit --pretty false 2>&1 | tee typecheck.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload TypeScript diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-diagnostics
+          path: typecheck.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Test complete suite
+        shell: bash
+        run: |
+          set +e
+          npm test 2>&1 | tee test.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics
+          path: test.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Run two-shop tenant isolation verification
+        shell: bash
+        env:
+          NODE_ENV: test
+          TENANT_ISOLATION_TESTING: "true"
+        run: |
+          set +e
+          npm run test:tenant-isolation 2>&1 | tee tenant-isolation.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload tenant isolation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-isolation-diagnostics
+          path: tenant-isolation.log
+          if-no-files-found: ignore
+          retention-days: 5
+
+      - name: Generate documentation
+        run: npm run docs:generate
+
+      - name: Build production application without browser test dependencies
+        run: npm run build
+
+      - name: Install browser test dependencies
+        run: npm --prefix e2e ci
+
+      - name: Audit browser test dependencies
+        run: npm --prefix e2e audit --audit-level=high
+
+      - name: Install Chromium for browser acceptance
+        run: npm --prefix e2e run install:chromium
+
+      - name: Seed browser acceptance identities
+        env:
+          NODE_ENV: test
+          E2E_TESTING: "true"
+          E2E_PASSWORD: ci-browser-password-2026
+        run: npm run e2e:seed
+
+      - name: Run Chromium browser acceptance
+        shell: bash
+        env:
+          CI: "true"
+          E2E_PASSWORD: ci-browser-password-2026
+        run: |
+          set +e
+          npm run test:e2e 2>&1 | tee e2e.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-browser-acceptance
+          path: |
+            e2e.log
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 5
