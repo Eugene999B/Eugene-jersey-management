@@ -174,8 +174,8 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
                 <form action={decideSubscriptionPlanChangeAction} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
                   <input type="hidden" name="requestId" value={request.id} />
                   <input className="field" name="decisionNote" minLength={5} required placeholder="Approval or rejection note" />
-                  <button className="button-primary" name="decision" value="APPROVE">Approve</button>
-                  <button className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700" name="decision" value="REJECT">Reject</button>
+                  <button type="submit" className="button-primary" name="decision" value="APPROVE">Approve</button>
+                  <button type="submit" className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700" name="decision" value="REJECT">Reject</button>
                 </form>
               </div>
             );
