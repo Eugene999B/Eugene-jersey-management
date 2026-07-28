@@ -3,12 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { OrderChannel, OrderStatus, PaymentStatus, ReturnRequestStatus, Role, ShopVerificationStatus } from "@prisma/client";
+import { ReturnRequestStatus, Role, ShopVerificationStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
 import { platformPermissionValues, requirePlatformPermission } from "@/lib/platform-admin";
 
 export async function verifyShopCredentialsAction(formData: FormData) {
@@ -206,18 +205,6 @@ export async function updateReturnIssueAction(formData: FormData) {
   const changed = await prisma.returnRequest.updateMany({ where: { id: existing.id, status: existing.status }, data: { status: parsed.data.status, resolution: parsed.data.resolution ?? existing.resolution, resolvedAt: terminal ? existing.resolvedAt ?? new Date() : null } });
   if (changed.count !== 1) redirect("/admin/support?error=issue-changed");
   await audit({ shopId: existing.shopId, userId: session.id, action: "admin.return_issue_updated", entityType: "ReturnRequest", entityId: existing.id, metadata: { from: existing.status, to: parsed.data.status, resolution: parsed.data.resolution } });
-  revalidatePath("/admin");
-  revalidatePath("/admin/support");
-}
-
-export async function releaseStaleReservationAction(formData: FormData) {
-  const session = await requirePlatformPermission("support");
-  const orderId = String(formData.get("orderId") ?? "");
-  if (!orderId) redirect("/admin/support?error=reservation");
-  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { payments: true } });
-  if (!order || order.channel !== OrderChannel.ONLINE || order.status !== OrderStatus.PENDING || !order.payments.some((payment) => payment.status === PaymentStatus.PENDING)) redirect("/admin/support?error=reservation");
-  const released = await releaseUnpaidOnlineReservation(order.id, session.id);
-  if (!released) redirect("/admin/support?error=reservation");
   revalidatePath("/admin");
   revalidatePath("/admin/support");
 }
