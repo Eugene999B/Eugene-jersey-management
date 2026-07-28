@@ -1,5 +1,3 @@
-import "server-only";
-
 import { createHash, randomBytes } from "node:crypto";
 
 type BusinessApplicationReferenceType = "SHOP" | "SUPPLIER";
@@ -12,7 +10,7 @@ function utcDateStamp(value: Date) {
 }
 
 function normaliseSuffix(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8).padEnd(6, "0");
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8).padEnd(8, "0");
 }
 
 function randomReferenceSuffix() {
