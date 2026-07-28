@@ -74,12 +74,13 @@ export async function requestBuyerPasswordResetAction(formData: FormData) {
   if (!buyer || !destination) redirect(`/buyer/forgot-password?sent=1&next=${encodeURIComponent(next)}`);
 
   try {
-    const challenge = await createPasswordRecoveryChallenge({
+    await createPasswordRecoveryChallenge({
       accountKind: AccountKind.BUYER,
       accountId: buyer.id,
       channel: parsed.data.channel,
       destination,
       recipientName: buyer.name,
+      resetPath: `/buyer/reset-password?next=${encodeURIComponent(next)}`,
       minutes: 10,
     });
     await audit({
@@ -88,7 +89,6 @@ export async function requestBuyerPasswordResetAction(formData: FormData) {
       entityId: buyer.id,
       metadata: { channel: parsed.data.channel, deliveryAccepted: true },
     });
-    redirect(`/buyer/reset-password?sent=1&challenge=${encodeURIComponent(challenge.publicToken)}&next=${encodeURIComponent(next)}`);
   } catch {
     await audit({
       action: "auth.buyer_password_reset_requested",
@@ -96,6 +96,6 @@ export async function requestBuyerPasswordResetAction(formData: FormData) {
       entityId: buyer.id,
       metadata: { channel: parsed.data.channel, deliveryAccepted: false },
     });
-    redirect(`/buyer/forgot-password?sent=1&next=${encodeURIComponent(next)}`);
   }
+  redirect(`/buyer/forgot-password?sent=1&next=${encodeURIComponent(next)}`);
 }
