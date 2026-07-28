@@ -1,14 +1,16 @@
 import "server-only";
 
 import { randomInt, timingSafeEqual } from "node:crypto";
+import { EmailDeliveryStatus } from "@prisma/client";
 import { platformDb } from "@/lib/platform-db";
 import { hashToken, minutesFromNow } from "@/lib/tokens";
+import {
+  isEmailDeliveryConfigured,
+  normaliseEmail,
+  sendTransactionalEmail,
+} from "@/lib/transactional-email";
 
-const EMAIL_TIMEOUT_MS = Math.max(3_000, Math.min(30_000, Number(process.env.EMAIL_PROVIDER_TIMEOUT_MS ?? 12_000)));
-
-function normaliseEmail(value: string) {
-  return value.trim().toLowerCase();
-}
+export { isEmailDeliveryConfigured } from "@/lib/transactional-email";
 
 function createEmailCode() {
   return String(randomInt(100000, 1000000));
@@ -20,53 +22,12 @@ function safeHashEqual(left: string, right: string) {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function emailConfig() {
-  return {
-    provider: (process.env.EMAIL_PROVIDER ?? "console").trim().toLowerCase(),
-    apiKey: process.env.RESEND_API_KEY?.trim(),
-    from: process.env.EMAIL_FROM?.trim(),
-  };
+function safeName(value: string) {
+  return value.replace(/[<>&"']/g, "").slice(0, 120);
 }
 
-export function isEmailDeliveryConfigured() {
-  const config = emailConfig();
-  return config.provider === "resend" && Boolean(config.apiKey && config.from);
-}
-
-async function sendViaResend(input: {
-  recordId: string;
-  codeHash: string;
-  email: string;
-  name: string;
-  code: string;
-  minutes: number;
-}) {
-  const config = emailConfig();
-  if (config.provider !== "resend" || !config.apiKey || !config.from) {
-    throw new Error("EMAIL_PROVIDER_NOT_CONFIGURED");
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": `buyer-email-verification/${input.recordId}/${input.codeHash.slice(0, 20)}`,
-      "User-Agent": "Eugene-Jersey-Management/1.0",
-    },
-    body: JSON.stringify({
-      from: config.from,
-      to: [input.email],
-      subject: "Verify your Eugene Jersey Management email",
-      text: `Hello ${input.name}, your email verification code is ${input.code}. It expires in ${input.minutes} minutes. Do not share it.`,
-      html: `<p>Hello ${input.name.replace(/[<>&"']/g, "")},</p><p>Your Eugene Jersey Management email verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${input.code}</p><p>It expires in ${input.minutes} minutes. Do not share it.</p>`,
-    }),
-    signal: AbortSignal.timeout(EMAIL_TIMEOUT_MS),
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => null) as { id?: string; message?: string } | null;
-  if (!response.ok || !payload?.id) throw new Error(`EMAIL_PROVIDER_${response.status}`);
-  return payload.id;
+function safeDeliveryDetail(error: unknown) {
+  return error instanceof Error ? error.message.replace(/[\r\n\t]+/g, " ").slice(0, 180) : "EMAIL_PROVIDER_ERROR";
 }
 
 export async function createBuyerEmailCode(input: {
@@ -75,6 +36,7 @@ export async function createBuyerEmailCode(input: {
   name: string;
   minutes?: number;
 }) {
+  if (!isEmailDeliveryConfigured()) throw new Error("EMAIL_PROVIDER_NOT_CONFIGURED");
   const minutes = Math.max(5, Math.min(30, input.minutes ?? 10));
   const email = normaliseEmail(input.email);
   const code = createEmailCode();
@@ -89,6 +51,9 @@ export async function createBuyerEmailCode(input: {
       usedAt: null,
       verifiedAt: null,
       providerReference: "PENDING-DISPATCH",
+      deliveryStatus: EmailDeliveryStatus.PENDING,
+      deliveryDetail: null,
+      deliveredAt: null,
     },
     create: {
       buyerId: input.buyerId,
@@ -96,24 +61,36 @@ export async function createBuyerEmailCode(input: {
       codeHash,
       expiresAt: minutesFromNow(minutes),
       providerReference: "PENDING-DISPATCH",
+      deliveryStatus: EmailDeliveryStatus.PENDING,
     },
   });
 
   try {
-    const providerReference = await sendViaResend({
-      recordId: record.id,
-      codeHash,
-      email,
-      name: input.name,
-      code,
-      minutes,
+    const sent = await sendTransactionalEmail({
+      to: email,
+      recipientName: input.name,
+      subject: "Verify your Eugene Jersey Management email",
+      text: `Hello ${input.name}, your email verification code is ${code}. It expires in ${minutes} minutes. Do not share it.`,
+      html: `<p>Hello ${safeName(input.name)},</p><p>Your Eugene Jersey Management email verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${minutes} minutes. Do not share it.</p>`,
+      idempotencyKey: `buyer-email-verification/${record.id}/${codeHash.slice(0, 20)}`,
+      tags: { category: "buyer_email_verification", buyer_id: input.buyerId },
     });
     await platformDb.buyerEmailVerification.updateMany({
       where: { id: record.id, codeHash, usedAt: null },
-      data: { providerReference },
+      data: {
+        providerReference: sent.providerReference,
+        deliveryStatus: EmailDeliveryStatus.ACCEPTED,
+        deliveryDetail: null,
+      },
     });
   } catch (error) {
-    await platformDb.buyerEmailVerification.deleteMany({ where: { id: record.id, codeHash } });
+    await platformDb.buyerEmailVerification.updateMany({
+      where: { id: record.id, codeHash, usedAt: null },
+      data: {
+        deliveryStatus: EmailDeliveryStatus.FAILED,
+        deliveryDetail: safeDeliveryDetail(error),
+      },
+    });
     throw error;
   }
 
@@ -127,7 +104,15 @@ export async function consumeBuyerEmailCode(input: {
 }) {
   const email = normaliseEmail(input.email);
   const record = await platformDb.buyerEmailVerification.findUnique({ where: { buyerId: input.buyerId } });
-  if (!record || record.email !== email || record.usedAt || record.expiresAt <= new Date() || record.attempts >= 5) return null;
+  if (
+    !record
+    || record.email !== email
+    || record.usedAt
+    || record.expiresAt <= new Date()
+    || record.attempts >= 5
+    || record.deliveryStatus === EmailDeliveryStatus.FAILED
+    || record.deliveryStatus === EmailDeliveryStatus.BOUNCED
+  ) return null;
 
   if (!safeHashEqual(record.codeHash, hashToken(input.code))) {
     await platformDb.buyerEmailVerification.updateMany({
@@ -145,6 +130,7 @@ export async function consumeBuyerEmailCode(input: {
       usedAt: null,
       expiresAt: { gt: verifiedAt },
       attempts: { lt: 5 },
+      deliveryStatus: { notIn: [EmailDeliveryStatus.FAILED, EmailDeliveryStatus.BOUNCED] },
     },
     data: { usedAt: verifiedAt, verifiedAt },
   });
@@ -154,6 +140,14 @@ export async function consumeBuyerEmailCode(input: {
 export async function buyerEmailVerificationState(buyerId: string) {
   return platformDb.buyerEmailVerification.findUnique({
     where: { buyerId },
-    select: { email: true, expiresAt: true, verifiedAt: true, attempts: true },
+    select: {
+      email: true,
+      expiresAt: true,
+      verifiedAt: true,
+      attempts: true,
+      deliveryStatus: true,
+      deliveryDetail: true,
+      deliveredAt: true,
+    },
   });
 }
