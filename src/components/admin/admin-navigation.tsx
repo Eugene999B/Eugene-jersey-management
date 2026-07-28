@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Activity, BarChart3, BookOpen, Coins, CreditCard, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { Activity, BarChart3, BookOpen, ClipboardCheck, Coins, CreditCard, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
 interface AdminNavigationProps {
@@ -14,6 +14,7 @@ interface AdminNavigationProps {
 const adminNav = [
   { href: "/admin", label: "Overview", shortLabel: "Home", icon: BarChart3, permission: null },
   { href: "/admin/shops", label: "Shops", shortLabel: "Shops", icon: Store, permission: "shops" },
+  { href: "/admin/applications", label: "Applications", shortLabel: "Apply", icon: ClipboardCheck, permission: "shops" },
   { href: "/admin/staff", label: "Admin staff", shortLabel: "Staff", icon: UserCog, permission: "workers" },
   { href: "/admin/investigate", label: "Investigation", shortLabel: "Search", icon: Search, permission: "support" },
   { href: "/admin/support/cases", label: "Support cases", shortLabel: "Cases", icon: FolderKanban, permission: "support" },
