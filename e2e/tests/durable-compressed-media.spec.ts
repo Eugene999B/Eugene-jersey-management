@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 const png = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFUlEQVR42mNkYPj/n4GBgYGJAQoAHgQCAQmX2rUAAAAASUVORK5CYII=",
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAH0lEQVR4nGNkYGAQYOAgHrEwCHAwMJCARjWMahg6GgC3uAoWp+kCcgAAAABJRU5ErkJggg==",
   "base64",
 );
 
@@ -39,7 +39,7 @@ function databasePathFromImageSource(source: string | null) {
 
 async function expectCompressedWebp(page: Page, path: string | null) {
   expect(path).toBeTruthy();
-  const response = await page.request.get(path ?? "");
+  const response = await page.request.get(new URL(path ?? "", page.url()).toString());
   expect(response.ok()).toBe(true);
   expect(response.headers()["content-type"]).toContain("image/webp");
   const body = await response.body();
@@ -54,6 +54,7 @@ test("stores compressed shop, product and Design Studio images durably in Postgr
   await expect(page.getByText("PostgreSQL compressed media ready")).toBeVisible();
   await expect(page.getByText(/large original is discarded/i)).toBeVisible();
   await expect(page.getByText(/Production media uploads require S3\/R2 storage/i)).toHaveCount(0);
+  await expect(page.locator('input[name="logoFile"]')).toHaveAttribute("accept", /\.heic/);
 
   await page.locator('input[name="logoFile"]').setInputFiles(uploadedFile("release30-logo.png"));
   await page.getByRole("button", { name: "Save settings" }).click();
@@ -64,6 +65,7 @@ test("stores compressed shop, product and Design Studio images durably in Postgr
 
   await page.goto("/dashboard/catalog");
   const productForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Create product" }) });
+  await expect(productForm.locator('input[name="photo"]')).toHaveAttribute("accept", /\.heif/);
   await productForm.locator('input[name="name"]').fill("Release 30 Compressed Product");
   await productForm.locator('select[name="categoryId"]').selectOption({ label: "Release 30 Products" });
   await productForm.locator('input[name="basePrice"]').fill("125");
@@ -78,7 +80,9 @@ test("stores compressed shop, product and Design Studio images durably in Postgr
   await expectCompressedWebp(page, databasePathFromImageSource(productStyle));
 
   await page.goto("/dashboard/designs");
-  await page.locator('input[type="file"][multiple]').setInputFiles(uploadedFile("release30-design.png"));
+  const artworkInput = page.locator('input[type="file"][multiple]');
+  await expect(artworkInput).toHaveAttribute("accept", /\.tiff/);
+  await artworkInput.setInputFiles(uploadedFile("release30-design.png"));
   await expect(page.getByText("1 artwork file added")).toBeVisible();
   const designHref = await page.locator('svg[aria-label="Production material canvas"] image').getAttribute("href");
   await expectCompressedWebp(page, databasePathFromImageSource(designHref));
