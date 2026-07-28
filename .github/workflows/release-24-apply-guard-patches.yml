@@ -1,36 +1,28 @@
-name: Apply Release 24 guard patches
+name: Temporary Release 24 patch payload
 
 on:
-  pull_request:
-    branches:
-      - main
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  patch:
-    if: github.actor != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+  payload:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-      - name: Apply exact guard and roadmap patches
-        run: |
+      - run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace(path, old, new):
+          def replace_once(path, old, new, desired=None):
               file = Path(path)
               text = file.read_text()
+              target = desired or new
+              if target in text:
+                  return
               if old not in text:
-                  raise SystemExit(f"Expected text not found in {path}: {old[:120]!r}")
+                  print(f"Skipped reformatted target in {path}: {old[:80]!r}")
+                  return
               file.write_text(text.replace(old, new, 1))
 
-          replace(
+          replace_once(
               "src/lib/tenant-db.ts",
               '  shopSubscriptionContract: "ShopSubscriptionContract",\n',
               '  shopSubscriptionContract: "ShopSubscriptionContract",\n'
@@ -40,9 +32,9 @@ jobs:
               '  shopCommunicationWallet: "ShopCommunicationWallet",\n'
               '  communicationCreditPurchase: "CommunicationCreditPurchase",\n'
               '  communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry",\n',
+              'communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"',
           )
-
-          replace(
+          replace_once(
               "src/tests/tenant-isolation-architecture.test.ts",
               '    expect(tenantDb).toContain(\'shopSubscriptionContract: "ShopSubscriptionContract"\');\n',
               '    expect(tenantDb).toContain(\'shopSubscriptionContract: "ShopSubscriptionContract"\');\n'
@@ -52,66 +44,69 @@ jobs:
               '    expect(tenantDb).toContain(\'shopCommunicationWallet: "ShopCommunicationWallet"\');\n'
               '    expect(tenantDb).toContain(\'communicationCreditPurchase: "CommunicationCreditPurchase"\');\n'
               '    expect(tenantDb).toContain(\'communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"\');\n',
+              'communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"',
           )
-          replace(
+          replace_once(
               "src/tests/tenant-isolation-architecture.test.ts",
               '    expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");\n',
               '    expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");\n'
               '    expect(verifier).toContain("Tenant client accessed the communication credit package catalogue");\n'
               '    expect(verifier).toContain("Interactive tenant transaction accessed communication credit wallets");\n',
+              'Interactive tenant transaction accessed communication credit wallets',
           )
 
-          subscription_block = '''    await expectRejects(
+          verifier = Path("scripts/verify-tenant-isolation.ts")
+          verifier_text = verifier.read_text()
+          if "Tenant client accessed the communication credit package catalogue." not in verifier_text:
+              marker = '''    await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.$transaction(async (transaction) => transaction.shopSubscriptionContract.findMany()),
               "Interactive tenant transaction accessed shop subscription contracts.",
             );
 '''
-          communication_block = subscription_block + '''
+              addition = marker + '''
             await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.communicationCreditPackage.findMany(),
               "Tenant client accessed the communication credit package catalogue.",
             );
-
             await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.communicationCreditPackageVersion.findMany(),
               "Tenant client accessed immutable communication credit package versions.",
             );
-
             await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.communicationCreditPackageChangeRequest.findMany(),
               "Tenant client accessed communication credit commercial approval requests.",
             );
-
             await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.$transaction(async (transaction) => transaction.shopCommunicationWallet.findMany()),
               "Interactive tenant transaction accessed communication credit wallets.",
             );
-
             await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.$transaction(async (transaction) => transaction.communicationCreditPurchase.findMany()),
               "Interactive tenant transaction accessed communication credit purchases.",
             );
-
             await expectRejects(
               TenantDatabaseAccessError,
               () => tenantA.$transaction(async (transaction) => transaction.communicationCreditLedgerEntry.findMany()),
               "Interactive tenant transaction accessed communication credit ledger entries.",
             );
 '''
-          replace("scripts/verify-tenant-isolation.ts", subscription_block, communication_block)
-          replace(
-              "scripts/verify-tenant-isolation.ts",
-              'governance denial, subscription-catalogue denial, two-factor global-model denial',
-              'governance denial, subscription-catalogue denial, communication-credit denial, two-factor global-model denial',
+              if marker in verifier_text:
+                  verifier_text = verifier_text.replace(marker, addition, 1)
+              else:
+                  raise SystemExit("Subscription contract isolation marker not found")
+          verifier_text = verifier_text.replace(
+              "governance denial, subscription-catalogue denial, two-factor global-model denial",
+              "governance denial, subscription-catalogue denial, communication-credit denial, two-factor global-model denial",
           )
+          verifier.write_text(verifier_text)
 
-          replace(
+          replace_once(
               "src/app/api/paystack/webhook/route.ts",
               '''    let result = await settleCommunicationCreditPurchase(payload.data);
               if (result.status === "ignored" && result.reason === "credit-purchase-not-found") {
@@ -123,9 +118,9 @@ jobs:
                 ? await settlePaystackTransaction(payload.data)
                 : creditResult;
 ''',
+              "const creditResult = await settleCommunicationCreditPurchase",
           )
-
-          replace(
+          replace_once(
               "src/lib/messaging.ts",
               '''export function isCommunicationDeliveryConfigured(channel: NotificationChannel) {
               const config = providerConfig(channel);
@@ -134,68 +129,51 @@ jobs:
               const config = providerConfig(channel);
               if (config.provider.toLowerCase() === "console") return false;
 ''',
+              'if (config.provider.toLowerCase() === "console") return false;',
           )
-
-          replace(
+          replace_once(
               "src/app/admin/billing/communication-actions.ts",
               '        isActive: true,\n        version: 1,',
               '        isActive: false,\n        version: 1,',
+              '        isActive: false,\n        version: 1,',
           )
-
-          replace(
+          replace_once(
               "src/app/dashboard/messages/credit-actions.ts",
               '  redirect(authorizationUrl);\n',
               '  if (!authorizationUrl) messagesRedirect("credit-checkout");\n  redirect(authorizationUrl);\n',
+              'if (!authorizationUrl) messagesRedirect("credit-checkout");',
           )
-
-          replace(
+          replace_once(
               "src/app/dashboard/messages/page.tsx",
               '{params.channel ? `${titleCase(params.channel)} credits` : "Communication credits"} purchased successfully. The verified units are now available.',
               'Communication credits purchased successfully. The verified units are now available.',
           )
-
-          replace(
+          replace_once(
               "src/app/dashboard/debts/page.tsx",
               '  "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",\n',
               '  "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",\n'
               '  "sms-credits": "This shop has no SMS credits. An owner or manager can purchase an approved package from Messages.",\n'
               '  "whatsapp-credits": "This shop has no WhatsApp credits. An owner or manager can purchase an approved package from Messages.",\n',
+              '"whatsapp-credits": "This shop has no WhatsApp credits.',
           )
-          replace(
+          replace_once(
               "src/app/dashboard/debts/page.tsx",
               '{params.error && debtErrors[params.error] ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">',
               '{params.error && debtErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">',
+              '<div role="alert" className="rounded-xl border border-red-200',
           )
 
           roadmap = "docs/source/10_System_Diagnostic_Progress_and_Roadmap.md"
-          replace(
-              roadmap,
-              'audited CEO governance controls and a versioned subscription-plan catalogue with second-administrator approval.',
-              'audited CEO governance controls, a versioned subscription-plan catalogue with second-administrator approval, and isolated SMS/WhatsApp communication-credit wallets with verified administrator-account purchases.',
-          )
-          replace(
-              roadmap,
-              '**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed, communication credits are built and remaining commercial launch controls are finished.',
-              '**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed and remaining commercial launch controls are finished.',
-          )
-          replace(
+          replace_once(roadmap, "audited CEO governance controls and a versioned subscription-plan catalogue with second-administrator approval.", "audited CEO governance controls, a versioned subscription-plan catalogue with second-administrator approval, and isolated SMS/WhatsApp communication-credit wallets with verified administrator-account purchases.")
+          replace_once(roadmap, "**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed, communication credits are built and remaining commercial launch controls are finished.", "**Not ready for broad paid shop onboarding** until the Release #17 provider checks are verified against real Railway credentials, controlled payment/message tests are completed and remaining commercial launch controls are finished.")
+          replace_once(
               roadmap,
               '28. **Included staff enforcement** — active non-owner staff and open invites reserve assigned plan slots; direct creation, invitations and acceptance fail closed through serializable platform transactions when the limit is reached.\n',
-              '28. **Included staff enforcement** — active non-owner staff and open invites reserve assigned plan slots; direct creation, invitations and acceptance fail closed through serializable platform transactions when the limit is reached.\n'
-              '29. **Communication package catalogue** — SMS and WhatsApp package prices, paid units, bonuses and availability use written proposals, second-administrator approval and immutable package versions.\n'
-              '30. **Administrator-owned credit checkout** — communication packages use the EJM main Paystack account without a shop subaccount, while ordinary shop sales retain store-owned settlement.\n'
-              '31. **Isolated shop wallets and ledger** — every shop has separate SMS and WhatsApp balances; verified purchases, message usage and provider-failure refunds are recorded through idempotent serializable ledger entries.\n'
-              '32. **Fail-closed message charging** — real provider sends reserve one credit, insufficient balances block dispatch, failed sends refund automatically, and email or console queues remain free.\n',
+              '28. **Included staff enforcement** — active non-owner staff and open invites reserve assigned plan slots; direct creation, invitations and acceptance fail closed through serializable platform transactions when the limit is reached.\n29. **Communication package catalogue** — SMS and WhatsApp package prices, paid units, bonuses and availability use written proposals, second-administrator approval and immutable package versions.\n30. **Administrator-owned credit checkout** — communication packages use the EJM main Paystack account without a shop subaccount, while ordinary shop sales retain store-owned settlement.\n31. **Isolated shop wallets and ledger** — every shop has separate SMS and WhatsApp balances; verified purchases, message usage and provider-failure refunds are recorded through idempotent serializable ledger entries.\n32. **Fail-closed message charging** — real provider sends reserve one credit, insufficient balances block dispatch, failed sends refund automatically, and email or console queues remain free.\n',
+              '29. **Communication package catalogue**',
           )
-          replace(
-              roadmap,
-              '6. Platform subscriptions and future SMS/WhatsApp credit purchases belong to the administrator account.',
-              '6. Platform subscriptions and SMS/WhatsApp credit purchases belong to the administrator account.',
-          )
-          replace(
-              roadmap,
-              '## Design recovery operating rules\n',
-              '''## Communication credit operating rules
+          replace_once(roadmap, "6. Platform subscriptions and future SMS/WhatsApp credit purchases belong to the administrator account.", "6. Platform subscriptions and SMS/WhatsApp credit purchases belong to the administrator account.")
+          communication_rules = '''## Communication credit operating rules
 
 1. SMS and WhatsApp packages are channel-specific platform-commercial records.
 2. Migration placeholders contain no invented price or credit quantity and existing shops start with zero balances.
@@ -210,59 +188,15 @@ jobs:
 11. Package, approval, wallet, purchase and ledger models remain inaccessible through normal and interactive tenant clients.
 12. Provider segment pricing, templates, consent, delivery status and cost reconciliation remain controlled rollout work.
 
-## Design recovery operating rules
-''',
-          )
-          replace(
-              roadmap,
-              '10. Complete communication-credit packages, support investigations, public business applications and location-aware marketplace work.',
-              '10. Complete support investigations, public business applications and location-aware marketplace work.',
-          )
-          replace(
-              roadmap,
-              '''1. Verify Release #17 production integrations when provider accounts are ready.
-2. Build SMS and WhatsApp communication-credit packages using the EJM administrator payment account.
-3. Add the admin investigation centre and public shop/supplier application pipeline.
-4. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.
-5. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
-6. Complete Paystack refunds, POS gateway payments and settlement/retry operations.
-7. Finish Design Studio collaboration/version-comparison improvements.
-8. Complete commercial launch hardening and a controlled real-shop pilot.
-''',
-              '''1. Verify Release #17 production integrations when provider accounts are ready.
-2. Add the admin investigation centre and public shop/supplier application pipeline.
-3. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.
-4. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.
-5. Complete Paystack refunds, POS gateway payments and settlement/retry operations.
-6. Finish Design Studio collaboration/version-comparison improvements.
-7. Complete controlled communication-package payment and provider-delivery tests.
-8. Complete commercial launch hardening and a controlled real-shop pilot.
-''',
-          )
-          replace(
-              roadmap,
-              '`docs/source/21_Subscription_Plans_and_Commercial_Approval.md` before production changes.',
-              '`docs/source/21_Subscription_Plans_and_Commercial_Approval.md`, and `docs/source/22_Communication_Credits_and_Wallets.md` before production changes.',
-          )
-          replace(
-              roadmap,
-              '17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.\n18. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.',
-              '17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.\n'
-              '18. Communication package, approval, wallet, purchase and ledger models must remain inaccessible through shop tenant clients and interactive tenant transactions.\n'
-              '19. Communication purchases must settle to the EJM administrator account; normal shop customer payments must retain store-owned subaccount settlement.\n'
-              '20. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.',
-          )
+'''
+          replace_once(roadmap, "## Design recovery operating rules\n", communication_rules + "## Design recovery operating rules\n", "## Communication credit operating rules")
+          replace_once(roadmap, "10. Complete communication-credit packages, support investigations, public business applications and location-aware marketplace work.", "10. Complete support investigations, public business applications and location-aware marketplace work.")
+          replace_once(roadmap, "2. Build SMS and WhatsApp communication-credit packages using the EJM administrator payment account.\n3. Add the admin investigation centre and public shop/supplier application pipeline.\n4. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.\n5. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.\n6. Complete Paystack refunds, POS gateway payments and settlement/retry operations.\n7. Finish Design Studio collaboration/version-comparison improvements.\n8. Complete commercial launch hardening and a controlled real-shop pilot.", "2. Add the admin investigation centre and public shop/supplier application pipeline.\n3. Enforce remaining subscription entitlements and build renewal/invoice/dunning operations.\n4. Add verified coordinates, standard marketplace taxonomy and nearby-shop discovery.\n5. Complete Paystack refunds, POS gateway payments and settlement/retry operations.\n6. Finish Design Studio collaboration/version-comparison improvements.\n7. Complete controlled communication-package payment and provider-delivery tests.\n8. Complete commercial launch hardening and a controlled real-shop pilot.", "7. Complete controlled communication-package payment")
+          replace_once(roadmap, '`docs/source/21_Subscription_Plans_and_Commercial_Approval.md` before production changes.', '`docs/source/21_Subscription_Plans_and_Commercial_Approval.md`, and `docs/source/22_Communication_Credits_and_Wallets.md` before production changes.')
+          replace_once(roadmap, "17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.\n18. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.", "17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.\n18. Communication package, approval, wallet, purchase and ledger models must remain inaccessible through shop tenant clients and interactive tenant transactions.\n19. Communication purchases must settle to the EJM administrator account; normal shop customer payments must retain store-owned subaccount settlement.\n20. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.", "18. Communication package, approval, wallet")
 
-          workflow = Path(".github/workflows/release-24-apply-guard-patches.yml")
+          Path(".github/workflows/release-24-apply-guard-patches.yml").unlink()
           trigger = Path(".github/release-24-guard-trigger.txt")
-          workflow.unlink()
           if trigger.exists():
               trigger.unlink()
           PY
-      - name: Commit guard patches and remove temporary files
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Harden communication credit isolation and roadmap"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
