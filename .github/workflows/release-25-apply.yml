@@ -1,0 +1,49 @@
+name: Apply Release 25 candidate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - agent/release-25-solo-admin-help-centre
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-25-import
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+      - name: Verify, apply and commit candidate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          find .github/release25-patch -maxdepth 1 -type f -name '*.txt' -printf '%f %s bytes\n' | sort
+          cat .github/release25-patch/*.txt > /tmp/release-25.patch.gz.b64
+          test "$(wc -c < /tmp/release-25.patch.gz.b64)" = "55860"
+          echo '868e3233555d4ac6780dc6b1fa807d224823370856086649e58b6d9ce5321356  /tmp/release-25.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/release-25.patch.gz.b64 > /tmp/release-25.patch.gz
+          gzip -t /tmp/release-25.patch.gz
+          gzip -dc /tmp/release-25.patch.gz > /tmp/release-25.patch
+          test "$(wc -c < /tmp/release-25.patch)" = "193863"
+          echo '9b4a1e0030a3ff9b7c672cb1db37edbac6dd82c51d7cebfc9e43eeb44c59c451  /tmp/release-25.patch' | sha256sum -c -
+          git apply --check --verbose /tmp/release-25.patch
+          git apply /tmp/release-25.patch
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- . ':(exclude).github/**'
+          git status --short
+          git commit -m 'Implement sole-admin controls and operator help'
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          git push origin "HEAD:${branch}"
