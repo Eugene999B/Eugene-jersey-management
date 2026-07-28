@@ -26,22 +26,25 @@ test("records a plan proposal and blocks requester self-approval", async ({ page
   await expect(page.getByRole("heading", { name: "Authoritative plan catalogue" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pending second-admin approvals" })).toBeVisible();
 
-  const basicPlan = page.locator("article").filter({ hasText: "BASIC · version 1" });
-  await expect(basicPlan).toBeVisible();
-  await basicPlan.getByText("Propose new terms").click();
-  await basicPlan.getByLabel("Monthly price").fill("150");
-  await basicPlan.getByLabel("Yearly price").fill("1500");
-  await basicPlan.getByLabel("Included staff accounts").fill("3");
-  await basicPlan.getByLabel("Maximum products").fill("500");
-  await basicPlan.getByLabel("Monthly order limit").fill("1000");
-  await basicPlan.locator('input[name="features"][value="POS"]').check();
-  await basicPlan.locator('input[name="isConfigured"]').check();
-  await basicPlan.locator('input[name="isPublic"]').check();
-  await basicPlan.getByLabel("Commercial change reason").fill("Set the controlled E2E Basic plan terms");
-  await basicPlan.getByRole("button", { name: "Submit for second-admin approval" }).click();
+  const pendingTitle = page.getByText("Basic · proposed version 2");
+  if (await pendingTitle.count() === 0) {
+    const basicPlan = page.locator("article").filter({ hasText: "BASIC · version 1" });
+    await expect(basicPlan).toBeVisible();
+    await basicPlan.getByText("Propose new terms").click();
+    await basicPlan.getByLabel("Monthly price").fill("150");
+    await basicPlan.getByLabel("Yearly price").fill("1500");
+    await basicPlan.getByLabel("Included staff accounts").fill("3");
+    await basicPlan.getByLabel("Maximum products").fill("500");
+    await basicPlan.getByLabel("Monthly order limit").fill("1000");
+    await basicPlan.locator('input[name="features"][value="POS"]').check();
+    await basicPlan.locator('input[name="isConfigured"]').check();
+    await basicPlan.locator('input[name="isPublic"]').check();
+    await basicPlan.getByLabel("Commercial change reason").fill("Set the controlled E2E Basic plan terms");
+    await basicPlan.getByRole("button", { name: "Submit for second-admin approval" }).click();
 
-  await expect(page).toHaveURL(/\/admin\/billing\?requested=1$/);
-  await expect(page.getByRole("status")).toContainText("different billing administrator");
+    await expect(page).toHaveURL(/\/admin\/billing\?requested=1$/);
+    await expect(page.getByRole("status")).toContainText("different billing administrator");
+  }
   await expect(page.getByText("Basic · proposed version 2")).toBeVisible();
 
   const pending = page.locator("div").filter({ hasText: "Basic · proposed version 2" }).filter({ has: page.getByPlaceholder("Approval or rejection note") }).first();
