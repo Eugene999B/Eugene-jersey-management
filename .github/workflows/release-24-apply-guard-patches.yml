@@ -159,9 +159,13 @@ jobs:
               '{params.error && debtErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">',
           )
 
-          Path(".github/workflows/release-24-apply-guard-patches.yml").unlink()
+          workflow = Path(".github/workflows/release-24-apply-guard-patches.yml")
+          trigger = Path(".github/release-24-guard-trigger.txt")
+          workflow.unlink()
+          if trigger.exists():
+              trigger.unlink()
           PY
-      - name: Commit guard patches and remove temporary workflow
+      - name: Commit guard patches and remove temporary files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
