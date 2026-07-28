@@ -92,12 +92,13 @@ export async function requestPasswordResetAction(formData: FormData) {
   if (!user || !destination) redirect("/forgot-password?sent=1");
 
   try {
-    const challenge = await createPasswordRecoveryChallenge({
+    await createPasswordRecoveryChallenge({
       accountKind: AccountKind.USER,
       accountId: user.id,
       channel: parsed.data.channel,
       destination,
       recipientName: user.name,
+      resetPath: "/reset-password",
       minutes: 10,
     });
     await audit({
@@ -108,7 +109,6 @@ export async function requestPasswordResetAction(formData: FormData) {
       entityId: user.id,
       metadata: { channel: parsed.data.channel, deliveryAccepted: true },
     });
-    redirect(`/reset-password?sent=1&challenge=${encodeURIComponent(challenge.publicToken)}`);
   } catch {
     await audit({
       shopId: user.shopId,
@@ -118,6 +118,6 @@ export async function requestPasswordResetAction(formData: FormData) {
       entityId: user.id,
       metadata: { channel: parsed.data.channel, deliveryAccepted: false },
     });
-    redirect("/forgot-password?sent=1");
   }
+  redirect("/forgot-password?sent=1");
 }
