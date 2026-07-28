@@ -51,6 +51,7 @@ export async function purchaseCommunicationCreditsAction(formData: FormData) {
   });
 
   const appUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  let authorizationUrl: string | null = null;
   try {
     const initialized = await initializePlatformPaystackTransaction({
       email: session.email,
@@ -71,7 +72,7 @@ export async function purchaseCommunicationCreditsAction(formData: FormData) {
       await failCommunicationCreditPurchase({ purchaseId: purchase.id, reason: "Paystack is not configured." });
       messagesRedirect("credit-paystack-unavailable");
     }
-    redirect(initialized.authorizationUrl);
+    authorizationUrl = initialized.authorizationUrl;
   } catch (error) {
     await failCommunicationCreditPurchase({
       purchaseId: purchase.id,
@@ -79,4 +80,6 @@ export async function purchaseCommunicationCreditsAction(formData: FormData) {
     });
     messagesRedirect("credit-checkout");
   }
+
+  redirect(authorizationUrl);
 }
