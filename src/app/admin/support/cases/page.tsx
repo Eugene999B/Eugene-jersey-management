@@ -84,7 +84,7 @@ export default async function SupportCasesPage({ searchParams }: Props) {
             <select className="field" name="status" defaultValue={status ?? ""}><option value="">All statuses</option>{Object.values(SupportCaseStatus).map((item) => <option key={item} value={item}>{titleCase(item)}</option>)}</select>
             <select className="field" name="priority" defaultValue={priority ?? ""}><option value="">All priorities</option>{Object.values(SupportCasePriority).map((item) => <option key={item} value={item}>{titleCase(item)}</option>)}</select>
             <select className="field" name="assigned" defaultValue={assignedToId ?? ""}><option value="">Any assignment</option><option value="unassigned">Unassigned</option>{admins.map((admin) => <option key={admin.id} value={admin.id}>{admin.name}</option>)}</select>
-            <button className="rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>
+            <button type="submit" className="rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white">Apply</button>
           </form>
         </div>
         <div className="overflow-x-auto">
