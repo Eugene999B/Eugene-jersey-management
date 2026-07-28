@@ -33,6 +33,8 @@ export const DEFAULT_PLATFORM_GOVERNANCE = {
 };
 
 export type PlatformGovernanceSettingsData = typeof DEFAULT_PLATFORM_GOVERNANCE;
+type GovernanceValue = string | number | boolean | null | string[];
+export type GovernanceChangeSet = Record<string, { previous: GovernanceValue; next: GovernanceValue }>;
 
 const editableKeys = [
   "platformName",
@@ -66,11 +68,11 @@ const editableKeys = [
 export function governanceChanges(
   previous: PlatformGovernanceSettingsData,
   next: PlatformGovernanceSettingsData,
-) {
-  const changes: Record<string, { previous: unknown; next: unknown }> = {};
+): GovernanceChangeSet {
+  const changes: GovernanceChangeSet = {};
   for (const key of editableKeys) {
-    const previousValue = previous[key];
-    const nextValue = next[key];
+    const previousValue = previous[key] as GovernanceValue;
+    const nextValue = next[key] as GovernanceValue;
     if (JSON.stringify(previousValue) !== JSON.stringify(nextValue)) {
       changes[key] = { previous: previousValue, next: nextValue };
     }
