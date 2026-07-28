@@ -3,7 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
-import { MACHINE_ORIGINS, MACHINE_OUTPUT_FORMATS } from "@/lib/design-machine-profile";
+import {
+  defaultConnectionModeForOutput,
+  machineProfileCompatibilityError,
+} from "@/lib/design-device-readiness";
+import {
+  MACHINE_CONNECTION_MODES,
+  MACHINE_DEVICE_TYPES,
+  MACHINE_ORIGINS,
+  MACHINE_OUTPUT_FORMATS,
+} from "@/lib/design-machine-profile";
 import { ensureShopMachineProfiles, serializeMachineProfile } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
 import { permissions } from "@/lib/rbac";
@@ -11,11 +20,17 @@ import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
 const profileFields = z.object({
   name: z.string().trim().min(2).max(80),
+  manufacturer: z.string().trim().max(80).nullable().optional(),
+  model: z.string().trim().max(80).nullable().optional(),
+  deviceType: z.enum(MACHINE_DEVICE_TYPES).optional(),
+  connectionMode: z.enum(MACHINE_CONNECTION_MODES).optional(),
   outputFormat: z.enum(MACHINE_OUTPUT_FORMATS),
   bedWidthMm: z.number().finite().min(20).max(2_000),
   bedHeightMm: z.number().finite().min(20).max(5_000),
   unitsPerMm: z.number().int().min(1).max(1_000),
   baudRate: z.number().int().min(300).max(1_000_000),
+  usbVendorId: z.number().int().min(0).max(65_535).nullable().optional(),
+  usbProductId: z.number().int().min(0).max(65_535).nullable().optional(),
   origin: z.enum(MACHINE_ORIGINS),
   mirrorDefault: z.boolean(),
   isDefault: z.boolean(),
@@ -24,6 +39,21 @@ const profileFields = z.object({
 
 const updateSchema = profileFields.extend({ id: z.string().min(1).max(100) });
 const deleteSchema = z.object({ id: z.string().min(1).max(100) });
+
+type ParsedProfile = z.infer<typeof profileFields>;
+
+function completeProfileData(data: ParsedProfile) {
+  const profile = {
+    ...data,
+    manufacturer: data.manufacturer?.trim() || null,
+    model: data.model?.trim() || null,
+    deviceType: data.deviceType ?? "CUTTER_PLOTTER",
+    connectionMode: data.connectionMode ?? defaultConnectionModeForOutput(data.outputFormat),
+    usbVendorId: data.usbVendorId ?? null,
+    usbProductId: data.usbProductId ?? null,
+  };
+  return { profile, compatibilityError: machineProfileCompatibilityError(profile) };
+}
 
 function profileError(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -50,17 +80,19 @@ export async function POST(request: NextRequest) {
   const access = await requireShopSettings(request);
   if ("response" in access) return access.response;
   const parsed = profileFields.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Check the machine name, bed size and output settings." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Check the machine identity, bed size and output settings." }, { status: 400 });
+  const { profile: profileData, compatibilityError } = completeProfileData(parsed.data);
+  if (compatibilityError) return NextResponse.json({ error: compatibilityError }, { status: 400 });
 
   try {
     const profile = await prisma.$transaction(async (transaction) => {
       const count = await transaction.shopMachineProfile.count({ where: { shopId: access.shopId } });
-      const makeDefault = count === 0 || parsed.data.isDefault;
+      const makeDefault = count === 0 || profileData.isDefault;
       if (makeDefault) {
         await transaction.shopMachineProfile.updateMany({ where: { shopId: access.shopId, isDefault: true }, data: { isDefault: false } });
       }
       return transaction.shopMachineProfile.create({
-        data: { ...parsed.data, shopId: access.shopId, isDefault: makeDefault },
+        data: { ...profileData, shopId: access.shopId, isDefault: makeDefault },
       });
     });
 
@@ -70,7 +102,15 @@ export async function POST(request: NextRequest) {
       action: "design.machine-profile.created",
       entityType: "ShopMachineProfile",
       entityId: profile.id,
-      metadata: { name: profile.name, outputFormat: profile.outputFormat, isDefault: profile.isDefault },
+      metadata: {
+        name: profile.name,
+        manufacturer: profile.manufacturer,
+        model: profile.model,
+        deviceType: profile.deviceType,
+        connectionMode: profile.connectionMode,
+        outputFormat: profile.outputFormat,
+        isDefault: profile.isDefault,
+      },
     });
     return NextResponse.json({ profile: serializeMachineProfile(profile) }, { status: 201 });
   } catch (error) {
@@ -82,19 +122,21 @@ export async function PATCH(request: NextRequest) {
   const access = await requireShopSettings(request);
   if ("response" in access) return access.response;
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Check the machine name, bed size and output settings." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Check the machine identity, bed size and output settings." }, { status: 400 });
+  const { id, ...rawProfileData } = parsed.data;
+  const { profile: profileData, compatibilityError } = completeProfileData(rawProfileData);
+  if (compatibilityError) return NextResponse.json({ error: compatibilityError }, { status: 400 });
 
   try {
-    const { id, ...profileData } = parsed.data;
     const profile = await prisma.$transaction(async (transaction) => {
       const existing = await transaction.shopMachineProfile.findFirst({ where: { id, shopId: access.shopId } });
       if (!existing) return null;
       const activeCount = await transaction.shopMachineProfile.count({ where: { shopId: access.shopId, isActive: true } });
-      if (existing.isActive && !parsed.data.isActive && activeCount <= 1) {
+      if (existing.isActive && !profileData.isActive && activeCount <= 1) {
         throw new Error("A shop must keep at least one active machine profile.");
       }
 
-      const makeDefault = parsed.data.isDefault || existing.isDefault;
+      const makeDefault = profileData.isDefault || existing.isDefault;
       if (makeDefault) {
         await transaction.shopMachineProfile.updateMany({
           where: { shopId: access.shopId, isDefault: true, id: { not: existing.id } },
@@ -114,7 +156,16 @@ export async function PATCH(request: NextRequest) {
       action: "design.machine-profile.updated",
       entityType: "ShopMachineProfile",
       entityId: profile.id,
-      metadata: { name: profile.name, outputFormat: profile.outputFormat, isDefault: profile.isDefault, isActive: profile.isActive },
+      metadata: {
+        name: profile.name,
+        manufacturer: profile.manufacturer,
+        model: profile.model,
+        deviceType: profile.deviceType,
+        connectionMode: profile.connectionMode,
+        outputFormat: profile.outputFormat,
+        isDefault: profile.isDefault,
+        isActive: profile.isActive,
+      },
     });
     return NextResponse.json({ profile: serializeMachineProfile(profile) });
   } catch (error) {
@@ -158,7 +209,14 @@ export async function DELETE(request: NextRequest) {
       action: "design.machine-profile.deleted",
       entityType: "ShopMachineProfile",
       entityId: deleted.id,
-      metadata: { name: deleted.name, outputFormat: deleted.outputFormat },
+      metadata: {
+        name: deleted.name,
+        manufacturer: deleted.manufacturer,
+        model: deleted.model,
+        deviceType: deleted.deviceType,
+        connectionMode: deleted.connectionMode,
+        outputFormat: deleted.outputFormat,
+      },
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
