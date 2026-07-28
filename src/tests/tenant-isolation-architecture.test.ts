@@ -52,6 +52,9 @@ describe("structural tenant isolation", () => {
     expect(tenantDb).toContain('shopCommunicationWallet: "ShopCommunicationWallet"');
     expect(tenantDb).toContain('communicationCreditPurchase: "CommunicationCreditPurchase"');
     expect(tenantDb).toContain('communicationCreditLedgerEntry: "CommunicationCreditLedgerEntry"');
+    expect(tenantDb).toContain('supportCase: "SupportCase"');
+    expect(tenantDb).toContain('supportCaseNote: "SupportCaseNote"');
+    expect(tenantDb).toContain('businessApplication: "BusinessApplication"');
     expect(tenantDb).toContain("createTenantTransactionDb(transaction, shopId)");
     expect(tenantDb).toContain("is platform-global or has an unsupported ownership rule");
     expect(tenantDb).toContain('model === "Announcement"');
@@ -79,17 +82,22 @@ describe("structural tenant isolation", () => {
     }
   });
 
-  it("keeps a guarded two-shop PostgreSQL verification in the release pipeline", () => {
+  it("keeps guarded PostgreSQL tenant attacks in the release pipeline", () => {
     const packageJson = source("../package.json");
     const workflow = source("../.github/workflows/ci.yml");
     const verifier = source("../scripts/verify-tenant-isolation.ts");
-    expect(packageJson).toContain('"test:tenant-isolation": "tsx scripts/verify-tenant-isolation.ts"');
+    const release26Verifier = source("../scripts/verify-release26-platform-isolation.ts");
+    expect(packageJson).toContain("tsx scripts/verify-tenant-isolation.ts && tsx scripts/verify-release26-platform-isolation.ts");
     expect(workflow).toContain("Run two-shop tenant isolation verification");
     expect(workflow).toContain('TENANT_ISOLATION_TESTING: "true"');
     expect(verifier).toContain("Interactive transaction bypassed tenant scope");
     expect(verifier).toContain("Tenant client accessed the platform subscription plan catalogue");
     expect(verifier).toContain("Tenant client accessed the communication credit package catalogue");
     expect(verifier).toContain("Interactive tenant transaction accessed communication credit wallets");
+    expect(verifier).toContain("Tenant client accessed Release 26 support cases");
+    expect(verifier).toContain("Interactive tenant transaction accessed Release 26 support case notes");
+    expect(verifier).toContain("Tenant client accessed Release 26 business applications");
+    expect(release26Verifier).toContain("Interactive tenant transaction accessed Release 26 business applications");
     expect(verifier).toContain("Tenant client accessed a platform-global model");
   });
 });

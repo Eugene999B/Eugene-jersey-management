@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Activity, BarChart3, BookOpen, Coins, CreditCard, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { Activity, BarChart3, BookOpen, ClipboardCheck, Coins, CreditCard, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
 interface AdminNavigationProps {
@@ -14,8 +14,11 @@ interface AdminNavigationProps {
 const adminNav = [
   { href: "/admin", label: "Overview", shortLabel: "Home", icon: BarChart3, permission: null },
   { href: "/admin/shops", label: "Shops", shortLabel: "Shops", icon: Store, permission: "shops" },
+  { href: "/admin/applications", label: "Applications", shortLabel: "Apply", icon: ClipboardCheck, permission: "shops" },
   { href: "/admin/staff", label: "Admin staff", shortLabel: "Staff", icon: UserCog, permission: "workers" },
-  { href: "/admin/support", label: "Support desk", shortLabel: "Support", icon: LifeBuoy, permission: "support" },
+  { href: "/admin/investigate", label: "Investigation", shortLabel: "Search", icon: Search, permission: "support" },
+  { href: "/admin/support/cases", label: "Support cases", shortLabel: "Cases", icon: FolderKanban, permission: "support" },
+  { href: "/admin/support", label: "Support desk", shortLabel: "Queues", icon: LifeBuoy, permission: "support" },
   { href: "/admin/billing", label: "Billing", shortLabel: "Billing", icon: CreditCard, permission: "billing" },
   { href: "/admin/billing/communications", label: "Communication credits", shortLabel: "Credits", icon: Coins, permission: "billing" },
   { href: "/admin/broadcast", label: "Broadcast", shortLabel: "Broadcast", icon: Megaphone, permission: "broadcast" },
@@ -28,7 +31,7 @@ const adminNav = [
 
 function isActive(pathname: string, href: string) {
   if (href === "/admin") return pathname === "/admin";
-  if (href === "/admin/billing") return pathname === href;
+  if (href === "/admin/billing" || href === "/admin/support") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

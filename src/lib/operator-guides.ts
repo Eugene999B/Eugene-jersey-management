@@ -58,10 +58,12 @@ const designStudioGuide: OperatorGuide = {
 const adminSections: Record<string, GuideSection> = {
   overview: { heading: "Command centre", paragraphs: ["The command centre summarises shops, users, buyers, orders, sales, debt, recurring subscription estimates and the support queue."], steps: ["Review the support queue and past-due shops first.", "Use the page cards to enter each specialised control area.", "Download reports or page guides before performing unfamiliar actions."] },
   shops: { heading: "Shops", paragraphs: ["A registered shop can have an active private workspace while choosing to keep its public storefront offline. Registration, verification, storefront visibility and ordering are separate states."], steps: ["Create the shop and owner account from a configured saved plan.", "Give the owner their Login ID and password through a secure channel.", "Verify business credentials before the shop becomes eligible for the marketplace.", "The shop owner controls Online, Browse-only or Offline status from Shop Settings.", "Use Suspend only to block the private workspace; do not suspend a shop merely because it chose to go offline."] },
+  applications: { heading: "Business applications", paragraphs: ["Public shop and supplier submissions remain private until reviewed. Submission alone never creates a tenant, Login ID, supplier portal or payment route."], steps: ["Search the application queue by reference, business or contact.", "Start the review to record the assigned administrator.", "Request changes or reject with an applicant-facing reason when information is incomplete or unsuitable.", "Approve a shop only with a configured active plan, unique Login ID and temporary credential delivered through a separate secure channel.", "Approve a supplier only under the exact reviewed active shop relationship.", "After shop approval, complete business verification and Paystack routing separately before public launch."] },
+  investigation: { heading: "Investigation search and support profiles", paragraphs: ["Investigation pages collect read-only operational evidence without impersonating a tenant or displaying provider secrets, passwords, sessions, two-factor secrets or full settlement account numbers."], steps: ["Search by shop, Login ID, email, phone, receipt, provider reference or audit action.", "Open the exact-shop profile and review workspace, verification, subscription, users, failed messages, failed payments, delayed orders and audit events.", "Open a durable support case when the issue needs assignment, evidence and a recorded resolution.", "Use existing audited shop controls for suspension, verification or payment-routing changes."] },
   billing: { heading: "Subscriptions and billing", paragraphs: ["The sole authenticated platform administrator saves plan changes immediately. Every save keeps a reason, before/after history record and immutable version."], steps: ["Edit the plan terms and explain the reason.", "Select Save changes now.", "Reassign a plan to a tenant only when that tenant should receive the new version and price.", "Catalogue edits never silently reprice existing tenant contracts."] },
   communications: { heading: "Communication credits", paragraphs: ["SMS and WhatsApp packages are paid to the EJM administrator Paystack account. Each shop has isolated channel balances."], steps: ["Create an inactive package shell when a new package is needed.", "Enter the price, paid units, bonus units and availability, then save immediately.", "Confirm a controlled Paystack purchase credits the wallet exactly once.", "Review wallet usage, refunds and provider failures through the ledger."] },
   staff: { heading: "Administrator staff", paragraphs: ["Platform administrator staff accounts receive only the responsibilities assigned to them. An unrestricted administrator can access every main-admin page."], steps: ["Create only the access needed for the person’s job.", "Disable access immediately when a worker leaves.", "Never share the unrestricted administrator password."] },
-  support: { heading: "Support desk", steps: ["Review open returns, customer conversations, failed messages and delayed orders.", "Open the related tenant or order before changing business records.", "Record the resolution in the audit trail or conversation."] },
+  support: { heading: "Support desk and durable cases", steps: ["Review open returns, customer conversations, failed messages and delayed orders.", "Use Investigation to find the exact shop, user, order, payment, message or audit evidence.", "Open a support case for issues requiring assignment, priority, append-only notes and a resolution.", "Corrections are added as new notes; existing case notes are not edited or deleted.", "Use existing audited actions for business changes; a case does not itself impersonate a tenant, refund a payment or alter stock."] },
   broadcast: { heading: "Broadcast", steps: ["Use global announcements only for messages every tenant should see.", "Keep messages short and operational.", "Avoid placing passwords, API keys or private customer data in announcements."] },
   activity: { heading: "Activity logs", steps: ["Search by action, shop or administrator when investigating a change.", "Use timestamps and entity IDs to follow related records.", "Activity logs are evidence; do not treat them as editable business records."] },
   security: { heading: "Security", steps: ["Review failed sign-ins and locked accounts.", "Keep personal two-factor authentication enabled on the main administrator account.", "Use account security to rotate recovery codes and revoke sessions when needed."] },
@@ -72,17 +74,19 @@ const adminSections: Record<string, GuideSection> = {
 };
 
 export function adminPageGuide(pathname: string): OperatorGuide {
-  const key = pathname.startsWith("/admin/shops") ? "shops"
-    : pathname.startsWith("/admin/billing/communications") ? "communications"
-      : pathname.startsWith("/admin/billing") ? "billing"
-        : pathname.startsWith("/admin/staff") ? "staff"
-          : pathname.startsWith("/admin/support") ? "support"
-            : pathname.startsWith("/admin/broadcast") ? "broadcast"
-              : pathname.startsWith("/admin/activity") ? "activity"
-                : pathname.startsWith("/admin/security") ? "security"
-                  : pathname.startsWith("/admin/integrations") ? "integrations"
-                    : pathname.startsWith("/admin/settings") ? "settings"
-                      : "overview";
+  const key = pathname.startsWith("/admin/applications") ? "applications"
+    : pathname.startsWith("/admin/investigate") ? "investigation"
+      : pathname.startsWith("/admin/shops") ? "shops"
+        : pathname.startsWith("/admin/billing/communications") ? "communications"
+          : pathname.startsWith("/admin/billing") ? "billing"
+            : pathname.startsWith("/admin/staff") ? "staff"
+              : pathname.startsWith("/admin/support") ? "support"
+                : pathname.startsWith("/admin/broadcast") ? "broadcast"
+                  : pathname.startsWith("/admin/activity") ? "activity"
+                    : pathname.startsWith("/admin/security") ? "security"
+                      : pathname.startsWith("/admin/integrations") ? "integrations"
+                        : pathname.startsWith("/admin/settings") ? "settings"
+                          : "overview";
   const section = adminSections[key];
   return {
     title: `EJM Administrator Page Guide - ${section.heading}`,
@@ -97,6 +101,8 @@ export const adminHandbook: OperatorGuide = {
   sections: [
     adminSections.overview,
     adminSections.shops,
+    adminSections.applications,
+    adminSections.investigation,
     adminSections.billing,
     adminSections.communications,
     adminSections.staff,
@@ -108,8 +114,8 @@ export const adminHandbook: OperatorGuide = {
     adminSections.settings,
     adminSections.shopOperations,
     adminSections.suppliers,
-    { heading: "Daily administrator checklist", steps: ["Review support and failed-message queues.", "Review past-due or suspended shops.", "Confirm integrations are healthy before controlled provider tests.", "Review recent high-impact audit events.", "Back up or export important records before structural changes."] },
-    { heading: "Important boundaries", steps: ["Shop customer payments settle to the shop’s Paystack subaccount; communication-credit purchases settle to the EJM administrator account.", "A shop being offline is a voluntary marketplace choice and does not mean the registered workspace is suspended.", "Never ask a user to send passwords, secret keys or full settlement account numbers through ordinary chat or notes.", "Use GitHub validation and Railway deployment status as the production source of truth."] },
+    { heading: "Daily administrator checklist", steps: ["Review support cases and live operational queues.", "Review new business applications and past-due or suspended shops.", "Confirm integrations are healthy before controlled provider tests.", "Review recent high-impact audit events.", "Back up or export important records before structural changes."] },
+    { heading: "Important boundaries", steps: ["Shop customer payments settle to the shop’s Paystack subaccount; communication-credit purchases settle to the EJM administrator account.", "A shop being offline is a voluntary marketplace choice and does not mean the registered workspace is suspended.", "Public application approval does not configure Paystack, verify business credentials or activate public ordering automatically.", "Never ask a user to send passwords, secret keys or full settlement account numbers through ordinary chat or notes.", "Use GitHub validation and Railway deployment status as the production source of truth."] },
   ],
 };
 

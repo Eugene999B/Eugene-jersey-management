@@ -1,0 +1,132 @@
+enum SupportCaseCategory {
+  ACCOUNT_ACCESS
+  SHOP_OPERATIONS
+  ORDER
+  PAYMENT
+  MESSAGING
+  INTEGRATION
+  SECURITY
+  APPLICATION
+  OTHER
+}
+
+enum SupportCasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SupportCaseStatus {
+  OPEN
+  INVESTIGATING
+  WAITING_ON_SHOP
+  WAITING_ON_PROVIDER
+  RESOLVED
+  CLOSED
+}
+
+enum BusinessApplicationType {
+  SHOP
+  SUPPLIER
+}
+
+enum BusinessApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model SupportCase {
+  id               String              @id @default(cuid())
+  reference        String              @unique
+  shopId           String?
+  subjectUserId    String?
+  supplierId       String?
+  assignedToId     String?
+  openedById       String
+  category         SupportCaseCategory
+  priority         SupportCasePriority @default(NORMAL)
+  status           SupportCaseStatus   @default(OPEN)
+  title            String
+  summary          String
+  resolution       String?
+  linkedEntityType String?
+  linkedEntityId   String?
+  resolvedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  notes SupportCaseNote[]
+
+  @@index([status, priority, createdAt])
+  @@index([shopId, status, updatedAt])
+  @@index([assignedToId, status, updatedAt])
+  @@index([subjectUserId, createdAt])
+  @@index([supplierId, createdAt])
+  @@index([linkedEntityType, linkedEntityId])
+}
+
+model SupportCaseNote {
+  id         String   @id @default(cuid())
+  caseId     String
+  authorId   String
+  body       String
+  isInternal Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  case SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model BusinessApplication {
+  id                         String                    @id @default(cuid())
+  reference                  String                    @unique
+  statusTokenHash            String                    @unique
+  duplicateFingerprint       String
+  type                       BusinessApplicationType
+  status                     BusinessApplicationStatus @default(SUBMITTED)
+  businessName               String
+  legalBusinessName          String?
+  businessRegistrationNumber String?
+  taxIdentificationNumber    String?
+  contactName                String
+  email                      String
+  phone                      String
+  address                    String?
+  city                       String?
+  region                     String?
+  country                    String                    @default("Ghana")
+  categories                 String?
+  requestedServices          String?
+  requestedShopId            String?
+  applicantNotes             String?
+  documentUrls               Json                      @default("[]")
+  consentGiven               Boolean
+  consentedAt                DateTime
+  assignedReviewerId         String?
+  reviewNotes                String?
+  decisionReason             String?
+  approvedShopId             String?
+  approvedOwnerUserId        String?
+  approvedSupplierId         String?
+  submittedAt                DateTime                  @default(now())
+  reviewedAt                 DateTime?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+
+  @@index([type, status, submittedAt])
+  @@index([assignedReviewerId, status, updatedAt])
+  @@index([duplicateFingerprint, status])
+  @@index([email, status])
+  @@index([phone, status])
+  @@index([businessRegistrationNumber, status])
+  @@index([requestedShopId, status])
+  @@index([approvedShopId])
+  @@index([approvedSupplierId])
+}
