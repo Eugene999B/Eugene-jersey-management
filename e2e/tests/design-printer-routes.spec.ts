@@ -12,7 +12,7 @@ async function signInAsOwner(page: Page) {
   const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
   const passwordField = page.getByPlaceholder("Click, then enter password");
   await loginId.click();
-  await loginId.fill("EJM-E2E-OWNER");
+  await loginId.fill("EJM-E2E-R25-OWNER");
   await passwordField.click();
   await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
@@ -47,7 +47,7 @@ test("routes a DTF printer through its system or RIP workflow without false dire
   await profileSelect.selectOption(value ?? "");
 
   await expect(page.getByText("DemoPrint DTF 600 Pro").first()).toBeVisible();
-  await expect(page.getByText("DTF printer").first()).toBeVisible();
+  await expect(page.getByText("DTF printer · Print / RIP", { exact: true })).toBeVisible();
   await expect(page.getByText("Operating-system print dialog").first()).toBeVisible();
   await expect(page.getByText(/The operating system or vendor\/RIP software selects and identifies the physical printer/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Test serial connection" })).toHaveCount(0);
