@@ -47,9 +47,10 @@ test("records a plan proposal and blocks requester self-approval", async ({ page
   }
   await expect(page.getByText("Basic · proposed version 2")).toBeVisible();
 
-  const pending = page.locator("div").filter({ hasText: "Basic · proposed version 2" }).filter({ has: page.getByPlaceholder("Approval or rejection note") }).first();
-  await pending.getByPlaceholder("Approval or rejection note").fill("Requester must not approve this proposal");
-  await pending.getByRole("button", { name: "Approve" }).click();
+  const decisionNote = page.getByPlaceholder("Approval or rejection note");
+  await decisionNote.fill("Requester must not approve this proposal");
+  const decisionForm = decisionNote.locator("xpath=ancestor::form");
+  await decisionForm.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/billing\?error=self-approval$/);
   await expect(page.getByRole("alert")).toContainText("cannot approve");
   await expect(page.getByText("Basic · proposed version 2")).toBeVisible();
