@@ -7,6 +7,8 @@ import {
 } from "@/lib/integration-health";
 import {
   configuredSenderDomain,
+  gmailAccessToken,
+  gmailAuthenticatedIdentity,
   transactionalEmailConfig,
 } from "@/lib/transactional-email";
 
@@ -31,29 +33,94 @@ function safeMessage(value: unknown, fallback: string) {
   return message.replace(/[\r\n\t]+/g, " ").slice(0, 300);
 }
 
-export async function checkTransactionalEmailHealth(): Promise<ProductionIntegrationHealthCheck> {
-  const started = Date.now();
-  const config = transactionalEmailConfig();
-  const senderDomain = configuredSenderDomain();
+function unconfiguredEmailCheck(provider: string, missing: string[], metadata: Record<string, unknown> = {}): ProductionIntegrationHealthCheck {
+  return {
+    key: "email",
+    label: "Transactional email",
+    state: "unconfigured",
+    configured: false,
+    reachable: null,
+    detail: `Transactional email is not ready. Missing or invalid: ${missing.join(", ")}.`,
+    checkedAt: nowIso(),
+    responseTimeMs: 0,
+    metadata: { provider, ...metadata },
+  };
+}
 
-  if (config.provider !== "resend" || !config.apiKey || !config.from || !senderDomain) {
-    const missing = [
-      config.provider === "resend" ? null : "EMAIL_PROVIDER=resend",
-      config.apiKey ? null : "RESEND_API_KEY",
-      config.from ? null : "EMAIL_FROM",
-      senderDomain ? null : "valid sender domain",
-    ].filter(Boolean).join(", ");
+async function checkGmailHealth(started: number): Promise<ProductionIntegrationHealthCheck> {
+  const config = transactionalEmailConfig();
+  const missing = [
+    config.from ? null : "EMAIL_FROM",
+    config.senderEmail ? null : "valid sender email",
+    config.gmailClientId ? null : "GMAIL_CLIENT_ID",
+    config.gmailClientSecret ? null : "GMAIL_CLIENT_SECRET",
+    config.gmailRefreshToken ? null : "GMAIL_REFRESH_TOKEN",
+  ].filter((value): value is string => Boolean(value));
+  if (missing.length) {
+    const result = unconfiguredEmailCheck("gmail", missing, { senderEmail: config.senderEmail ?? "Not configured" });
+    return { ...result, responseTimeMs: Date.now() - started };
+  }
+
+  try {
+    const token = await gmailAccessToken();
+    const identity = await gmailAuthenticatedIdentity(token.accessToken);
+    const senderMatches = identity.email === config.senderEmail;
+    const ready = identity.verified && senderMatches;
+    const state: IntegrationHealthState = ready ? "healthy" : "attention";
     return {
       key: "email",
       label: "Transactional email",
-      state: "unconfigured",
-      configured: false,
-      reachable: null,
-      detail: `Transactional email is not ready. Missing or invalid: ${missing}.`,
+      state,
+      configured: true,
+      reachable: true,
+      detail: ready
+        ? `Google authenticated ${identity.email}. Automated OTP, verification and password-recovery email can use this Gmail mailbox.`
+        : !identity.verified
+          ? `Google authenticated ${identity.email}, but the account email is not reported as verified.`
+          : `Google authenticated ${identity.email}, but EMAIL_FROM is configured for ${config.senderEmail}. They must match.`,
       checkedAt: nowIso(),
       responseTimeMs: Date.now() - started,
-      metadata: { provider: config.provider, senderDomain: senderDomain ?? "Not configured" },
+      metadata: {
+        provider: "gmail",
+        senderEmail: config.senderEmail,
+        authenticatedEmail: identity.email,
+        emailVerified: identity.verified,
+        senderMatches,
+        oauthScopePresent: Boolean(token.scope),
+      },
     };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "GMAIL_HEALTH_ERROR";
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return {
+      key: "email",
+      label: "Transactional email",
+      state: "unreachable",
+      configured: true,
+      reachable: false,
+      detail: timedOut
+        ? "The Gmail OAuth health check timed out."
+        : `Gmail could not authenticate the configured mailbox: ${safeMessage(message, "Unknown Gmail OAuth error")}`,
+      checkedAt: nowIso(),
+      responseTimeMs: Date.now() - started,
+      metadata: { provider: "gmail", senderEmail: config.senderEmail },
+    };
+  }
+}
+
+async function checkResendHealth(started: number): Promise<ProductionIntegrationHealthCheck> {
+  const config = transactionalEmailConfig();
+  const senderDomain = configuredSenderDomain();
+
+  if (!config.apiKey || !config.from || !config.senderEmail || !senderDomain) {
+    const missing = [
+      config.apiKey ? null : "RESEND_API_KEY",
+      config.from ? null : "EMAIL_FROM",
+      config.senderEmail ? null : "valid sender email",
+      senderDomain ? null : "valid sender domain",
+    ].filter((value): value is string => Boolean(value));
+    const result = unconfiguredEmailCheck("resend", missing, { senderDomain: senderDomain ?? "Not configured" });
+    return { ...result, responseTimeMs: Date.now() - started };
   }
 
   try {
@@ -131,6 +198,15 @@ export async function checkTransactionalEmailHealth(): Promise<ProductionIntegra
       metadata: { provider: "resend", senderDomain },
     };
   }
+}
+
+export async function checkTransactionalEmailHealth(): Promise<ProductionIntegrationHealthCheck> {
+  const started = Date.now();
+  const config = transactionalEmailConfig();
+  if (config.provider === "gmail") return checkGmailHealth(started);
+  if (config.provider === "resend") return checkResendHealth(started);
+  const result = unconfiguredEmailCheck(config.provider, ["EMAIL_PROVIDER=gmail or resend"]);
+  return { ...result, responseTimeMs: Date.now() - started };
 }
 
 export async function getProductionIntegrationHealth() {
