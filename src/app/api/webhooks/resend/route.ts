@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         eventType: event.eventType,
         providerReference: event.providerReference,
         occurredAt: event.occurredAt,
-        payload: event.safePayload,
+        payload: event.safePayload as Prisma.InputJsonObject,
       },
     });
   } catch (error) {
