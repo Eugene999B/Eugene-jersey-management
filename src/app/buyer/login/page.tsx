@@ -5,7 +5,7 @@ import { BuyerPasswordLoginForm } from "@/components/auth/buyer-password-login-f
 import { PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 type Props = {
-  searchParams?: Promise<{ next?: string; error?: string; securityChanged?: string }>;
+  searchParams?: Promise<{ next?: string; error?: string; securityChanged?: string; reset?: string }>;
 };
 
 const errors: Record<string, string> = {
@@ -43,9 +43,10 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
           <div className="mb-4 sm:mb-5"><p className="text-xs font-black uppercase tracking-[0.17em] text-violet-600">Customer gateway</p><h2 className="mt-2 text-2xl font-black tracking-[-0.04em] sm:text-3xl">Sign in or create an account.</h2><p className="mt-2 text-sm leading-6 text-slate-600">Existing buyers sign in below. New customers can open the dedicated registration page immediately.</p></div>
           <Link href={`/buyer/register?next=${encodeURIComponent(next)}`} className="mb-4 flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 text-left text-cyan-950 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-100 sm:mb-5"><span className="flex items-center gap-3"><span className="rounded-xl bg-white p-2.5 text-cyan-700"><UserPlus size={19} /></span><span><span className="block text-sm font-bold">Create a buyer account</span><span className="mt-0.5 block text-xs text-cyan-900/70">Verify your phone and continue to checkout.</span></span></span><ArrowRight size={18} /></Link>
           {params.error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{errors[params.error] ?? errors.invalid}</div> : null}
+          {params.reset ? <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Your buyer password was changed successfully. Sign in with the new password.</div> : null}
           {params.securityChanged ? <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Your two-factor preference changed successfully. Every previous buyer session was signed out; continue with your current security setting.</div> : null}
           <BuyerPasswordLoginForm nextPath={next} />
-          <div className="mt-5 grid gap-2 text-center text-sm text-slate-600 sm:grid-cols-2"><Link className="rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-800 hover:border-cyan-300" href={`/buyer/register?next=${encodeURIComponent(next)}`}>New customer registration</Link><Link className="rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-800 hover:border-cyan-300" href={`/buyer/register?next=${encodeURIComponent(next)}`}>Recover with phone verification</Link></div>
+          <div className="mt-5 grid gap-2 text-center text-sm text-slate-600 sm:grid-cols-2"><Link className="rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-800 hover:border-cyan-300" href={`/buyer/register?next=${encodeURIComponent(next)}`}>New customer registration</Link><Link className="rounded-xl border border-slate-200 bg-white px-3 py-3 font-semibold text-slate-800 hover:border-cyan-300" href={`/buyer/forgot-password?next=${encodeURIComponent(next)}`}>Forgot buyer password</Link></div>
         </div>
       </section>
     </main>

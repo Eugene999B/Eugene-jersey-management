@@ -15,17 +15,21 @@ describe("Release 27 buyer email verification", () => {
     expect(model).toContain("attempts");
     expect(model).toContain("usedAt");
     expect(model).toContain("verifiedAt");
+    expect(model).toContain("deliveryStatus");
     expect(migration).toContain('CREATE UNIQUE INDEX "BuyerEmailVerification_buyerId_key"');
   });
 
   it("uses authenticated idempotent Resend delivery without logging the code", () => {
     const helper = source("lib/buyer-email-verification.ts");
-    expect(helper).toContain('Authorization: `Bearer ${config.apiKey}`');
-    expect(helper).toContain('"Idempotency-Key"');
-    expect(helper).toContain('"User-Agent"');
+    const transactional = source("lib/transactional-email.ts");
+    expect(helper).toContain("sendTransactionalEmail");
     expect(helper).toContain("timingSafeEqual");
     expect(helper).toContain("attempts: { increment: 1 }");
+    expect(transactional).toContain('Authorization: `Bearer ${config.apiKey}`');
+    expect(transactional).toContain('"Idempotency-Key"');
+    expect(transactional).toContain('"User-Agent"');
     expect(helper).not.toContain("console.log");
+    expect(transactional).not.toContain("console.log");
   });
 
   it("requires a signed buyer session and rate limits send and verify actions", () => {

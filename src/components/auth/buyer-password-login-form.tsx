@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { buyerPasswordLoginAction } from "@/app/buyer/login/actions";
@@ -31,6 +32,7 @@ export function BuyerPasswordLoginForm({ nextPath }: { nextPath: string }) {
           <input className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-11 pr-12 text-sm outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100" name="password" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} placeholder="Password" autoComplete="off" data-lpignore="true" data-1p-ignore="true" required />
           <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button>
         </div>
+        <div className="flex justify-end"><Link href={`/buyer/forgot-password?next=${encodeURIComponent(nextPath)}`} className="text-xs font-semibold text-cyan-700 hover:underline">Forgot password?</Link></div>
         <button type="submit" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#07111f] px-4 text-sm font-semibold text-white transition hover:bg-[#10243e]">Continue securely <ArrowRight size={16} /></button>
       </div>
     </form>
