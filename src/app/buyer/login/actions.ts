@@ -10,6 +10,7 @@ import {
   BUYER_SESSION_COOKIE,
   setBuyerSessionCookie,
 } from "@/lib/buyer-session";
+import { createBuyerEmailCode, isEmailDeliveryConfigured } from "@/lib/buyer-email-verification";
 import { prisma } from "@/lib/db";
 import { isSmsDeliveryConfigured } from "@/lib/messaging";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -65,7 +66,11 @@ async function requestIp() {
     || "unknown";
 }
 
-async function completeBuyerLogin(buyer: AuthenticatedBuyer, destinationValue: string | null | undefined) {
+async function completeBuyerLogin(
+  buyer: AuthenticatedBuyer,
+  destinationValue: string | null | undefined,
+  options: { offerEmailVerification?: boolean } = {},
+) {
   const destination = nextPath(destinationValue);
   let requiresTwoFactor = false;
   try {
@@ -117,6 +122,25 @@ async function completeBuyerLogin(buyer: AuthenticatedBuyer, destinationValue: s
     entityId: updated.id,
     metadata: { twoFactor: false },
   });
+
+  if (options.offerEmailVerification && updated.email) {
+    if (!isEmailDeliveryConfigured()) {
+      redirect(`/buyer/verify-email?error=provider&next=${encodeURIComponent(destination)}`);
+    }
+    try {
+      await createBuyerEmailCode({ buyerId: updated.id, email: updated.email, name: updated.name, minutes: 10 });
+      await audit({
+        action: "auth.buyer_email_verification_sent",
+        entityType: "BuyerAccount",
+        entityId: updated.id,
+        metadata: { emailDomain: updated.email.split("@")[1] ?? "unknown" },
+      });
+    } catch {
+      redirect(`/buyer/verify-email?error=send&next=${encodeURIComponent(destination)}`);
+    }
+    redirect(`/buyer/verify-email?sent=1&next=${encodeURIComponent(destination)}`);
+  }
+
   redirect(destination);
 }
 
@@ -241,5 +265,5 @@ export async function verifyBuyerLoginCodeAction(formData: FormData) {
         },
       });
 
-  await completeBuyerLogin(updated, parsed.data.next);
+  await completeBuyerLogin(updated, parsed.data.next, { offerEmailVerification: Boolean(updated.email) });
 }
