@@ -67,7 +67,7 @@ describe("Release 26 database foundation", () => {
 
     expect(noteModel).toContain("createdAt");
     expect(noteModel).not.toContain("updatedAt");
-    expect(models).toContain("statusTokenHash          String                    @unique");
+    expect(models).toMatch(/statusTokenHash\s+String\s+@unique/);
     expect(migration).toContain('CONSTRAINT "BusinessApplication_consent_check" CHECK ("consentGiven" = true)');
     expect(migration).toContain('FOREIGN KEY ("caseId") REFERENCES "SupportCase"("id") ON DELETE CASCADE');
   });
