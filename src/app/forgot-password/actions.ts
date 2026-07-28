@@ -118,6 +118,6 @@ export async function requestPasswordResetAction(formData: FormData) {
       entityId: user.id,
       metadata: { channel: parsed.data.channel, deliveryAccepted: false },
     });
-    redirect("/forgot-password?error=send");
+    redirect("/forgot-password?sent=1");
   }
 }
