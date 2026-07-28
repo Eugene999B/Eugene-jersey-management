@@ -50,6 +50,7 @@ export default async function BuyerVerifyEmailPage({ searchParams }: Props) {
   const configured = isEmailDeliveryConfigured();
   const verified = Boolean(params.verified || (state?.verifiedAt && state.email === buyer.email));
   const notice = deliveryNotice(state?.deliveryStatus);
+  const NoticeIcon = notice?.icon;
 
   return (
     <main className="min-h-screen bg-[#07111f] px-4 py-8 text-white sm:px-6">
@@ -64,7 +65,7 @@ export default async function BuyerVerifyEmailPage({ searchParams }: Props) {
           {buyer.email ? <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Email on this account</p><p className="mt-1 font-semibold">{maskEmail(buyer.email)}</p></div> : null}
           {params.error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{errors[params.error] ?? errors.invalid}</div> : null}
           {params.sent ? <div className="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm font-semibold text-cyan-900">Resend accepted the verification request. Check Inbox, Promotions and Spam while delivery status is updated.</div> : null}
-          {!verified && notice ? <div className={`mt-4 rounded-2xl border p-4 text-sm ${notice.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : notice.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-900" : notice.tone === "red" ? "border-red-200 bg-red-50 text-red-900" : "border-cyan-200 bg-cyan-50 text-cyan-900"}`}><notice.icon size={20} /><p className="mt-2 font-bold">{notice.title}</p><p className="mt-1 leading-6">{notice.body}</p></div> : null}
+          {!verified && notice && NoticeIcon ? <div className={`mt-4 rounded-2xl border p-4 text-sm ${notice.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : notice.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-900" : notice.tone === "red" ? "border-red-200 bg-red-50 text-red-900" : "border-cyan-200 bg-cyan-50 text-cyan-900"}`}><NoticeIcon size={20} /><p className="mt-2 font-bold">{notice.title}</p><p className="mt-1 leading-6">{notice.body}</p></div> : null}
 
           {verified ? (
             <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><ShieldCheck size={24} /><h2 className="mt-3 text-xl font-bold">Email ownership verified</h2><p className="mt-2 text-sm leading-6">The one-time code proved that the current buyer could access this mailbox. It does not certify the person’s legal identity.</p><Link href={next} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white">Continue <ArrowRight size={16} /></Link></div>
