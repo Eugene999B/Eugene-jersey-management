@@ -27,6 +27,7 @@ Every update requires a written reason and records previous value, new value, ad
 - audit diff, reason, IP and user-agent capture
 - normal and interactive tenant-client denial
 - unit tests, TypeScript, production build and mobile Chromium acceptance
+- one clean candidate head before merge and Railway deployment verification after merge
 
 ## Scope boundary
 
