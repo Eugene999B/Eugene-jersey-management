@@ -1,0 +1,32 @@
+model PlatformGovernanceSettings {
+  id                           String   @id @default("platform")
+  platformName                 String   @default("Eugene Jersey Management")
+  legalCompanyName             String?
+  supportEmail                 String?
+  supportPhone                 String?
+  defaultCountry               String   @default("Ghana")
+  defaultCurrency              String   @default("GHS")
+  defaultTimezone              String   @default("Africa/Accra")
+  termsVersion                 String?
+  privacyVersion               String?
+  marketplaceEnabled           Boolean  @default(true)
+  publicApplicationsEnabled    Boolean  @default(false)
+  maintenanceMode              Boolean  @default(false)
+  incidentMode                 Boolean  @default(false)
+  paymentsEnabled              Boolean  @default(true)
+  messagingEnabled             Boolean  @default(true)
+  signupsEnabled               Boolean  @default(true)
+  maintenanceNotice            String?
+  trialDays                    Int      @default(14)
+  includedStaffAccounts        Int      @default(3)
+  supportSlaHours              Int      @default(24)
+  loginAttemptLimit            Int      @default(5)
+  sessionLifetimeMinutes       Int      @default(10080)
+  sensitiveActionReauthMinutes Int      @default(15)
+  auditRetentionDays           Int      @default(2555)
+  dataRetentionDays            Int      @default(2555)
+  allowedUploadTypes           String[] @default(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "application/pdf"])
+  updatedById                  String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
