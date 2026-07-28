@@ -20,6 +20,8 @@ type PaystackInitInput = {
   bearer?: string | null;
 };
 
+type PlatformPaystackInitInput = Pick<PaystackInitInput, "email" | "amount" | "currency" | "reference" | "callbackUrl" | "metadata">;
+
 type PaystackInitResult = { authorizationUrl: string | null; reference: string; providerEnabled: boolean };
 
 export function amountToSubunit(amount: number) {
@@ -39,6 +41,32 @@ export function isPaystackCheckoutReady(config?: { allowCard?: boolean | null; p
   return Boolean(secretKey() && config?.allowCard && code && /^ACCT_[A-Za-z0-9]+$/.test(code));
 }
 
+async function requestPaystackInitialization(body: Record<string, unknown>) {
+  const key = secretKey();
+  if (!key) return { authorizationUrl: null, reference: String(body.reference ?? ""), providerEnabled: false };
+
+  const response = await fetch("https://api.paystack.co/transaction/initialize", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => null) as {
+    status?: boolean;
+    message?: string;
+    data?: { authorization_url?: string; reference?: string };
+  } | null;
+  if (!response.ok || !payload?.status || !payload.data?.authorization_url) {
+    throw new Error(payload?.message ?? "Paystack transaction initialization failed.");
+  }
+  return {
+    authorizationUrl: payload.data.authorization_url,
+    reference: payload.data.reference ?? String(body.reference ?? ""),
+    providerEnabled: true,
+  };
+}
+
 export async function initializePaystackTransaction(input: PaystackInitInput): Promise<PaystackInitResult> {
   const key = secretKey();
   if (!key) return { authorizationUrl: null, reference: input.reference, providerEnabled: false };
@@ -55,36 +83,40 @@ export async function initializePaystackTransaction(input: PaystackInitInput): P
     throw new Error("The EJM platform charge must be smaller than the customer payment amount.");
   }
 
-  const response = await fetch("https://api.paystack.co/transaction/initialize", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: input.email,
-      amount,
-      currency: input.currency,
-      reference: input.reference,
-      callback_url: input.callbackUrl,
-      subaccount,
-      transaction_charge: transactionCharge,
-      bearer: normalizePaystackChargeBearer(input.bearer),
-      metadata: {
-        ...input.metadata,
-        settlement_owner: "shop_subaccount",
-        platform_account: "ejm_administrator",
-      },
-    }),
-    signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
-    cache: "no-store",
+  return requestPaystackInitialization({
+    email: input.email,
+    amount,
+    currency: input.currency,
+    reference: input.reference,
+    callback_url: input.callbackUrl,
+    subaccount,
+    transaction_charge: transactionCharge,
+    bearer: normalizePaystackChargeBearer(input.bearer),
+    metadata: {
+      ...input.metadata,
+      settlement_owner: "shop_subaccount",
+      platform_account: "ejm_administrator",
+    },
   });
-  const payload = await response.json().catch(() => null) as {
-    status?: boolean;
-    message?: string;
-    data?: { authorization_url?: string; reference?: string };
-  } | null;
-  if (!response.ok || !payload?.status || !payload.data?.authorization_url) {
-    throw new Error(payload?.message ?? "Paystack transaction initialization failed.");
-  }
-  return { authorizationUrl: payload.data.authorization_url, reference: payload.data.reference ?? input.reference, providerEnabled: true };
+}
+
+export async function initializePlatformPaystackTransaction(
+  input: PlatformPaystackInitInput,
+): Promise<PaystackInitResult> {
+  if (!secretKey()) return { authorizationUrl: null, reference: input.reference, providerEnabled: false };
+  return requestPaystackInitialization({
+    email: input.email,
+    amount: amountToSubunit(input.amount),
+    currency: input.currency,
+    reference: input.reference,
+    callback_url: input.callbackUrl,
+    metadata: {
+      ...input.metadata,
+      settlement_owner: "ejm_administrator",
+      platform_account: "ejm_administrator",
+      purchase_type: "communication_credits",
+    },
+  });
 }
 
 export function verifyPaystackWebhookSignature(rawBody: string, signature: string | null) {
