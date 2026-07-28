@@ -63,9 +63,10 @@ describe("Release 26 database foundation", () => {
       new URL("../../prisma/migrations/20260728230000_release26_support_applications/migration.sql", import.meta.url),
       "utf8",
     );
+    const noteModel = models.split("model SupportCaseNote")[1]?.split("model BusinessApplication")[0] ?? "";
 
-    expect(models).toContain("model SupportCaseNote");
-    expect(models).not.toMatch(/model SupportCaseNote[\s\S]*?updatedAt/);
+    expect(noteModel).toContain("createdAt");
+    expect(noteModel).not.toContain("updatedAt");
     expect(models).toContain("statusTokenHash          String                    @unique");
     expect(migration).toContain('CONSTRAINT "BusinessApplication_consent_check" CHECK ("consentGiven" = true)');
     expect(migration).toContain('FOREIGN KEY ("caseId") REFERENCES "SupportCase"("id") ON DELETE CASCADE');
