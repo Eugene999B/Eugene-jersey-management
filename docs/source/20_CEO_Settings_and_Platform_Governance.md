@@ -31,4 +31,4 @@ Every update requires a written reason and records previous value, new value, ad
 
 ## Scope boundary
 
-This release establishes the governance source of truth and audited editing experience. Subscription plan catalogues, communication-credit pricing, second-administrator approvals and enforcement of every policy across all public routes remain focused follow-up work within the confirmed roadmap.
+This release establishes the governance source of truth and audited editing experience. Subscription plan catalogues and communication-credit pricing now use immediate authenticated administrator saves with immutable history. Enforcement of every policy across all public routes remains focused follow-up work within the confirmed roadmap.

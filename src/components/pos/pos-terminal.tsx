@@ -41,7 +41,7 @@ type CartLine = {
 
 type PosTerminalProps = {
   products: PosProduct[];
-  customers: Array<{ id: string; name: string; phone: string | null; email: string | null }>;
+  customers: Array<{ id: string; name: string; phone: string | null; email: string | null; outstandingBalance: number }>;
   currencyCode: string;
 };
 
@@ -82,6 +82,9 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   const total = Math.max(subtotal - discountAmount, 0);
   const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) ?? null;
+  const creditCustomerReady = Boolean(selectedCustomerId || customerName.trim());
+  const projectedOutstanding = (selectedCustomer?.outstandingBalance ?? 0) + total;
 
   function addLine(product: PosProduct, variant: PosVariant, personalization?: Partial<CartLine>) {
     const key = `${variant.id}-${personalization?.personalName ?? ""}-${personalization?.personalNumber ?? ""}-${personalization?.notes ?? ""}`;
@@ -161,7 +164,10 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
       checkoutKeyRef.current = null;
       setLastReceiptUrl(payload.receiptUrl);
       if (receiptWindow && payload.receiptUrl) receiptWindow.location.href = payload.receiptUrl;
-      setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}${receiptWindow ? " opened for printing" : " is ready to reprint"}.`);
+      const creditMessage = payload.creditSummary
+        ? ` Credit debt added: ${currency(payload.creditSummary.addedDebt, currencyCode)}. ${payload.creditSummary.customerName} now owes ${currency(payload.creditSummary.newOutstanding, currencyCode)} in total.`
+        : "";
+      setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}${receiptWindow ? " opened for printing" : " is ready to reprint"}.${creditMessage}`);
     });
   }
 
@@ -238,13 +244,14 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
             <h2 className="text-lg font-semibold">Cart</h2>
             <Badge tone={itemCount ? "green" : undefined}>{itemCount} item{itemCount === 1 ? "" : "s"}</Badge>
           </div>
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-sm font-semibold text-slate-900">Customer for this sale</p><p className="mt-1 text-xs leading-5 text-slate-600">Search an existing customer first. For a new customer, leave the search unselected and enter their name below.</p></div>
           <label className="mt-3 block text-xs font-semibold text-slate-600">Find existing customer
             <input className="field mt-1" aria-label="Find existing customer" placeholder="Search name, phone or email" value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} />
           </label>
-          {!selectedCustomerId && customerQuery ? <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-[#ded8cd] bg-white p-1">{customerMatches.map((customer) => <button key={customer.id} type="button" className="block min-h-11 w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#f6f4ef]" onClick={() => { setSelectedCustomerId(customer.id); setCustomerName(customer.name); setCustomerPhone(customer.phone ?? ""); setCustomerEmail(customer.email ?? ""); setCustomerQuery(customer.name); }}><strong className="block">{customer.name}</strong><span className="text-xs text-slate-500">{customer.phone ?? customer.email ?? "No contact"}</span></button>)}{!customerMatches.length ? <p className="p-3 text-xs text-slate-500">No match. Enter a new customer below.</p> : null}</div> : null}
-          {selectedCustomerId ? <button type="button" className="mt-2 min-h-11 w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={() => { setSelectedCustomerId(""); setCustomerQuery(""); setCustomerName(""); setCustomerPhone(""); setCustomerEmail(""); }}>Existing customer selected · click to change</button> : null}
+          {!selectedCustomerId && customerQuery ? <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-[#ded8cd] bg-white p-1">{customerMatches.map((customer) => <button key={customer.id} type="button" className="block min-h-11 w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#f6f4ef]" onClick={() => { setSelectedCustomerId(customer.id); setCustomerName(customer.name); setCustomerPhone(customer.phone ?? ""); setCustomerEmail(customer.email ?? ""); setCustomerQuery(customer.name); }}><strong className="block">{customer.name}</strong><span className="text-xs text-slate-500">{customer.phone ?? customer.email ?? "No contact"} · owes {currency(customer.outstandingBalance, currencyCode)}</span></button>)}{!customerMatches.length ? <p className="p-3 text-xs text-slate-500">No match. Enter a new customer below.</p> : null}</div> : null}
+          {selectedCustomer ? <button type="button" className="mt-2 min-h-11 w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={() => { setSelectedCustomerId(""); setCustomerQuery(""); setCustomerName(""); setCustomerPhone(""); setCustomerEmail(""); }}><span className="block">Existing customer selected: {selectedCustomer.name}</span><span className="mt-1 block font-normal">Current outstanding debt: {currency(selectedCustomer.outstandingBalance, currencyCode)} · click to change</span></button> : null}
           <label className="mt-3 block text-xs font-semibold text-slate-600">Customer name
-            <input className="field mt-1" placeholder="Walk-in or new customer (optional)" value={customerName} onChange={(event) => { setCustomerName(event.target.value); if (selectedCustomerId) setSelectedCustomerId(""); }} />
+            <input className="field mt-1" placeholder={paymentMethod === "STORE_CREDIT" ? "New credit customer name" : "Walk-in or new customer (optional)"} value={customerName} onChange={(event) => { setCustomerName(event.target.value); if (selectedCustomerId) setSelectedCustomerId(""); }} />
           </label>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <label className="text-xs font-semibold text-slate-600">Phone<input className="field mt-1" placeholder="Phone for receipt" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} /></label>
@@ -287,9 +294,9 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
             ))}
           </div>
           {paymentMethod === "CARD" || paymentMethod === "MOMO" ? <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3"><label className="block text-xs font-semibold text-sky-900">Terminal / network reference<input className="field mt-1" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Required reference" /></label><label className="flex items-start gap-2 text-xs font-semibold text-sky-900"><input className="mt-0.5 h-5 w-5 shrink-0" type="checkbox" checked={paymentConfirmed} onChange={(event) => setPaymentConfirmed(event.target.checked)} /><span>I confirmed that this payment was received on the card terminal or mobile-money network.</span></label></div> : null}
-          {paymentMethod === "STORE_CREDIT" ? <div className="grid grid-cols-2 gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3"><label className="block"><span className="mb-1 block text-xs font-semibold text-orange-800">Credit due date</span><input className="field" type="date" value={creditDueDate} onChange={(event) => setCreditDueDate(event.target.value)} /></label><label className="block"><span className="mb-1 block text-xs font-semibold text-orange-800">Installments</span><input className="field" type="number" min="1" max="12" value={creditInstallments} onChange={(event) => setCreditInstallments(Number(event.target.value || 1))} /></label><p className="col-span-2 text-xs text-orange-800">Credit sales require a customer name and automatically appear under Debts.</p></div> : null}
+          {paymentMethod === "STORE_CREDIT" ? <div className="grid grid-cols-2 gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3"><label className="block"><span className="mb-1 block text-xs font-semibold text-orange-800">Credit due date</span><input className="field" type="date" value={creditDueDate} onChange={(event) => setCreditDueDate(event.target.value)} /></label><label className="block"><span className="mb-1 block text-xs font-semibold text-orange-800">Installments</span><input className="field" type="number" min="1" max="12" value={creditInstallments} onChange={(event) => setCreditInstallments(Number(event.target.value || 1))} /></label><div className="col-span-2 rounded-lg bg-white/70 p-3 text-xs leading-5 text-orange-900">{selectedCustomer ? <><strong>{selectedCustomer.name}</strong> currently owes {currency(selectedCustomer.outstandingBalance, currencyCode)}. This sale adds {currency(total, currencyCode)}, making the projected total {currency(projectedOutstanding, currencyCode)}.</> : customerName.trim() ? <>A new customer named <strong>{customerName.trim()}</strong> will be created and this {currency(total, currencyCode)} sale will become their first debt entry.</> : <>Choose an existing customer above or enter a new customer name. Each credit sale is saved separately under Debts, while the customer&apos;s total is the sum of all unpaid entries.</>}</div></div> : null}
           <div className="rounded-lg bg-white p-3 text-sm"><div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{currency(subtotal, currencyCode)}</span></div><div className="mt-1 flex justify-between text-slate-500"><span>Discount</span><span>{currency(discountAmount, currencyCode)}</span></div><div className="mt-3 flex justify-between text-lg font-semibold"><span>Total</span><span>{currency(total, currencyCode)}</span></div></div>
-          <Button className="w-full" onClick={checkout} disabled={!cart.length || isPending}><Printer size={16} />{isPending ? "Processing..." : "Complete sale & print"}</Button>
+          <Button className="w-full" onClick={checkout} disabled={!cart.length || isPending || (paymentMethod === "STORE_CREDIT" && !creditCustomerReady)}><Printer size={16} />{isPending ? "Processing..." : "Complete sale & print"}</Button>
           {message ? <p className="rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-700">{message}</p> : null}
           {lastReceiptUrl ? <a className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href={lastReceiptUrl} target="_blank" rel="noreferrer"><Printer size={16} /> Reprint receipt</a> : null}
         </div>

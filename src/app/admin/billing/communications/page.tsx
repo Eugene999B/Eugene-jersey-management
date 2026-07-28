@@ -1,14 +1,12 @@
 import Link from "next/link";
 import {
   CommunicationCreditChannel,
-  CommunicationCreditPackageChangeStatus,
   CommunicationCreditPurchaseStatus,
 } from "@prisma/client";
-import { ArrowLeft, Coins, MessageCircle, PackagePlus, ShieldCheck, Smartphone, Store } from "lucide-react";
+import { ArrowLeft, Coins, History, MessageCircle, PackagePlus, Smartphone, Store } from "lucide-react";
 import {
   createCommunicationPackageShellAction,
-  decideCommunicationPackageChangeAction,
-  requestCommunicationPackageChangeAction,
+  saveCommunicationPackageAction,
 } from "@/app/admin/billing/communication-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,9 +22,7 @@ type PageProps = {
   searchParams?: Promise<{
     error?: string;
     created?: string;
-    requested?: string;
-    approved?: string;
-    rejected?: string;
+    saved?: string;
   }>;
 };
 
@@ -37,12 +33,7 @@ const errorMessages: Record<string, string> = {
   "configured-package-values": "A configured package requires a positive price and positive credit quantity.",
   "public-package-state": "A public package must be configured and active.",
   "package-missing": "That communication package no longer exists.",
-  "pending-package-change": "That package already has a pending proposal.",
-  "decision-values": "Choose approve or reject and provide a decision note.",
-  "request-state": "That package proposal is no longer pending.",
-  "self-approval": "The administrator who requested the package change cannot approve it.",
-  "proposal-corrupt": "The stored package proposal is invalid and was not applied.",
-  "stale-package": "The package changed after this proposal was created. Reject it and submit a fresh proposal.",
+  "stale-package": "The package changed while it was being saved. Reload the page and save again.",
 };
 
 function channelIcon(channel: CommunicationCreditChannel) {
@@ -52,22 +43,17 @@ function channelIcon(channel: CommunicationCreditChannel) {
 export default async function CommunicationCreditsAdminPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   await requirePlatformPermission("billing");
-  const [packages, pendingRequests, wallets, purchases, shops] = await Promise.all([
+  const [packages, recentChanges, wallets, purchases, shops] = await Promise.all([
     prisma.communicationCreditPackage.findMany({ orderBy: [{ channel: "asc" }, { name: "asc" }] }),
     prisma.communicationCreditPackageChangeRequest.findMany({
-      where: { status: CommunicationCreditPackageChangeStatus.PENDING },
       include: { package: true },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
+      take: 8,
     }),
     prisma.shopCommunicationWallet.findMany({ orderBy: [{ shopId: "asc" }, { channel: "asc" }] }),
     prisma.communicationCreditPurchase.findMany({ orderBy: { createdAt: "desc" }, take: 40 }),
     prisma.shop.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
-  const requesterIds = [...new Set(pendingRequests.map((request) => request.requestedById))];
-  const requesters = requesterIds.length
-    ? await prisma.user.findMany({ where: { id: { in: requesterIds } }, select: { id: true, name: true, email: true } })
-    : [];
-  const requesterMap = new Map(requesters.map((user) => [user.id, user]));
   const shopMap = new Map(shops.map((shop) => [shop.id, shop.name]));
   const totalBalance = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
   const successfulPurchases = purchases.filter((purchase) => purchase.status === CommunicationCreditPurchaseStatus.SUCCESS);
@@ -80,26 +66,24 @@ export default async function CommunicationCreditsAdminPage({ searchParams }: Pa
           <Link href="/admin/billing" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-800 hover:text-cyan-950"><ArrowLeft size={16} /> Back to subscriptions</Link>
           <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Administrator-owned messaging commerce</p>
           <h1 className="mt-2 text-3xl font-semibold">Communication Credits</h1>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Configure SMS and WhatsApp packages, require second-administrator approval, monitor shop balances and reconcile Paystack purchases that settle to the EJM administrator account.</p>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Configure and save SMS and WhatsApp packages immediately, monitor shop balances and reconcile Paystack purchases that settle to the EJM administrator account.</p>
         </div>
       </div>
 
       {params.error ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">{errorMessages[params.error] ?? "The communication credit change was not applied."}</div> : null}
-      {params.created ? <div role="status" className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Inactive package shell created. Submit real commercial terms for second-administrator approval.</div> : null}
-      {params.requested ? <div role="status" className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Package proposal recorded. A different Billing administrator must approve it.</div> : null}
-      {params.approved ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Package proposal approved and stored as a new immutable version.</div> : null}
-      {params.rejected ? <div role="status" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800">Package proposal rejected without changing the catalogue.</div> : null}
+      {params.created ? <div role="status" className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Inactive package shell created. Open it below, enter the real commercial terms and save them immediately.</div> : null}
+      {params.saved ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Package changes saved immediately and recorded as a new immutable version.</div> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Configured packages" value={`${packages.filter((item) => item.isConfigured).length}/${packages.length}`} icon={<Coins size={20} />} />
-        <StatCard label="Pending approvals" value={compactNumber(pendingRequests.length)} icon={<ShieldCheck size={20} />} />
+        <StatCard label="Recorded changes" value={compactNumber(recentChanges.length)} icon={<History size={20} />} />
         <StatCard label="Credits across shops" value={compactNumber(totalBalance)} icon={<Store size={20} />} />
         <StatCard label="Verified package revenue" value={currency(revenue)} icon={<PackagePlus size={20} />} />
       </section>
 
       <section className="panel p-5">
         <div className="flex items-center gap-2"><PackagePlus size={20} /><h2 className="text-xl font-semibold">Create inactive package shell</h2></div>
-        <p className="mt-2 text-sm text-slate-600">A shell has no price or credit quantity and cannot be purchased. Commercial terms still require a different administrator’s approval.</p>
+        <p className="mt-2 text-sm text-slate-600">A shell has no price or credit quantity and cannot be purchased until you configure, activate and publish it.</p>
         <form action={createCommunicationPackageShellAction} className="mt-4 grid gap-3 lg:grid-cols-[0.7fr_0.7fr_1fr_1.5fr_auto]">
           <input className="field" name="code" placeholder="SMS-SEASONAL" required />
           <select className="field" name="channel" defaultValue={CommunicationCreditChannel.SMS}>
@@ -126,7 +110,7 @@ export default async function CommunicationCreditsAdminPage({ searchParams }: Pa
               <article key={creditPackage.id} className="panel p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex items-start gap-3"><span className="rounded-xl bg-cyan-50 p-3 text-cyan-800"><Icon size={20} /></span><div><h3 className="text-xl font-semibold">{creditPackage.name}</h3><p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{creditPackage.code} · version {creditPackage.version}</p></div></div>
-                  <div className="flex flex-wrap gap-2"><Badge tone={creditPackage.isConfigured ? "green" : "orange"}>{creditPackage.isConfigured ? "Configured" : "Needs approval"}</Badge><Badge tone={creditPackage.isPublic ? "blue" : "orange"}>{creditPackage.isPublic ? "Public" : "Private"}</Badge><Badge tone={creditPackage.isActive ? "green" : "red"}>{creditPackage.isActive ? "Active" : "Inactive"}</Badge></div>
+                  <div className="flex flex-wrap gap-2"><Badge tone={creditPackage.isConfigured ? "green" : "orange"}>{creditPackage.isConfigured ? "Configured" : "Not configured"}</Badge><Badge tone={creditPackage.isPublic ? "blue" : "orange"}>{creditPackage.isPublic ? "Public" : "Private"}</Badge><Badge tone={creditPackage.isActive ? "green" : "red"}>{creditPackage.isActive ? "Active" : "Inactive"}</Badge></div>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-600">{creditPackage.description || "No description recorded."}</p>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
@@ -136,8 +120,8 @@ export default async function CommunicationCreditsAdminPage({ searchParams }: Pa
                 </dl>
 
                 <details className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                  <summary className="cursor-pointer font-semibold">Propose new commercial terms</summary>
-                  <form action={requestCommunicationPackageChangeAction} className="mt-4 space-y-4">
+                  <summary className="cursor-pointer font-semibold">Edit and save package terms</summary>
+                  <form action={saveCommunicationPackageAction} className="mt-4 space-y-4">
                     <input type="hidden" name="packageId" value={creditPackage.id} />
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="text-sm font-semibold">Package name<input className="field mt-1" name="name" defaultValue={creditPackage.name} required /></label>
@@ -153,7 +137,7 @@ export default async function CommunicationCreditsAdminPage({ searchParams }: Pa
                       <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="isActive" defaultChecked={creditPackage.isActive} />Active</label>
                     </div>
                     <label className="block text-sm font-semibold">Commercial change reason<textarea className="field mt-1 min-h-20" name="reason" minLength={8} required placeholder="Explain the package price, units, bonus or availability decision." /></label>
-                    <Button type="submit">Submit for second-admin approval</Button>
+                    <Button type="submit">Save changes now</Button>
                   </form>
                 </details>
               </article>
@@ -162,26 +146,11 @@ export default async function CommunicationCreditsAdminPage({ searchParams }: Pa
         </div>
       </section>
 
-      <section className="panel p-5">
-        <div className="flex items-center gap-2"><ShieldCheck size={20} /><h2 className="text-xl font-semibold">Pending second-admin approvals</h2></div>
-        <p className="mt-1 text-sm text-slate-600">The requester can never approve the same package proposal.</p>
-        <div className="mt-4 space-y-4">
-          {pendingRequests.map((request) => {
-            const requester = requesterMap.get(request.requestedById);
-            return (
-              <div key={request.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-amber-950">{request.package.name} · proposed version {request.baseVersion + 1}</p><p className="mt-1 text-sm text-amber-800">Requested by {requester?.name ?? requester?.email ?? request.requestedById} · {shortDate(request.createdAt)}</p></div><Badge tone="orange">PENDING</Badge></div>
-                <p className="mt-3 text-sm leading-6 text-amber-900"><strong>Reason:</strong> {request.reason}</p>
-                <form action={decideCommunicationPackageChangeAction} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-                  <input type="hidden" name="requestId" value={request.id} />
-                  <input className="field" name="decisionNote" minLength={5} required placeholder="Approval or rejection note" />
-                  <button type="submit" className="button-primary" name="decision" value="APPROVE">Approve</button>
-                  <button type="submit" className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700" name="decision" value="REJECT">Reject</button>
-                </form>
-              </div>
-            );
-          })}
-          {!pendingRequests.length ? <p className="text-sm text-slate-500">No communication package changes are awaiting approval.</p> : null}
+      <section className="panel overflow-hidden">
+        <div className="border-b border-[#ded8cd] p-5"><div className="flex items-center gap-2"><History size={20} /><h2 className="text-xl font-semibold">Recent saved package changes</h2></div><p className="mt-1 text-sm text-slate-600">Changes apply immediately for the authenticated administrator and remain fully audited.</p></div>
+        <div className="divide-y divide-[#ded8cd] bg-white">
+          {recentChanges.map((change) => <div key={change.id} className="p-4 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">{change.package.name} · version {change.baseVersion + 1}</p><Badge tone="green">APPLIED</Badge></div><p className="mt-1 text-slate-600">{change.reason}</p><p className="mt-2 text-xs text-slate-400">{shortDate(change.createdAt)}</p></div>)}
+          {!recentChanges.length ? <p className="p-5 text-sm text-slate-500">No saved package changes yet.</p> : null}
         </div>
       </section>
 

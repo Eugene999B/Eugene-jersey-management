@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OrderStatus, ReturnRequestStatus } from "@prisma/client";
-import { Activity, AlertTriangle, Banknote, CheckCircle2, CreditCard, LifeBuoy, Megaphone, Plus, Settings, Shield, Store, TrendingUp, UserCog } from "lucide-react";
+import { Activity, AlertTriangle, Banknote, BookOpen, CheckCircle2, CreditCard, Download, LifeBuoy, Megaphone, Plus, Settings, Shield, Store, TrendingUp, UserCog } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { prisma } from "@/lib/db";
 import { compactNumber, currency, shortDate } from "@/lib/format";
@@ -67,7 +67,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       {params.error === "permission" ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Your platform role does not include access to that admin page.</div> : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Unrestricted platform overview</p><h1 className="mt-2 text-3xl font-semibold">Command centre</h1><p className="mt-2 text-sm text-slate-600">Global financial, tenant and audit information is visible only to unrestricted platform administrators.</p></div>
-        <Link href="/admin/shops/new" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16} /> Create shop</Link>
+<div className="flex flex-wrap gap-2"><a href="/api/guides/admin-handbook" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900"><Download size={16} /> Download complete handbook</a><Link href="/admin/help" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900"><BookOpen size={16} /> Help centre</Link><Link href="/admin/shops/new" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16} /> Create shop</Link></div>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">

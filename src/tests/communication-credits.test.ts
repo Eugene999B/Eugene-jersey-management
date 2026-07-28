@@ -13,7 +13,6 @@ import {
   packageTotalUnits,
   packageUnitPrice,
 } from "@/lib/communication-credits";
-import { canApproveCommercialChange } from "@/lib/subscription-plans";
 
 function creditPackage(overrides: Partial<CommunicationCreditPackage> = {}): CommunicationCreditPackage {
   const now = new Date("2026-07-28T00:00:00.000Z");
@@ -76,10 +75,13 @@ describe("communication credit packages", () => {
     expect(creditChannelForNotification(NotificationChannel.IN_APP)).toBeNull();
   });
 
-  it("uses the existing second-administrator commercial approval rule", () => {
-    expect(canApproveCommercialChange("admin-a", "admin-a")).toBe(false);
-    expect(canApproveCommercialChange("admin-a", "admin-b")).toBe(true);
+  it("supports immediate sole-administrator saves while preserving immutable package snapshots", () => {
+    const snapshot = communicationCreditPackageSnapshot(creditPackage({ updatedById: "admin-a", version: 4 }));
+    expect(snapshot.version).toBe(4);
+    expect(snapshot.price).toBe("80.00");
+    expect(packageTotalUnits(snapshot)).toBe(120);
   });
+
 
   it("backfills zero balances and package placeholders without invented prices or units", () => {
     const migration = readFileSync(

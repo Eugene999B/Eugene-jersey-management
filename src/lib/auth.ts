@@ -109,6 +109,8 @@ export async function requireActiveShop(session: SessionUser) {
       yearlyPrice: true,
       subscriptionRenewalAt: true,
       networkCode: true,
+      staffLoginId: true,
+      verificationStatus: true,
     },
   });
 

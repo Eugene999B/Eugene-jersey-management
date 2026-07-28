@@ -38,7 +38,7 @@ export default async function ShopLegalDocumentPage({ params }: Props) {
             ["Legal business name", shop.legalBusinessName],
             ["Public shop link", `/shop/${shop.slug}`],
             ["Network code", shop.networkCode],
-            ["Staff login ID", shop.staffLoginId],
+            ["Owner Login ID", shop.staffLoginId],
             ["Registration number", shop.businessRegistrationNumber],
             ["Tax ID", shop.taxIdentificationNumber],
             ["Owner government ID", shop.ownerGovernmentId],
@@ -62,7 +62,7 @@ export default async function ShopLegalDocumentPage({ params }: Props) {
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <div>
             <p className="text-sm text-slate-500">Verified by</p>
-            <p className="mt-1 font-semibold">{shop.verifiedBy?.name ?? "Pending super-admin approval"}</p>
+            <p className="mt-1 font-semibold">{shop.verifiedBy?.name ?? "Pending platform verification"}</p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Verification date</p>

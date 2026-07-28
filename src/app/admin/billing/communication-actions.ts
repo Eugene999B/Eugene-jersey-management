@@ -12,11 +12,9 @@ import { audit } from "@/lib/audit";
 import {
   communicationCreditPackageSnapshot,
   communicationCreditSnapshotAsJson,
-  parseCommunicationCreditPackageSnapshot,
 } from "@/lib/communication-credits";
 import { prisma } from "@/lib/db";
 import { requirePlatformPermission } from "@/lib/platform-admin";
-import { canApproveCommercialChange } from "@/lib/subscription-plans";
 
 const packageShellSchema = z.object({
   code: z.string().trim().min(3).max(60).transform((value) => value.toUpperCase().replace(/[^A-Z0-9-]/g, "-")),
@@ -26,7 +24,7 @@ const packageShellSchema = z.object({
 });
 
 const optionalPositiveInt = z.number().int().positive().max(10_000_000).nullable();
-const packageProposalSchema = z.object({
+const packageSchema = z.object({
   packageId: z.string().min(1),
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500),
@@ -38,12 +36,6 @@ const packageProposalSchema = z.object({
   isPublic: z.boolean(),
   isActive: z.boolean(),
   reason: z.string().trim().min(8).max(500),
-});
-
-const decisionSchema = z.object({
-  requestId: z.string().min(1),
-  decision: z.enum(["APPROVE", "REJECT"]),
-  decisionNote: z.string().trim().min(5).max(500),
 });
 
 function numberOrNull(value: FormDataEntryValue | null) {
@@ -106,9 +98,9 @@ export async function createCommunicationPackageShellAction(formData: FormData) 
   redirect("/admin/billing/communications?created=1");
 }
 
-export async function requestCommunicationPackageChangeAction(formData: FormData) {
+export async function saveCommunicationPackageAction(formData: FormData) {
   const session = await requirePlatformPermission("billing");
-  const parsed = packageProposalSchema.safeParse({
+  const parsed = packageSchema.safeParse({
     packageId: formData.get("packageId"),
     name: formData.get("name"),
     description: formData.get("description") ?? "",
@@ -131,14 +123,9 @@ export async function requestCommunicationPackageChangeAction(formData: FormData
 
   const creditPackage = await prisma.communicationCreditPackage.findUnique({ where: { id: parsed.data.packageId } });
   if (!creditPackage) communicationRedirect("package-missing");
-  const existingPending = await prisma.communicationCreditPackageChangeRequest.findFirst({
-    where: { packageId: creditPackage.id, status: CommunicationCreditPackageChangeStatus.PENDING },
-    select: { id: true },
-  });
-  if (existingPending) communicationRedirect("pending-package-change");
 
   const previous = communicationCreditPackageSnapshot(creditPackage);
-  const proposed = {
+  const next = {
     ...previous,
     name: parsed.data.name,
     description: parsed.data.description,
@@ -151,129 +138,69 @@ export async function requestCommunicationPackageChangeAction(formData: FormData
     isActive: parsed.data.isActive,
     version: creditPackage.version + 1,
   };
+  const decidedAt = new Date();
 
-  const request = await prisma.communicationCreditPackageChangeRequest.create({
-    data: {
-      packageId: creditPackage.id,
-      baseVersion: creditPackage.version,
-      reason: parsed.data.reason,
-      previousSnapshot: communicationCreditSnapshotAsJson(previous),
-      proposedSnapshot: communicationCreditSnapshotAsJson(proposed),
-      requestedById: session.id,
-    },
-  });
-  await audit({
-    userId: session.id,
-    action: "admin.communication_credit_package_change_requested",
-    entityType: "CommunicationCreditPackageChangeRequest",
-    entityId: request.id,
-    metadata: {
-      packageId: creditPackage.id,
-      code: creditPackage.code,
-      baseVersion: creditPackage.version,
-      proposedVersion: proposed.version,
-      reason: parsed.data.reason,
-    },
-  });
-  revalidatePath("/admin/billing/communications");
-  redirect("/admin/billing/communications?requested=1");
-}
-
-export async function decideCommunicationPackageChangeAction(formData: FormData) {
-  const session = await requirePlatformPermission("billing");
-  const parsed = decisionSchema.safeParse({
-    requestId: formData.get("requestId"),
-    decision: formData.get("decision"),
-    decisionNote: formData.get("decisionNote"),
-  });
-  if (!parsed.success) communicationRedirect("decision-values");
-
-  const request = await prisma.communicationCreditPackageChangeRequest.findUnique({
-    where: { id: parsed.data.requestId },
-    include: { package: true },
-  });
-  if (!request || request.status !== CommunicationCreditPackageChangeStatus.PENDING) communicationRedirect("request-state");
-  if (!canApproveCommercialChange(request.requestedById, session.id)) communicationRedirect("self-approval");
-
-  if (parsed.data.decision === "REJECT") {
-    const rejected = await prisma.communicationCreditPackageChangeRequest.updateMany({
-      where: { id: request.id, status: CommunicationCreditPackageChangeStatus.PENDING },
-      data: {
-        status: CommunicationCreditPackageChangeStatus.REJECTED,
-        decisionNote: parsed.data.decisionNote,
-        decidedById: session.id,
-        decidedAt: new Date(),
-      },
-    });
-    if (rejected.count !== 1) communicationRedirect("request-state");
-    await audit({
-      userId: session.id,
-      action: "admin.communication_credit_package_change_rejected",
-      entityType: "CommunicationCreditPackageChangeRequest",
-      entityId: request.id,
-      metadata: { packageId: request.packageId, requestedById: request.requestedById, decisionNote: parsed.data.decisionNote },
-    });
-    revalidatePath("/admin/billing/communications");
-    redirect("/admin/billing/communications?rejected=1");
-  }
-
-  const proposed = parseCommunicationCreditPackageSnapshot(request.proposedSnapshot);
-  if (!proposed.success || proposed.data.version !== request.baseVersion + 1) communicationRedirect("proposal-corrupt");
   const applied = await prisma.$transaction(async (tx) => {
-    const claimed = await tx.communicationCreditPackageChangeRequest.updateMany({
-      where: { id: request.id, status: CommunicationCreditPackageChangeStatus.PENDING },
-      data: {
-        status: CommunicationCreditPackageChangeStatus.APPROVED,
-        decisionNote: parsed.data.decisionNote,
-        decidedById: session.id,
-        decidedAt: new Date(),
-      },
-    });
-    if (claimed.count !== 1) throw new Error("REQUEST_STATE");
-
     const changed = await tx.communicationCreditPackage.updateMany({
-      where: { id: request.packageId, version: request.baseVersion },
+      where: { id: creditPackage.id, version: creditPackage.version },
       data: {
-        name: proposed.data.name,
-        description: proposed.data.description || null,
-        currency: proposed.data.currency,
-        price: proposed.data.price,
-        creditUnits: proposed.data.creditUnits,
-        bonusUnits: proposed.data.bonusUnits,
-        isConfigured: proposed.data.isConfigured,
-        isPublic: proposed.data.isPublic,
-        isActive: proposed.data.isActive,
-        version: proposed.data.version,
+        name: next.name,
+        description: next.description || null,
+        currency: next.currency,
+        price: next.price,
+        creditUnits: next.creditUnits,
+        bonusUnits: next.bonusUnits,
+        isConfigured: next.isConfigured,
+        isPublic: next.isPublic,
+        isActive: next.isActive,
+        version: next.version,
         updatedById: session.id,
       },
     });
     if (changed.count !== 1) throw new Error("STALE_PACKAGE");
+
+    const change = await tx.communicationCreditPackageChangeRequest.create({
+      data: {
+        packageId: creditPackage.id,
+        baseVersion: creditPackage.version,
+        status: CommunicationCreditPackageChangeStatus.APPROVED,
+        reason: parsed.data.reason,
+        decisionNote: "Applied immediately by the authenticated platform administrator.",
+        previousSnapshot: communicationCreditSnapshotAsJson(previous),
+        proposedSnapshot: communicationCreditSnapshotAsJson(next),
+        requestedById: session.id,
+        decidedById: session.id,
+        decidedAt,
+      },
+    });
     await tx.communicationCreditPackageVersion.create({
       data: {
-        packageId: request.packageId,
-        version: proposed.data.version,
-        snapshot: communicationCreditSnapshotAsJson(proposed.data),
-        reason: request.reason,
+        packageId: creditPackage.id,
+        version: next.version,
+        snapshot: communicationCreditSnapshotAsJson(next),
+        reason: parsed.data.reason,
         approvedById: session.id,
       },
     });
-    return proposed.data;
+    return change;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(() => null);
   if (!applied) communicationRedirect("stale-package");
 
   await audit({
     userId: session.id,
-    action: "admin.communication_credit_package_change_approved",
+    action: "admin.communication_credit_package_updated",
     entityType: "CommunicationCreditPackage",
-    entityId: request.packageId,
+    entityId: creditPackage.id,
     metadata: {
-      requestId: request.id,
-      requestedById: request.requestedById,
-      approvedVersion: applied.version,
-      decisionNote: parsed.data.decisionNote,
+      changeRequestId: applied.id,
+      code: creditPackage.code,
+      previousVersion: creditPackage.version,
+      savedVersion: next.version,
+      reason: parsed.data.reason,
+      appliedImmediately: true,
     },
   });
   revalidatePath("/admin/billing/communications");
   revalidatePath("/dashboard/messages");
-  redirect("/admin/billing/communications?approved=1");
+  redirect("/admin/billing/communications?saved=1");
 }

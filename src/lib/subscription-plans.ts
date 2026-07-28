@@ -89,9 +89,6 @@ export function parseSubscriptionPlanSnapshot(value: Prisma.JsonValue) {
   return subscriptionPlanSnapshotSchema.safeParse(value);
 }
 
-export function canApproveCommercialChange(requestedById: string, approverId: string) {
-  return Boolean(requestedById && approverId && requestedById !== approverId);
-}
 
 export function resolvePlanPrice(plan: Pick<SubscriptionPlan, "monthlyPrice" | "yearlyPrice">, cycle: BillingCycle) {
   const value = cycle === BillingCycle.YEARLY ? plan.yearlyPrice : plan.monthlyPrice;

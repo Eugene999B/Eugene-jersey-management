@@ -36,8 +36,6 @@ const schema = z.object({
   logoUrl: safeImageUrl.optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  storefrontEnabled: z.boolean().default(false),
-  publicOrderingEnabled: z.boolean().default(false),
   cashOrderHoldMinutes: z.coerce.number().int().min(15).max(10080),
   settlementBank: z.string().trim().max(120).optional(),
   settlementAccount: z.string().trim().max(80).optional(),
@@ -57,8 +55,6 @@ export async function updateShopSettingsAction(formData: FormData) {
   const parsed = schema.safeParse({
     name: formData.get("name"), logoUrl: formData.get("logoUrl") || undefined,
     primaryColor: formData.get("primaryColor"), secondaryColor: formData.get("secondaryColor"),
-    storefrontEnabled: formData.get("storefrontEnabled") === "on",
-    publicOrderingEnabled: formData.get("publicOrderingEnabled") === "on",
     cashOrderHoldMinutes: formData.get("cashOrderHoldMinutes") || 120,
     settlementBank: formData.get("settlementBank") || undefined,
     settlementAccount: formData.get("settlementAccount") || undefined,
@@ -70,12 +66,8 @@ export async function updateShopSettingsAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
-  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true, verificationStatus: true } });
+  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true } });
   if (!shop?.isActive) redirect("/login?error=shop-suspended");
-  if ((parsed.data.storefrontEnabled || parsed.data.publicOrderingEnabled) && shop.verificationStatus !== ShopVerificationStatus.VERIFIED) {
-    redirect("/dashboard/settings?error=verification-required");
-  }
-  if (parsed.data.publicOrderingEnabled && !parsed.data.storefrontEnabled) redirect("/dashboard/settings?error=storefront-required");
 
   const uploadedLogo = formData.get("logoFile");
   const logoAsset = uploadedLogo instanceof File && uploadedLogo.size > 0
@@ -89,8 +81,6 @@ export async function updateShopSettingsAction(formData: FormData) {
       logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
       primaryColor: parsed.data.primaryColor,
       secondaryColor: parsed.data.secondaryColor,
-      storefrontEnabled: parsed.data.storefrontEnabled,
-      publicOrderingEnabled: parsed.data.publicOrderingEnabled,
       cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
       paymentConfig: {
         upsert: {
@@ -127,8 +117,6 @@ export async function updateShopSettingsAction(formData: FormData) {
     entityType: "Shop",
     entityId: shopId,
     metadata: {
-      storefrontEnabled: parsed.data.storefrontEnabled,
-      publicOrderingEnabled: parsed.data.publicOrderingEnabled,
       logoChanged: Boolean(logoAsset || parsed.data.logoUrl),
       settlementDetailsUpdated: Boolean(parsed.data.settlementBank || parsed.data.settlementAccount || parsed.data.settlementAccountName),
     },
@@ -136,4 +124,48 @@ export async function updateShopSettingsAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/shops");
+}
+
+
+const storefrontModeSchema = z.enum(["ONLINE", "BROWSE", "OFFLINE"]);
+
+export async function updateStorefrontVisibilityAction(formData: FormData) {
+  const session = await requireRole(permissions.settings);
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
+  const mode = storefrontModeSchema.safeParse(formData.get("mode"));
+  if (!mode.success) redirect("/dashboard/settings?error=storefront-mode");
+
+  const shop = await prisma.shop.findUnique({
+    where: { id: session.shopId },
+    select: { id: true, slug: true, isActive: true, verificationStatus: true, storefrontEnabled: true, publicOrderingEnabled: true },
+  });
+  if (!shop?.isActive) redirect("/login?error=shop-suspended");
+  if (mode.data !== "OFFLINE" && shop.verificationStatus !== ShopVerificationStatus.VERIFIED) {
+    redirect("/dashboard/settings?error=verification-required");
+  }
+
+  const next = mode.data === "ONLINE"
+    ? { storefrontEnabled: true, publicOrderingEnabled: true }
+    : mode.data === "BROWSE"
+      ? { storefrontEnabled: true, publicOrderingEnabled: false }
+      : { storefrontEnabled: false, publicOrderingEnabled: false };
+
+  await prisma.shop.update({ where: { id: shop.id }, data: next });
+  await audit({
+    shopId: shop.id,
+    userId: session.id,
+    action: "settings.storefront_visibility_updated",
+    entityType: "Shop",
+    entityId: shop.id,
+    metadata: {
+      mode: mode.data,
+      previous: { storefrontEnabled: shop.storefrontEnabled, publicOrderingEnabled: shop.publicOrderingEnabled },
+      next,
+    },
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/shops");
+  revalidatePath(`/shop/${shop.slug}`);
+  redirect(`/dashboard/settings?storefront=${mode.data.toLowerCase()}`);
 }

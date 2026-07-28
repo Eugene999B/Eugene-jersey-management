@@ -2,15 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { BillingCycle, PlanTier, SubscriptionPlanChangeStatus, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, PlanTier, Prisma, SubscriptionPlanChangeStatus, SubscriptionStatus } from "@prisma/client";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { requirePlatformPermission } from "@/lib/platform-admin";
 import {
   SUPPORTED_PLAN_FEATURES,
-  canApproveCommercialChange,
-  parseSubscriptionPlanSnapshot,
   resolvePlanPrice,
   snapshotAsJson,
   subscriptionDates,
@@ -19,7 +17,7 @@ import {
 
 const optionalNumber = (maximum: number) => z.number().int().positive().max(maximum).nullable();
 
-const planProposalSchema = z.object({
+const planSchema = z.object({
   planId: z.string().min(1),
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500),
@@ -36,12 +34,6 @@ const planProposalSchema = z.object({
   isPublic: z.boolean(),
   isActive: z.boolean(),
   reason: z.string().trim().min(8).max(500),
-});
-
-const decisionSchema = z.object({
-  requestId: z.string().min(1),
-  decision: z.enum(["APPROVE", "REJECT"]),
-  decisionNote: z.string().trim().min(5).max(500),
 });
 
 const assignmentSchema = z.object({
@@ -71,9 +63,9 @@ function billingRedirect(error: string): never {
   redirect(`/admin/billing?error=${encodeURIComponent(error)}`);
 }
 
-export async function requestSubscriptionPlanChangeAction(formData: FormData) {
+export async function saveSubscriptionPlanAction(formData: FormData) {
   const session = await requirePlatformPermission("billing");
-  const parsed = planProposalSchema.safeParse({
+  const parsed = planSchema.safeParse({
     planId: formData.get("planId"),
     name: formData.get("name"),
     description: formData.get("description") ?? "",
@@ -107,14 +99,8 @@ export async function requestSubscriptionPlanChangeAction(formData: FormData) {
     billingRedirect("configured-plan-price");
   }
 
-  const existingPending = await prisma.subscriptionPlanChangeRequest.findFirst({
-    where: { planId: plan.id, status: SubscriptionPlanChangeStatus.PENDING },
-    select: { id: true },
-  });
-  if (existingPending) billingRedirect("pending-plan-change");
-
   const previous = subscriptionPlanSnapshot(plan);
-  const proposed = {
+  const next = {
     tier: plan.tier,
     name: parsed.data.name,
     description: parsed.data.description,
@@ -132,118 +118,76 @@ export async function requestSubscriptionPlanChangeAction(formData: FormData) {
     isActive: parsed.data.isActive,
     version: plan.version + 1,
   };
-
-  const request = await prisma.subscriptionPlanChangeRequest.create({
-    data: {
-      planId: plan.id,
-      basePlanVersion: plan.version,
-      reason: parsed.data.reason,
-      previousSnapshot: snapshotAsJson(previous),
-      proposedSnapshot: snapshotAsJson(proposed),
-      requestedById: session.id,
-    },
-  });
-  await audit({
-    userId: session.id,
-    action: "admin.subscription_plan_change_requested",
-    entityType: "SubscriptionPlanChangeRequest",
-    entityId: request.id,
-    metadata: { planId: plan.id, tier: plan.tier, basePlanVersion: plan.version, proposedVersion: proposed.version, reason: parsed.data.reason },
-  });
-  revalidatePath("/admin/billing");
-  redirect("/admin/billing?requested=1");
-}
-
-export async function decideSubscriptionPlanChangeAction(formData: FormData) {
-  const session = await requirePlatformPermission("billing");
-  const parsed = decisionSchema.safeParse({
-    requestId: formData.get("requestId"),
-    decision: formData.get("decision"),
-    decisionNote: formData.get("decisionNote"),
-  });
-  if (!parsed.success) billingRedirect("decision-values");
-
-  const request = await prisma.subscriptionPlanChangeRequest.findUnique({
-    where: { id: parsed.data.requestId },
-    include: { plan: true },
-  });
-  if (!request || request.status !== SubscriptionPlanChangeStatus.PENDING) billingRedirect("request-state");
-  if (!canApproveCommercialChange(request.requestedById, session.id)) billingRedirect("self-approval");
-
-  if (parsed.data.decision === "REJECT") {
-    const rejected = await prisma.subscriptionPlanChangeRequest.updateMany({
-      where: { id: request.id, status: SubscriptionPlanChangeStatus.PENDING },
-      data: { status: SubscriptionPlanChangeStatus.REJECTED, decisionNote: parsed.data.decisionNote, decidedById: session.id, decidedAt: new Date() },
-    });
-    if (rejected.count !== 1) billingRedirect("request-state");
-    await audit({
-      userId: session.id,
-      action: "admin.subscription_plan_change_rejected",
-      entityType: "SubscriptionPlanChangeRequest",
-      entityId: request.id,
-      metadata: { planId: request.planId, requestedById: request.requestedById, decisionNote: parsed.data.decisionNote },
-    });
-    revalidatePath("/admin/billing");
-    redirect("/admin/billing?rejected=1");
-  }
-
-  const proposed = parseSubscriptionPlanSnapshot(request.proposedSnapshot);
-  if (!proposed.success || proposed.data.version !== request.basePlanVersion + 1) billingRedirect("proposal-corrupt");
+  const decidedAt = new Date();
 
   const applied = await prisma.$transaction(async (tx) => {
-    const claimed = await tx.subscriptionPlanChangeRequest.updateMany({
-      where: { id: request.id, status: SubscriptionPlanChangeStatus.PENDING },
-      data: { status: SubscriptionPlanChangeStatus.APPROVED, decisionNote: parsed.data.decisionNote, decidedById: session.id, decidedAt: new Date() },
-    });
-    if (claimed.count !== 1) throw new Error("REQUEST_STATE");
-
-    const planChanged = await tx.subscriptionPlan.updateMany({
-      where: { id: request.planId, version: request.basePlanVersion },
+    const changed = await tx.subscriptionPlan.updateMany({
+      where: { id: plan.id, version: plan.version },
       data: {
-        name: proposed.data.name,
-        description: proposed.data.description || null,
-        currency: proposed.data.currency,
-        monthlyPrice: proposed.data.monthlyPrice,
-        yearlyPrice: proposed.data.yearlyPrice,
-        trialDays: proposed.data.trialDays,
-        gracePeriodDays: proposed.data.gracePeriodDays,
-        includedStaffAccounts: proposed.data.includedStaffAccounts,
-        maxProducts: proposed.data.maxProducts,
-        maxOrdersPerMonth: proposed.data.maxOrdersPerMonth,
-        features: proposed.data.features,
-        isConfigured: proposed.data.isConfigured,
-        isPublic: proposed.data.isPublic,
-        isActive: proposed.data.isActive,
-        version: proposed.data.version,
+        name: next.name,
+        description: next.description || null,
+        currency: next.currency,
+        monthlyPrice: next.monthlyPrice,
+        yearlyPrice: next.yearlyPrice,
+        trialDays: next.trialDays,
+        gracePeriodDays: next.gracePeriodDays,
+        includedStaffAccounts: next.includedStaffAccounts,
+        maxProducts: next.maxProducts,
+        maxOrdersPerMonth: next.maxOrdersPerMonth,
+        features: next.features,
+        isConfigured: next.isConfigured,
+        isPublic: next.isPublic,
+        isActive: next.isActive,
+        version: next.version,
         updatedById: session.id,
       },
     });
-    if (planChanged.count !== 1) throw new Error("STALE_PLAN");
+    if (changed.count !== 1) throw new Error("STALE_PLAN");
 
+    const change = await tx.subscriptionPlanChangeRequest.create({
+      data: {
+        planId: plan.id,
+        basePlanVersion: plan.version,
+        status: SubscriptionPlanChangeStatus.APPROVED,
+        reason: parsed.data.reason,
+        decisionNote: "Applied immediately by the authenticated platform administrator.",
+        previousSnapshot: snapshotAsJson(previous),
+        proposedSnapshot: snapshotAsJson(next),
+        requestedById: session.id,
+        decidedById: session.id,
+        decidedAt,
+      },
+    });
     await tx.subscriptionPlanVersion.create({
       data: {
-        planId: request.planId,
-        version: proposed.data.version,
-        snapshot: snapshotAsJson(proposed.data),
-        reason: request.reason,
+        planId: plan.id,
+        version: next.version,
+        snapshot: snapshotAsJson(next),
+        reason: parsed.data.reason,
         approvedById: session.id,
       },
     });
-    return proposed.data;
-  }).catch(() => null);
+    return change;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(() => null);
   if (!applied) billingRedirect("stale-plan");
 
   await audit({
     userId: session.id,
-    action: "admin.subscription_plan_change_approved",
+    action: "admin.subscription_plan_updated",
     entityType: "SubscriptionPlan",
-    entityId: request.planId,
-    metadata: { requestId: request.id, requestedById: request.requestedById, approvedVersion: applied.version, decisionNote: parsed.data.decisionNote },
+    entityId: plan.id,
+    metadata: {
+      changeRequestId: applied.id,
+      previousVersion: plan.version,
+      savedVersion: next.version,
+      reason: parsed.data.reason,
+      appliedImmediately: true,
+    },
   });
   revalidatePath("/admin");
   revalidatePath("/admin/billing");
   revalidatePath("/admin/shops");
-  redirect("/admin/billing?approved=1");
+  redirect("/admin/billing?saved=1");
 }
 
 export async function assignShopSubscriptionAction(formData: FormData) {

@@ -62,14 +62,15 @@ export async function createSecureShopAction(formData: FormData) {
   if (selectedPrice === null) redirect("/admin/shops/new?error=plan-price");
 
   const proposedStaffLoginId = shopStaffLoginId(parsed.data.slug, parsed.data.staffLoginId);
-  const [existingOwner, existingShop, existingLoginId] = await Promise.all([
+  const [existingOwner, existingShop, existingShopLoginId, existingUserLoginId] = await Promise.all([
     prisma.user.findUnique({ where: { email: parsed.data.ownerEmail }, select: { id: true } }),
     prisma.shop.findUnique({ where: { slug: parsed.data.slug }, select: { id: true } }),
     prisma.shop.findUnique({ where: { staffLoginId: proposedStaffLoginId }, select: { id: true } }),
+    prisma.user.findUnique({ where: { adminLoginId: proposedStaffLoginId }, select: { id: true } }),
   ]);
   if (existingOwner) redirect("/admin/shops/new?error=email-exists");
   if (existingShop) redirect("/admin/shops/new?error=slug-exists");
-  if (existingLoginId) redirect("/admin/shops/new?error=login-id-exists");
+  if (existingShopLoginId || existingUserLoginId) redirect("/admin/shops/new?error=login-id-exists");
 
   const passwordHash = await hashPassword(parsed.data.ownerPassword);
   const dates = subscriptionDates({ status: SubscriptionStatus.TRIAL, trialDays: plan.trialDays, gracePeriodDays: plan.gracePeriodDays });
@@ -100,10 +101,10 @@ export async function createSecureShopAction(formData: FormData) {
         renewalAt: dates.renewalAt,
         termsSnapshot: snapshotAsJson(snapshot),
         assignedById: session.id,
-        assignmentReason: "Initial tenant creation from an approved plan version.",
+        assignmentReason: "Initial tenant creation from a saved plan version.",
       },
     });
-    await tx.user.create({ data: { shopId: createdShop.id, email: parsed.data.ownerEmail, name: parsed.data.ownerName, role: Role.OWNER, passwordHash, phone: parsed.data.ownerPhone || parsed.data.credentialPhone, isActive: true } });
+    await tx.user.create({ data: { shopId: createdShop.id, adminLoginId: proposedStaffLoginId, email: parsed.data.ownerEmail, name: parsed.data.ownerName, role: Role.OWNER, passwordHash, phone: parsed.data.ownerPhone || parsed.data.credentialPhone, isActive: true } });
     return createdShop;
   });
 

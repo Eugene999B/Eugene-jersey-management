@@ -42,13 +42,21 @@ export default async function DebtsPage({ searchParams }: Props) {
   const totalDebt = openDebts.reduce((sum, debt) => sum + Number(debt.principalAmount) - Number(debt.paidAmount), 0);
   const overdue = openDebts.filter((debt) => debt.dueDate < new Date());
   const installmentCount = debts.reduce((sum, debt) => sum + debt.installments.length, 0);
+  const customerTotals = new Map<string, { id: string; name: string; balance: number; entries: number }>();
+  for (const debt of openDebts) {
+    const current = customerTotals.get(debt.customerId) ?? { id: debt.customerId, name: debt.customer.name, balance: 0, entries: 0 };
+    current.balance += Number(debt.principalAmount) - Number(debt.paidAmount);
+    current.entries += 1;
+    customerTotals.set(debt.customerId, current);
+  }
+  const largestCustomerBalances = [...customerTotals.values()].sort((left, right) => right.balance - left.balance).slice(0, 8);
 
   return (
     <div className="space-y-4 sm:space-y-5">
       {params.error && debtErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{debtErrors[params.error]}</div> : null}
       <div>
         <h1 className="text-2xl font-semibold">Debts and installments</h1>
-        <p className="mt-2 text-sm text-slate-500">Track customer credit, payment plans, reminders, and collection risk.</p>
+        <p className="mt-2 text-sm text-slate-500">Track customer credit, payment plans, reminders, and collection risk. Every credit sale stays as its own receipt-linked debt entry; a customer&apos;s total is the sum of all unpaid entries.</p>
       </div>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -56,6 +64,14 @@ export default async function DebtsPage({ searchParams }: Props) {
         <StatCard label="Open debts" value={String(openDebts.length)} />
         <StatCard label="Overdue" value={String(overdue.length)} helper="Needs follow-up" icon={<CalendarClock size={20} />} />
         <StatCard label="Installments" value={String(installmentCount)} />
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="text-lg font-semibold">Customer outstanding totals</h2><p className="mt-1 text-sm text-slate-500">This combines all unpaid credit-sale and manually created debt entries for each customer.</p></div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          {largestCustomerBalances.map((customer) => <div key={customer.id} className="rounded-xl border border-[#ded8cd] bg-white p-4"><p className="truncate font-semibold">{customer.name}</p><p className="mt-2 text-xl font-semibold">{currency(customer.balance, shop.currency)}</p><p className="mt-1 text-xs text-slate-500">{customer.entries} unpaid entr{customer.entries === 1 ? "y" : "ies"}</p></div>)}
+          {!largestCustomerBalances.length ? <p className="text-sm text-slate-500">No customer has an unpaid balance.</p> : null}
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr] xl:gap-5">
