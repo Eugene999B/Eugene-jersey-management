@@ -62,7 +62,7 @@ describe("Release 28 password recovery and email trust", () => {
     expect(health).toContain("https://api.resend.com/domains?limit=100");
     expect(health).toContain('domainStatus === "verified"');
     expect(webhook).toContain("verifyResendWebhookSignature");
-    expect(webhook).toContain("EmailProviderEvent");
+    expect(webhook).toContain("emailProviderEvent.create");
   });
 
   it("blocks platform recovery records from normal and interactive tenant clients", () => {
