@@ -12,7 +12,7 @@ async function signInAsAdministrator(page: Page) {
   const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
   const passwordField = page.getByPlaceholder("Click, then enter password");
   await loginId.click();
-  await loginId.fill("EJM-E2E-ADMIN");
+  await loginId.fill("EJM-E2E-R25-ADMIN");
   await passwordField.click();
   await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
@@ -24,7 +24,8 @@ test("saves subscription terms immediately for the sole administrator", async ({
   await page.goto("/admin/billing");
   await expect(page.getByRole("heading", { name: "Subscription Plans & Billing" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Recent saved plan changes" })).toBeVisible();
-  await expect(page.getByText(/another administrator/i)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Pending second-admin approvals", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 
   const basicPlan = page.locator("article").filter({ hasText: "BASIC · version" }).first();
   await expect(basicPlan).toBeVisible();
