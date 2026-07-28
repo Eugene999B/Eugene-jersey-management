@@ -27,7 +27,7 @@ function safeNext(value: FormDataEntryValue | string | null | undefined) {
   return raw;
 }
 
-function errorRedirect(challenge: string, next: string) {
+function errorRedirect(challenge: string, next: string): never {
   redirect(`/buyer/reset-password?error=invalid&challenge=${encodeURIComponent(challenge)}&next=${encodeURIComponent(next)}`);
 }
 
