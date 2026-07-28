@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -46,65 +46,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-
-      - name: Apply reviewed Release 25 patch
-        if: ${{ github.actor != 'github-actions[bot]' && hashFiles('.github/release25-patch/00.txt') != '' }}
-        shell: bash
-        run: |
-          cat .github/release25-patch/*.txt | base64 -d | gzip -d > /tmp/release-25.patch
-          git apply --check /tmp/release-25.patch
-          git apply /tmp/release-25.patch
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- \
-            docs/source/10_System_Diagnostic_Progress_and_Roadmap.md \
-            docs/source/20_CEO_Settings_and_Platform_Governance.md \
-            docs/source/21_Subscription_Plans_and_Commercial_Approval.md \
-            docs/source/22_Communication_Credits_and_Wallets.md \
-            docs/source/25_Release_25_Implementation_Checklist.md \
-            e2e/tests/communication-credits.spec.ts \
-            e2e/tests/solo-admin-help.spec.ts \
-            e2e/tests/subscription-plans.spec.ts \
-            prisma/migrations/20260728213000_shop_owner_login_ids/migration.sql \
-            src/app/admin/billing/actions.ts \
-            src/app/admin/billing/communication-actions.ts \
-            src/app/admin/billing/communications/page.tsx \
-            src/app/admin/billing/page.tsx \
-            src/app/admin/create-shop-action.ts \
-            src/app/admin/help/page.tsx \
-            src/app/admin/layout.tsx \
-            src/app/admin/page.tsx \
-            'src/app/admin/shops/[shopId]/legal-document/page.tsx' \
-            'src/app/admin/shops/[shopId]/page.tsx' \
-            src/app/admin/shops/new/page.tsx \
-            src/app/admin/shops/page.tsx \
-            'src/app/api/guides/[guide]/route.ts' \
-            src/app/api/pos/checkout/route.ts \
-            src/app/dashboard/debts/page.tsx \
-            src/app/dashboard/designs/page.tsx \
-            src/app/dashboard/messages/page.tsx \
-            src/app/dashboard/pos/page.tsx \
-            src/app/dashboard/settings/actions.ts \
-            src/app/dashboard/settings/page.tsx \
-            src/app/dashboard/staff/page.tsx \
-            src/components/admin/admin-navigation.tsx \
-            src/components/admin/admin-page-help.tsx \
-            src/components/auth/copy-login-id-button.tsx \
-            src/components/dashboard/topbar.tsx \
-            src/components/pos/pos-terminal.tsx \
-            src/lib/auth.ts \
-            src/lib/operator-guides.ts \
-            src/lib/subscription-plans.ts \
-            src/tests/communication-credits.test.ts \
-            src/tests/operator-guides.test.ts \
-            src/tests/solo-admin-usability-architecture.test.ts \
-            src/tests/subscription-plans.test.ts
-          git commit -m "Implement sole-admin controls and operator help"
-          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git push origin "HEAD:${branch}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
