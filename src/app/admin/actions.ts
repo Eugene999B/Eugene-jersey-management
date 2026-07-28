@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { ReturnRequestStatus, Role, ShopVerificationStatus } from "@prisma/client";
+import { OrderChannel, OrderStatus, PaymentStatus, ReturnRequestStatus, Role, ShopVerificationStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
 import { platformPermissionValues, requirePlatformPermission } from "@/lib/platform-admin";
 
 export async function verifyShopCredentialsAction(formData: FormData) {
@@ -205,6 +206,52 @@ export async function updateReturnIssueAction(formData: FormData) {
   const changed = await prisma.returnRequest.updateMany({ where: { id: existing.id, status: existing.status }, data: { status: parsed.data.status, resolution: parsed.data.resolution ?? existing.resolution, resolvedAt: terminal ? existing.resolvedAt ?? new Date() : null } });
   if (changed.count !== 1) redirect("/admin/support?error=issue-changed");
   await audit({ shopId: existing.shopId, userId: session.id, action: "admin.return_issue_updated", entityType: "ReturnRequest", entityId: existing.id, metadata: { from: existing.status, to: parsed.data.status, resolution: parsed.data.resolution } });
+  revalidatePath("/admin");
+  revalidatePath("/admin/support");
+}
+
+const allowedAdminOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+  IN_PRODUCTION: [OrderStatus.READY, OrderStatus.CANCELLED],
+  READY: [OrderStatus.CANCELLED],
+  COMPLETED: [], CANCELLED: [],
+};
+
+const orderIssueSchema = z.object({ orderId: z.string().min(1).max(100), status: z.nativeEnum(OrderStatus), notes: z.string().trim().max(1000).optional() });
+
+export async function adminUpdateOrderStatusAction(formData: FormData) {
+  const session = await requirePlatformPermission("support");
+  const parsed = orderIssueSchema.safeParse({ orderId: formData.get("orderId"), status: formData.get("status"), notes: formData.get("notes") || undefined });
+  if (!parsed.success) redirect("/admin/support?error=issue");
+  const order = await prisma.order.findUnique({ where: { id: parsed.data.orderId }, include: { payments: true } });
+  if (!order) redirect("/admin/support?error=issue");
+  if (parsed.data.status !== order.status && !allowedAdminOrderTransitions[order.status].includes(parsed.data.status)) redirect("/admin/support?error=order-transition");
+
+  if (parsed.data.status === OrderStatus.CANCELLED && parsed.data.status !== order.status) {
+    if (order.channel !== OrderChannel.ONLINE) redirect("/admin/support?error=refund-required");
+    const reason = parsed.data.notes || `Cancelled by platform support agent ${session.name} before confirmed payment.`;
+    const result = await releaseUnpaidOnlineReservation({ orderId: order.id, reason });
+    if (!result.released) redirect(`/admin/support?error=${result.reason === "paid" ? "refund-required" : "issue-changed"}`);
+    await audit({ shopId: order.shopId, userId: session.id, action: "admin.unpaid_order_cancelled", entityType: "Order", entityId: order.id, metadata: { from: order.status, reason } });
+    revalidatePath("/admin");
+    revalidatePath("/admin/support");
+    return;
+  }
+
+  if (parsed.data.status !== order.status && order.paystackReference && !order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS)) redirect("/admin/support?error=payment-pending");
+  const changed = await prisma.order.updateMany({ where: { id: order.id, status: order.status }, data: { status: parsed.data.status, notes: parsed.data.notes ?? order.notes } });
+  if (changed.count !== 1) redirect("/admin/support?error=issue-changed");
+  await audit({ shopId: order.shopId, userId: session.id, action: "admin.order_issue_status_updated", entityType: "Order", entityId: order.id, metadata: { from: order.status, to: parsed.data.status, notes: parsed.data.notes } });
+  revalidatePath("/admin");
+  revalidatePath("/admin/support");
+}
+
+export async function closeCustomerThreadAction(formData: FormData) {
+  const session = await requirePlatformPermission("support");
+  const threadId = String(formData.get("threadId") ?? "");
+  if (!threadId) redirect("/admin/support?error=issue");
+  const thread = await prisma.customerThread.update({ where: { id: threadId }, data: { status: "RESOLVED" } });
+  await audit({ shopId: thread.shopId, userId: session.id, action: "admin.customer_thread_resolved", entityType: "CustomerThread", entityId: thread.id });
   revalidatePath("/admin");
   revalidatePath("/admin/support");
 }
