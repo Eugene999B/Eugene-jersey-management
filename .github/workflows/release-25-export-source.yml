@@ -1,0 +1,28 @@
+name: Export Release 25 source
+
+on:
+  push:
+    branches:
+      - agent/release-25-solo-admin-help-centre
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-25-source
+          path: |
+            src
+            prisma
+            docs
+            e2e
+            scripts
+            package.json
+            package-lock.json
+            .github/workflows/ci.yml
+          retention-days: 3
