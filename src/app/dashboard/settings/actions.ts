@@ -99,6 +99,7 @@ export async function updateShopSettingsAction(formData: FormData) {
       ?? parsed.data.marketplaceHeroUrl
       ?? currentMarketplaceProfile?.heroImageUrl
       ?? null;
+  const marketplaceTagline = parsed.data.marketplaceTagline ?? null;
 
   await prisma.$transaction([
     prisma.shop.update({
@@ -141,11 +142,11 @@ export async function updateShopSettingsAction(formData: FormData) {
       where: { shopId },
       create: {
         shopId,
-        tagline: parsed.data.marketplaceTagline,
+        tagline: marketplaceTagline,
         heroImageUrl: marketplaceHeroUrl,
       },
       update: {
-        tagline: parsed.data.marketplaceTagline,
+        tagline: marketplaceTagline,
         heroImageUrl: marketplaceHeroUrl,
       },
     }),
@@ -160,7 +161,7 @@ export async function updateShopSettingsAction(formData: FormData) {
     metadata: {
       logoChanged: Boolean(logoAsset || parsed.data.logoUrl),
       marketplaceHeroChanged: Boolean(marketplaceHeroAsset || parsed.data.clearMarketplaceHero || parsed.data.marketplaceHeroUrl),
-      marketplaceTaglineUpdated: Boolean(parsed.data.marketplaceTagline),
+      marketplaceTaglineUpdated: marketplaceTagline !== currentMarketplaceProfile?.tagline,
       settlementDetailsUpdated: Boolean(parsed.data.settlementBank || parsed.data.settlementAccount || parsed.data.settlementAccountName),
     },
   });
