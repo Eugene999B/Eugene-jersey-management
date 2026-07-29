@@ -5,6 +5,7 @@ type DashboardRole = Role | string;
 const dashboardRoles = ["OWNER", "MANAGER", "CASHIER", "DESIGNER", "INVENTORY_CLERK", "ACCOUNTANT", "VIEWER"] as const;
 
 const routeRules: Array<{ prefix: string; roles: readonly DashboardRole[] }> = [
+  { prefix: "/dashboard/subscription", roles: dashboardRoles },
   { prefix: "/dashboard/catalog", roles: ["OWNER", "MANAGER", "INVENTORY_CLERK", "VIEWER"] },
   { prefix: "/dashboard/orders", roles: ["OWNER", "MANAGER", "CASHIER", "DESIGNER", "VIEWER"] },
   { prefix: "/dashboard/pos", roles: ["OWNER", "MANAGER", "CASHIER"] },
