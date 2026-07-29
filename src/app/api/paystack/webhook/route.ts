@@ -4,6 +4,7 @@ import { PaymentProviderEventStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { settleCommunicationCreditPurchase } from "@/lib/communication-credits";
 import { settlePaystackTransaction, verifyPaystackWebhookSignature, type PaystackTransactionData } from "@/lib/payments";
+import { settleSubscriptionInvoicePayment } from "@/lib/subscription-billing";
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -57,9 +58,12 @@ export async function POST(request: NextRequest) {
     }
 
     const creditResult = await settleCommunicationCreditPurchase(payload.data);
-    const result = creditResult.status === "ignored" && creditResult.reason === "credit-purchase-not-found"
-      ? await settlePaystackTransaction(payload.data)
+    const subscriptionResult = creditResult.status === "ignored" && creditResult.reason === "credit-purchase-not-found"
+      ? await settleSubscriptionInvoicePayment(payload.data)
       : creditResult;
+    const result = subscriptionResult.status === "ignored" && subscriptionResult.reason === "subscription-payment-not-found"
+      ? await settlePaystackTransaction(payload.data)
+      : subscriptionResult;
     await prisma.paymentProviderEvent.update({
       where: { id: event.id },
       data: {
