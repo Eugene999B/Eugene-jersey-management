@@ -1,0 +1,65 @@
+name: Apply Release 38 settlement guard
+
+on:
+  push:
+    branches:
+      - agent/release-38-subscription-billing-operations
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/release-38-subscription-billing-operations
+          fetch-depth: 0
+      - name: Apply guarded settlement changes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/subscription-billing.ts")
+          text = path.read_text()
+          paid_guard = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
+              return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
+            }
+
+            if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
+          if "Payment arrived after this invoice was already settled" not in text:
+              old = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
+              if old not in text:
+                  raise SystemExit("subscription paid guard insertion point missing")
+              text = text.replace(old, paid_guard, 1)
+
+          close_pending = '''    await tx.subscriptionPaymentAttempt.updateMany({
+              where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
+              data: {
+                status: PaymentStatus.FAILED,
+                failedAt: new Date(),
+                gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
+              },
+            });
+
+            await tx.subscriptionPaymentAttempt.create({'''
+          if "Invoice settled manually. Any later provider debit requires refund or reconciliation." not in text:
+              old = '''    await tx.subscriptionPaymentAttempt.create({'''
+              start = text.index("export async function markSubscriptionInvoicePaidManually")
+              position = text.index(old, start)
+              text = text[:position] + text[position:].replace(old, close_pending, 1)
+
+          path.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "Settlement guard already applied."
+            exit 0
+          fi
+          git config user.name "EJM Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/lib/subscription-billing.ts
+          git commit -m "fix: prevent duplicate subscription settlement"
+          git push origin HEAD:agent/release-38-subscription-billing-operations
