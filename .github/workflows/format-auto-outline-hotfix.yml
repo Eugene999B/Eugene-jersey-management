@@ -1,4 +1,4 @@
-name: Format automatic outline hotfix
+name: Finalize automatic outline hotfix
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  format:
+  finalize:
     if: github.head_ref == 'agent/hotfix-auto-outline-text'
     runs-on: ubuntu-24.04
     steps:
@@ -16,19 +16,28 @@ jobs:
         with:
           ref: agent/hotfix-auto-outline-text
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Format hotfix files
-        run: npx --no-install biome format --write src/lib/design-text-outline.ts src/lib/design-cut-path.ts src/lib/design-production.ts src/components/design/production-studio-advanced.tsx src/tests/design-text-outline.test.ts src/tests/design-cut-path.test.ts
-      - name: Remove one-time formatter
+      - name: Fix final source formatting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("src/components/design/production-studio-advanced.tsx")
+          source = path.read_text()
+          old = '''    const paths = await prepareCutPaths();
+            if (!paths) return;
+              const writer = port.writable.getWriter();'''
+          new = '''    const paths = await prepareCutPaths();
+              if (!paths) return;
+              const writer = port.writable.getWriter();'''
+          if old not in source:
+              raise SystemExit("direct cutter formatting marker did not match")
+          path.write_text(source.replace(old, new, 1))
+          PY
+      - name: Remove one-time finalizer
         run: git rm .github/workflows/format-auto-outline-hotfix.yml
-      - name: Commit formatting
+      - name: Commit final source
         run: |
           git config user.name "EJM Hotfix Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add src/lib/design-text-outline.ts src/lib/design-cut-path.ts src/lib/design-production.ts src/components/design/production-studio-advanced.tsx src/tests/design-text-outline.test.ts src/tests/design-cut-path.test.ts
-          git commit -m "style: format automatic cutter text outlines"
+          git add src/components/design/production-studio-advanced.tsx
+          git commit -m "fix: finalize automatic text outline source"
           git push origin HEAD:agent/hotfix-auto-outline-text
