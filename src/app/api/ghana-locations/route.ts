@@ -22,21 +22,39 @@ type RegistryResponse = {
   data?: RegistryItem[];
 };
 
-const REGISTRY_ENDPOINT = "https://registry.mogcsp.gov.gh/api/locations";
+const REGISTRY_ENDPOINTS = [
+  "https://registry.mogcsp.gov.gh/api/locations",
+  "https://registry.mogcsp.gov.gh/api/v2/locations",
+] as const;
 
 async function registryLocations(type: "R" | "D" | "C", parentCode?: string) {
-  const url = new URL(REGISTRY_ENDPOINT);
-  url.searchParams.set("type", type);
-  if (parentCode) url.searchParams.set("parent_code", parentCode);
+  let lastError: unknown = null;
 
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 24 * 60 * 60 },
-    signal: AbortSignal.timeout(7000),
-  });
-  if (!response.ok) throw new Error(`Ghana location registry returned ${response.status}.`);
-  const payload = await response.json() as RegistryResponse;
-  return Array.isArray(payload.data) ? payload.data : [];
+  for (const endpoint of REGISTRY_ENDPOINTS) {
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("type", type);
+      if (parentCode) url.searchParams.set("parent_code", parentCode);
+
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "Eugene-Jersey-Management/1.0",
+        },
+        next: { revalidate: 24 * 60 * 60 },
+        signal: AbortSignal.timeout(7000),
+      });
+      if (!response.ok) throw new Error(`Ghana location registry returned ${response.status}.`);
+
+      const payload = await response.json() as RegistryResponse;
+      if (!Array.isArray(payload.data)) throw new Error("Ghana location registry returned an invalid response.");
+      return payload.data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Ghana location registry is unavailable.");
 }
 
 function text(value: unknown) {
@@ -104,7 +122,7 @@ export async function GET(request: Request) {
         .map(publicItem)
         .filter((item) => item.code && item.name)
         .sort((left, right) => left.name.localeCompare(right.name));
-      return NextResponse.json({ source: "Ghana National Household Registry", manualEntryAllowed: true, items });
+      return NextResponse.json({ source: "Ghana National Household Registry", manualEntryAllowed: false, items });
     }
 
     if (!parsed.data.district) {
@@ -117,13 +135,14 @@ export async function GET(request: Request) {
       .map(publicItem)
       .filter((item) => item.code && item.name)
       .sort((left, right) => left.name.localeCompare(right.name));
-    return NextResponse.json({ source: "Ghana National Household Registry", manualEntryAllowed: true, items });
+    return NextResponse.json({ source: "Ghana National Household Registry", manualEntryAllowed: false, items });
   } catch {
     return NextResponse.json({
-      source: "manual fallback",
-      manualEntryAllowed: true,
+      source: "Ghana National Household Registry",
+      manualEntryAllowed: false,
       items: [],
-      notice: "Official location suggestions are temporarily unavailable. Enter the correct district, town or community manually.",
-    });
+      retryable: true,
+      notice: "The official Ghana district and town directory could not be reached. Please retry; district and town are selected from the directory rather than typed manually.",
+    }, { status: 503 });
   }
 }
