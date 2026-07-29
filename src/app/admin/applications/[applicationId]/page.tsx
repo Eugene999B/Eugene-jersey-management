@@ -13,6 +13,7 @@ import {
 import { platformDb } from "@/lib/platform-db";
 import { requirePlatformPermission } from "@/lib/platform-admin";
 import { currency, shortDate, titleCase } from "@/lib/format";
+import { formatGhanaLocation } from "@/lib/ghana-locations";
 import { sortSubscriptionPlans } from "@/lib/subscription-plans";
 
 export const dynamic = "force-dynamic";
@@ -50,12 +51,13 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
   const application = await platformDb.businessApplication.findUnique({ where: { id: applicationId } });
   if (!application) notFound();
 
-  const [reviewers, shops, plans, approvedShop, approvedSupplier] = await Promise.all([
+  const [reviewers, shops, plans, approvedShop, approvedSupplier, applicationLocation] = await Promise.all([
     platformDb.user.findMany({ where: { role: Role.SUPER_ADMIN, shopId: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     platformDb.shop.findMany({ where: { isActive: true }, select: { id: true, name: true, city: true }, orderBy: { name: "asc" }, take: 500 }),
     platformDb.subscriptionPlan.findMany({ where: { isConfigured: true, isActive: true }, orderBy: { tier: "asc" } }),
     application.approvedShopId ? platformDb.shop.findUnique({ where: { id: application.approvedShopId }, select: { id: true, name: true, slug: true, staffLoginId: true, verificationStatus: true } }) : null,
     application.approvedSupplierId ? platformDb.supplier.findUnique({ where: { id: application.approvedSupplierId }, select: { id: true, name: true, shopId: true, portalUser: { select: { adminLoginId: true, email: true } } } }) : null,
+    platformDb.businessApplicationLocation.findUnique({ where: { applicationId: application.id } }),
   ]);
   const reviewerNames = new Map(reviewers.map((reviewer) => [reviewer.id, reviewer.name]));
   const shopNames = new Map(shops.map((shop) => [shop.id, shop.name]));
@@ -63,6 +65,14 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
   const requestedShop = application.requestedShopId ? shopNames.get(application.requestedShopId) : null;
   const expectedUpdatedAt = application.updatedAt.toISOString();
   const reviewable = isReviewable(application.status);
+  const structuredLocationLabel = applicationLocation
+    ? formatGhanaLocation({
+        region: applicationLocation.region,
+        district: applicationLocation.district,
+        town: applicationLocation.town,
+        area: applicationLocation.area,
+      })
+    : [application.city, application.region].filter(Boolean).join(", ") || "Not supplied";
 
   return (
     <div className="space-y-6">
@@ -77,8 +87,17 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-5">
           <article className="panel p-5"><h2 className="text-xl font-semibold">Applicant information</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{[
-            ["Business name", application.businessName], ["Legal name", application.legalBusinessName ?? "Not supplied"], ["Registration", application.businessRegistrationNumber ?? "Not supplied"], ["Tax ID", application.taxIdentificationNumber ?? "Not supplied"], ["Contact", application.contactName], ["Email", application.email], ["Phone", application.phone], ["Address", application.address ?? "Not supplied"], ["City / region", [application.city, application.region].filter(Boolean).join(", ") || "Not supplied"], ["Country", application.country], ["Categories", application.categories ?? "Not supplied"], ["Requested shop", requestedShop ?? (application.type === BusinessApplicationType.SHOP ? "New tenant workspace" : "Unavailable")],
-          ].map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3 text-sm"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words font-semibold">{value}</p></div>)}</div>{application.requestedServices ? <TextBlock label="Requested services" value={application.requestedServices} /> : null}{application.applicantNotes ? <TextBlock label="Applicant notes" value={application.applicantNotes} /> : null}<p className="mt-4 text-xs text-slate-500">Consent recorded {shortDate(application.consentedAt)} · submitted {shortDate(application.submittedAt)}</p></article>
+            ["Business name", application.businessName], ["Legal name", application.legalBusinessName ?? "Not supplied"], ["Registration", application.businessRegistrationNumber ?? "Not supplied"], ["Tax ID", application.taxIdentificationNumber ?? "Not supplied"], ["Contact", application.contactName], ["Email", application.email], ["Phone", application.phone], ["Business location", structuredLocationLabel], ["Country", applicationLocation?.country ?? application.country], ["Categories", application.categories ?? "Not supplied"], ["Requested shop", requestedShop ?? (application.type === BusinessApplicationType.SHOP ? "New tenant workspace" : "Unavailable")],
+          ].map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3 text-sm"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words font-semibold">{value}</p></div>)}</div>{applicationLocation ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4"><h3 className="font-semibold text-emerald-950">Structured Ghana location</h3><div className="mt-3 grid gap-3 sm:grid-cols-2">{[
+            ["Region", applicationLocation.region],
+            ["District", applicationLocation.district],
+            ["Town / community", applicationLocation.town],
+            ["Suburb / area", applicationLocation.area ?? "Not supplied"],
+            ["GhanaPost GPS", applicationLocation.digitalAddress ?? "Not supplied"],
+            ["Street / building", applicationLocation.streetAddress ?? "Not supplied"],
+            ["Landmark", applicationLocation.landmark ?? "Not supplied"],
+            ["Coordinates", applicationLocation.latitude !== null && applicationLocation.longitude !== null ? `${applicationLocation.latitude}, ${applicationLocation.longitude}` : "Not supplied"],
+          ].map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3 text-sm"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words font-semibold">{value}</p></div>)}</div></div> : application.address ? <TextBlock label="Legacy business address" value={application.address} /> : null}{application.requestedServices ? <TextBlock label="Requested services" value={application.requestedServices} /> : null}{application.applicantNotes ? <TextBlock label="Applicant notes" value={application.applicantNotes} /> : null}<p className="mt-4 text-xs text-slate-500">Consent recorded {shortDate(application.consentedAt)} · submitted {shortDate(application.submittedAt)}</p></article>
 
           {(application.reviewNotes || application.decisionReason) ? <article className="panel p-5"><h2 className="text-xl font-semibold">Review record</h2>{application.reviewNotes ? <TextBlock label="Internal review notes" value={application.reviewNotes} /> : null}{application.decisionReason ? <TextBlock label="Applicant-facing decision message" value={application.decisionReason} /> : null}</article> : null}
 
@@ -89,7 +108,7 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
         <div className="space-y-5">
           {reviewable ? <form action={startBusinessApplicationReviewAction} className="panel p-5"><input type="hidden" name="applicationId" value={application.id} /><input type="hidden" name="expectedUpdatedAt" value={expectedUpdatedAt} /><h2 className="text-xl font-semibold">Review ownership</h2><p className="mt-2 text-sm leading-6 text-slate-500">Assign this application to yourself and mark it under review before making a decision.</p><Button className="mt-4">Start or resume review</Button></form> : null}
 
-          {reviewable && application.type === BusinessApplicationType.SHOP ? <form action={approveShopBusinessApplicationAction} className="panel p-5"><input type="hidden" name="applicationId" value={application.id} /><input type="hidden" name="expectedUpdatedAt" value={expectedUpdatedAt} /><h2 className="text-xl font-semibold">Approve and create shop</h2><p className="mt-2 text-sm leading-6 text-slate-500">Creates a private pending-verification shop, owner account, plan contract, payment configuration and zero communication wallets.</p><div className="mt-4 grid gap-4">
+          {reviewable && application.type === BusinessApplicationType.SHOP ? <form action={approveShopBusinessApplicationAction} className="panel p-5"><input type="hidden" name="applicationId" value={application.id} /><input type="hidden" name="expectedUpdatedAt" value={expectedUpdatedAt} /><h2 className="text-xl font-semibold">Approve and create shop</h2><p className="mt-2 text-sm leading-6 text-slate-500">Creates a private pending-verification shop, owner account, plan contract, payment configuration and zero communication wallets. The approved application location is copied into the new shop automatically.</p><div className="mt-4 grid gap-4">
             <Field label="Shop slug"><input className="field" name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" defaultValue={slugSuggestion(application.businessName)} /></Field>
             <Field label="Owner Login ID"><input className="field uppercase" name="staffLoginId" required minLength={4} maxLength={40} defaultValue={loginSuggestion(application.type, application.businessName)} /></Field>
             <Field label="Subscription plan"><select className="field" name="planId" required defaultValue=""><option value="" disabled>Select a configured plan</option>{sortedPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · monthly {currency(plan.monthlyPrice?.toString() ?? "0")} · yearly {currency(plan.yearlyPrice?.toString() ?? "0")}</option>)}</select></Field>

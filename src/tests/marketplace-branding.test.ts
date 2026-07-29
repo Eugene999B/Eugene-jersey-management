@@ -17,16 +17,19 @@ describe("marketplace brand identity", () => {
     expect(migration).toContain('REFERENCES "Shop"("id") ON DELETE CASCADE');
   });
 
-  it("lets a shop upload or clear its selected marketplace photo", () => {
+  it("lets a shop upload or clear its selected marketplace photo through a scoped repository", () => {
     const actions = source("../app/dashboard/settings/actions.ts");
     const settings = source("../app/dashboard/settings/page.tsx");
+    const profileStore = source("../lib/shop-profile-store.ts");
 
     expect(actions).toContain('formData.get("marketplaceHeroFile")');
-    expect(actions).toContain("prisma.shopMarketplaceProfile.upsert");
+    expect(actions).toContain("saveShopProfileBundle");
     expect(actions).toContain("clearMarketplaceHero");
+    expect(profileStore).toContain("tx.shopMarketplaceProfile.upsert");
+    expect(profileStore).toContain("where: { shopId: input.shopId }");
     expect(settings).toContain("Marketplace featured photo");
     expect(settings).toContain("Remove the featured photo");
-    expect(settings).toContain("Product brand names are taken automatically");
+    expect(settings).toContain("Product brands appear automatically");
   });
 
   it("renders the chosen photo or logo and exposes product brands on marketplace cards", () => {

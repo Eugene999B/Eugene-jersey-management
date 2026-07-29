@@ -12,6 +12,7 @@ import {
   ImageIcon,
   KeyRound,
   LockKeyhole,
+  MapPinned,
   MessageSquareText,
   ShoppingBag,
   Sparkles,
@@ -19,9 +20,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { CopyLoginIdButton } from "@/components/auth/copy-login-id-button";
 import { Badge } from "@/components/ui/badge";
+import { GhanaLocationFields } from "@/components/locations/ghana-location-fields";
 import { updateShopSettingsAction, updateStorefrontVisibilityAction } from "@/app/dashboard/settings/actions";
-import { prisma } from "@/lib/db";
 import { currency } from "@/lib/format";
+import { formatGhanaLocation } from "@/lib/ghana-locations";
+import { readShopSettingsProfile } from "@/lib/shop-profile-store";
 import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
@@ -33,11 +36,7 @@ export default async function SettingsPage({ searchParams }: Props) {
   const session = await requireRole(permissions.settings);
   const { shop } = await getTenantContext();
   if (!shop) return null;
-  const [paymentConfig, account, marketplaceProfile] = await Promise.all([
-    prisma.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
-    prisma.user.findUnique({ where: { id: session.id }, select: { adminLoginId: true } }),
-    prisma.shopMarketplaceProfile.findUnique({ where: { shopId: shop.id } }),
-  ]);
+  const [paymentConfig, account, marketplaceProfile, shopLocation] = await readShopSettingsProfile(shop.id, session.id);
   const loginId = account?.adminLoginId ?? session.email;
   const storefrontMode = !shop.storefrontEnabled ? "OFFLINE" : shop.publicOrderingEnabled ? "ONLINE" : "BROWSE";
   const paystackServerReady = Boolean(process.env.PAYSTACK_SECRET_KEY);
@@ -70,12 +69,15 @@ export default async function SettingsPage({ searchParams }: Props) {
   const chargeBearer = paymentConfig?.paystackChargeBearer === "account"
     ? "EJM platform account"
     : "Shop subaccount";
+  const locationLabel = shopLocation
+    ? formatGhanaLocation({ region: shopLocation.region, district: shopLocation.district, town: shopLocation.town, area: shopLocation.area })
+    : shop.city ?? "Location profile not completed";
 
   return (
     <div className="space-y-5">
       {params.error === "verification-required" ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Your shop is registered, but the platform administrator must verify it before you can place it on the public marketplace.</div> : null}
       {params.error === "storefront-mode" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Choose a valid online shop status.</div> : null}
-      {params.error === "invalid" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Check the shop and marketplace branding fields, then save again.</div> : null}
+      {params.error === "invalid" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Check the shop branding, Ghana location and payment fields, then save again.</div> : null}
       {params.storefront ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Online shop status updated successfully.</div> : null}
 
       <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
@@ -117,7 +119,7 @@ export default async function SettingsPage({ searchParams }: Props) {
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="panel p-5">
           <div className="flex flex-wrap items-center gap-2"><Sparkles size={21} className="text-cyan-700" /><h1 className="text-2xl font-semibold">Shop settings</h1><Badge tone="blue">Marketplace branding</Badge></div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Your logo identifies the shop everywhere. The optional marketplace photo creates the large visual on your marketplace card. Product brand names are taken automatically from each product&apos;s Brand field.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Control the shop identity, exact Ghana location, public marketplace presentation and settlement details from one place.</p>
           <div className="mt-4 rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
             <p className="text-slate-500">Shop network code</p>
             <p className="mt-1 text-xl font-semibold tracking-wide">{shop.networkCode ?? "Not assigned yet"}</p>
@@ -130,6 +132,23 @@ export default async function SettingsPage({ searchParams }: Props) {
             <input type="hidden" name="marketplaceHeroUrl" value={marketplaceProfile?.heroImageUrl ?? ""} />
             <label className="block rounded-[8px] border border-cyan-200 bg-cyan-50/60 p-3 text-sm"><span className="mb-2 flex items-center gap-2 font-semibold text-cyan-950"><ImageIcon size={17} /> Marketplace featured photo</span><input className="block w-full text-sm" name="marketplaceHeroFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs leading-5 text-cyan-900/70">Upload one specific jersey, shop-front or promotional image. The whole photo is fitted inside the card without cutting off the item.</span></label>
             {marketplaceProfile?.heroImageUrl ? <label className="flex items-start gap-2 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm"><input className="mt-1" name="clearMarketplaceHero" type="checkbox" /><span><strong className="block text-amber-950">Remove the featured photo</strong><span className="text-xs leading-5 text-amber-900/70">The marketplace card will use your logo instead.</span></span></label> : null}
+
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
+              <div className="flex items-center gap-2"><MapPinned size={18} className="text-emerald-700" /><h2 className="font-semibold text-emerald-950">Business location</h2></div>
+              <p className="mt-1 text-xs leading-5 text-emerald-900/70">Customers can filter the marketplace by region, district, town and sub-town. Existing shops may complete this profile when ready; once saved, all three core levels stay required together.</p>
+              <div className="mt-4"><GhanaLocationFields required={Boolean(shopLocation)} compact defaults={{
+                region: shopLocation?.region,
+                district: shopLocation?.district,
+                city: shopLocation?.town ?? shop.city,
+                suburb: shopLocation?.area,
+                digitalAddress: shopLocation?.digitalAddress,
+                address: shopLocation?.streetAddress ?? shop.credentialAddress,
+                landmark: shopLocation?.landmark,
+                latitude: shopLocation?.latitude,
+                longitude: shopLocation?.longitude,
+              }} /></div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <label className="block"><span className="mb-1 block text-sm font-semibold">Primary color</span><input className="field h-12" name="primaryColor" type="color" defaultValue={shop.primaryColor} /></label>
               <label className="block"><span className="mb-1 block text-sm font-semibold">Secondary color</span><input className="field h-12" name="secondaryColor" type="color" defaultValue={shop.secondaryColor} /></label>
@@ -155,7 +174,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 <label className="flex items-center gap-2"><input name="allowMomo" type="checkbox" defaultChecked={paymentConfig?.allowMomo ?? true} />Mobile money</label>
               </div>
             </div>
-            <Button>Save settings and marketplace branding</Button>
+            <Button>Save settings — shop, location and marketplace</Button>
           </form>
         </section>
 
@@ -171,7 +190,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 {marketplaceProfile?.heroImageUrl ? <div className="absolute bottom-4 left-4 rounded-2xl border border-white/70 bg-white/90 p-2 shadow-lg backdrop-blur"><Image src={shop.logoUrl || "/brand/ejm-mark.svg"} alt={`${shop.name} logo`} width={54} height={54} className="h-12 w-12 rounded-xl object-contain" /></div> : null}
               </div>
               <div className="p-5">
-                <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">{shop.name}</h3><p className="mt-1 text-sm text-slate-600">{marketplaceProfile?.tagline || "Your marketplace tagline will appear here."}</p></div><Badge tone="green">Verified</Badge></div>
+                <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">{shop.name}</h3><p className="mt-1 text-sm text-slate-600">{marketplaceProfile?.tagline || "Your marketplace tagline will appear here."}</p><p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500"><MapPinned size={14} /> {locationLabel}</p></div><Badge tone="green">Verified</Badge></div>
                 <div className="mt-4 flex flex-wrap gap-2"><Badge tone={shop.publicOrderingEnabled ? "green" : "orange"}>{shop.publicOrderingEnabled ? "Ordering open" : "Browse only"}</Badge><Badge>Product brands appear automatically</Badge></div>
                 <div className="mt-5 h-2 rounded-full" style={{ background: `linear-gradient(90deg, ${shop.primaryColor}, ${shop.secondaryColor})` }} />
               </div>

@@ -25,8 +25,8 @@ test("keeps marketplace discovery engaging and usable on mobile", async ({ page 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/shops");
 
-  await expect(page.getByPlaceholder("Shop, team, brand or item")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Apply/ })).toBeVisible();
+  await expect(page.getByPlaceholder("Item, shop, team, brand or location")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Search/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Explore shops/ })).toBeVisible();
   await expect(page.getByText("Brands available").first()).toBeVisible();
   await expectNoHorizontalOverflow(page);

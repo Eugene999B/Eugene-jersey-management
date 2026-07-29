@@ -12,6 +12,11 @@ import {
   normaliseApplicationPhone,
   normaliseBusinessRegistrationNumber,
 } from "@/lib/platform-support";
+import {
+  buildLocationSearchText,
+  canonicalGhanaRegion,
+  cleanLocationText,
+} from "@/lib/ghana-locations";
 
 export const APPLICATION_RECEIPT_COOKIE = "ejm_application_receipt";
 export const APPLICATION_ACCESS_COOKIE = "ejm_application_access";
@@ -27,6 +32,11 @@ const optionalText = (maximum: number) => z.preprocess(
   z.string().max(maximum).optional(),
 );
 
+const optionalCoordinate = (minimum: number, maximum: number) => z.preprocess(
+  (value) => String(value ?? "").trim() || undefined,
+  z.coerce.number().min(minimum).max(maximum).optional(),
+);
+
 export const publicBusinessApplicationSchema = z
   .object({
     type: z.nativeEnum(BusinessApplicationType),
@@ -38,8 +48,14 @@ export const publicBusinessApplicationSchema = z
     email: z.string().email().max(180),
     phone: z.string().trim().min(7).max(40),
     address: optionalText(500),
-    city: optionalText(100),
+    city: optionalText(160),
     region: optionalText(100),
+    district: optionalText(180),
+    suburb: optionalText(160),
+    digitalAddress: optionalText(40),
+    landmark: optionalText(700),
+    latitude: optionalCoordinate(-90, 90),
+    longitude: optionalCoordinate(-180, 180),
     country: z.string().trim().min(2).max(100).default("Ghana"),
     categories: optionalText(700),
     requestedServices: optionalText(1000),
@@ -56,6 +72,14 @@ export const publicBusinessApplicationSchema = z
     }
     if (value.type === BusinessApplicationType.SHOP && value.requestedShopId) {
       context.addIssue({ code: "custom", path: ["requestedShopId"], message: "Shop applications cannot request a supplier relationship." });
+    }
+    if (value.region && !canonicalGhanaRegion(value.region)) {
+      context.addIssue({ code: "custom", path: ["region"], message: "Choose one of Ghana's 16 regions." });
+    }
+    if (value.type === BusinessApplicationType.SHOP) {
+      if (!value.region) context.addIssue({ code: "custom", path: ["region"], message: "Region is required." });
+      if (!value.district) context.addIssue({ code: "custom", path: ["district"], message: "District is required." });
+      if (!value.city) context.addIssue({ code: "custom", path: ["city"], message: "Town or community is required." });
     }
   });
 
@@ -149,6 +173,21 @@ export function normalisePublicApplicationInput(input: PublicBusinessApplication
   const email = normaliseApplicationEmail(input.email);
   const phone = normaliseApplicationPhone(input.phone);
   const businessRegistrationNumber = normaliseBusinessRegistrationNumber(input.businessRegistrationNumber);
+  const region = input.region ? canonicalGhanaRegion(input.region) : null;
+  const location = region && input.district && input.city
+    ? {
+        country: "Ghana",
+        region,
+        district: cleanLocationText(input.district, 180) as string,
+        town: cleanLocationText(input.city, 160) as string,
+        area: cleanLocationText(input.suburb, 160),
+        digitalAddress: cleanLocationText(input.digitalAddress, 40)?.toUpperCase() ?? null,
+        streetAddress: cleanLocationText(input.address, 500),
+        landmark: cleanLocationText(input.landmark, 700),
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+      }
+    : null;
   return {
     ...input,
     email,
@@ -158,11 +197,16 @@ export function normalisePublicApplicationInput(input: PublicBusinessApplication
     taxIdentificationNumber: input.taxIdentificationNumber?.trim().toUpperCase() || null,
     address: input.address?.trim() || null,
     city: input.city?.trim() || null,
-    region: input.region?.trim() || null,
+    region,
+    district: input.district?.trim() || null,
+    suburb: input.suburb?.trim() || null,
+    digitalAddress: input.digitalAddress?.trim().toUpperCase() || null,
+    landmark: input.landmark?.trim() || null,
     categories: input.categories?.trim() || null,
     requestedServices: input.requestedServices?.trim() || null,
     requestedShopId: input.requestedShopId?.trim() || null,
     applicantNotes: input.applicantNotes?.trim() || null,
+    location: location ? { ...location, searchText: buildLocationSearchText(location) } : null,
     duplicateFingerprint: applicationDuplicateFingerprint({ email, phone, businessRegistrationNumber }),
   };
 }

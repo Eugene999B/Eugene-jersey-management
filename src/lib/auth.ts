@@ -99,6 +99,8 @@ export async function requireActiveShop(session: SessionUser) {
       secondaryColor: true,
       planTier: true,
       isActive: true,
+      city: true,
+      credentialAddress: true,
       currency: true,
       storefrontEnabled: true,
       publicOrderingEnabled: true,
