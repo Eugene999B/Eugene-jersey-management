@@ -75,7 +75,7 @@ export function MarketplaceLocationFilters({ region: initialRegion = "", distric
         <datalist id={districtListId}>{districts.map((item) => <option key={item.code || item.name} value={item.name} />)}</datalist>
       </div>
       <div>
-        <input className="field" name="city" list={townListId} value={city} onChange={(event) => setCity(event.target.value)} placeholder={district ? "Town, city or community" : "Choose district first"} disabled={!district} aria-label="Marketplace town or city" />
+        <input className="field" name="city" list={townListId} value={city} onChange={(event) => setCity(event.target.value)} placeholder={district ? "Town, city or community" : "Town or city (district optional)"} aria-label="Marketplace town or city" />
         <datalist id={townListId}>{towns.map((item) => <option key={item.code || item.name} value={item.name} />)}</datalist>
       </div>
       <input className="field" name="suburb" defaultValue={suburb} placeholder="Suburb, area or sub-town" aria-label="Marketplace suburb or area" />
