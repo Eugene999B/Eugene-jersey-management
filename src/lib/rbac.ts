@@ -44,6 +44,7 @@ export const permissions = {
   exports: [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT],
   staff: [Role.OWNER, Role.MANAGER],
   settings: [Role.OWNER, Role.MANAGER],
+  subscription: [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER],
 } satisfies Record<string, Role[]>;
 
 export type SessionUser = {
@@ -85,5 +86,6 @@ export function canSeeNav(role: Role) {
     exports: hasRole({ role }, permissions.exports),
     staff: hasRole({ role }, permissions.staff),
     settings: hasRole({ role }, permissions.settings),
+    subscription: hasRole({ role }, permissions.settings),
   };
 }
