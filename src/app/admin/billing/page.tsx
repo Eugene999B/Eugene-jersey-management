@@ -1,4 +1,4 @@
-import { BillingCycle, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, Role, SubscriptionStatus } from "@prisma/client";
 import { AlertTriangle, Banknote, CalendarClock, CheckCircle2, CreditCard, History, Users } from "lucide-react";
 import { assignShopSubscriptionAction, saveSubscriptionPlanAction } from "@/app/admin/billing/actions";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +11,10 @@ import {
   SUPPORTED_PLAN_FEATURES,
   ensureSubscriptionPlans,
   formatNullableLimit,
+  parseSubscriptionPlanSnapshot,
   sortSubscriptionPlans,
 } from "@/lib/subscription-plans";
+import { subscriptionMonthWindow } from "@/lib/subscription-hardening";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +41,18 @@ function planPrice(value: { toString(): string } | null) {
   return value === null ? "Not configured" : currency(value.toString());
 }
 
+function usageLabel(current: number, limit: number | null, configured: boolean) {
+  if (!configured) return `${current.toLocaleString("en-GB")} / legacy`;
+  if (limit === null) return `${current.toLocaleString("en-GB")} / unlimited`;
+  return `${current.toLocaleString("en-GB")} / ${limit.toLocaleString("en-GB")}`;
+}
+
 export default async function BillingPage({ searchParams }: BillingPageProps) {
   const params = (await searchParams) ?? {};
   await requirePlatformPermission("billing");
   const plans = await ensureSubscriptionPlans();
-  const [shops, contracts, recentChanges] = await Promise.all([
+  const { monthStart, monthEnd } = subscriptionMonthWindow();
+  const [shops, contracts, recentChanges, productGroups, orderGroups, staffGroups, inviteGroups] = await Promise.all([
     prisma.shop.findMany({ orderBy: [{ subscriptionStatus: "asc" }, { name: "asc" }] }),
     prisma.shopSubscriptionContract.findMany(),
     prisma.subscriptionPlanChangeRequest.findMany({
@@ -51,8 +60,16 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
+    prisma.product.groupBy({ by: ["shopId"], _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["shopId"], where: { createdAt: { gte: monthStart, lt: monthEnd } }, _count: { _all: true } }),
+    prisma.user.groupBy({ by: ["shopId"], where: { shopId: { not: null }, isActive: true, role: { not: Role.OWNER } }, _count: { _all: true } }),
+    prisma.inviteToken.groupBy({ by: ["shopId"], where: { usedAt: null, expiresAt: { gt: new Date() } }, _count: { _all: true } }),
   ]);
   const contractMap = new Map(contracts.map((contract) => [contract.shopId, contract]));
+  const productCountMap = new Map(productGroups.map((row) => [row.shopId, row._count._all]));
+  const orderCountMap = new Map(orderGroups.map((row) => [row.shopId, row._count._all]));
+  const staffCountMap = new Map(staffGroups.flatMap((row) => row.shopId ? [[row.shopId, row._count._all] as const] : []));
+  const inviteCountMap = new Map(inviteGroups.map((row) => [row.shopId, row._count._all]));
   const sortedPlans = sortSubscriptionPlans(plans);
   const assignablePlans = sortedPlans.filter((plan) => plan.isConfigured && plan.isActive);
 
@@ -168,7 +185,16 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
 
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-5"><h2 className="text-xl font-semibold">Tenant subscription register</h2><p className="mt-1 text-sm text-slate-500">Legacy shop fields remain synchronized for current application compatibility.</p></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-4">Shop</th><th className="p-4">Plan version</th><th className="p-4">Cycle</th><th className="p-4">Price</th><th className="p-4">Renewal</th><th className="p-4">Grace ends</th><th className="p-4">Status</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{shops.map((shop) => { const contract = contractMap.get(shop.id); return <tr key={shop.id}><td className="p-4 font-semibold">{shop.name}</td><td className="p-4">{shop.planTier}{contract ? ` · v${contract.planVersion}` : " · legacy"}</td><td className="p-4">{shop.billingCycle}</td><td className="p-4">{shop.billingCycle === "YEARLY" ? currency(shop.yearlyPrice?.toString() ?? "0") : currency(shop.monthlyPrice?.toString() ?? "0")}</td><td className="p-4 text-slate-500">{shop.subscriptionRenewalAt ? shortDate(shop.subscriptionRenewalAt) : "Not set"}</td><td className="p-4 text-slate-500">{contract?.graceEndsAt ? shortDate(contract.graceEndsAt) : "—"}</td><td className="p-4"><Badge tone={shop.subscriptionStatus === "ACTIVE" ? "green" : shop.subscriptionStatus === "PAST_DUE" ? "red" : "orange"}>{shop.subscriptionStatus}</Badge></td></tr>; })}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[1320px] text-left text-sm"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-4">Shop</th><th className="p-4">Plan version</th><th className="p-4">Products</th><th className="p-4">Orders this month</th><th className="p-4">Staff slots</th><th className="p-4">Cycle</th><th className="p-4">Price</th><th className="p-4">Renewal</th><th className="p-4">Grace ends</th><th className="p-4">Status</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{shops.map((shop) => {
+            const contract = contractMap.get(shop.id);
+            const parsedTerms = contract ? parseSubscriptionPlanSnapshot(contract.termsSnapshot) : null;
+            const terms = parsedTerms?.success ? parsedTerms.data : null;
+            const configured = Boolean(contract && terms?.isConfigured);
+            const products = productCountMap.get(shop.id) ?? 0;
+            const orders = orderCountMap.get(shop.id) ?? 0;
+            const staff = (staffCountMap.get(shop.id) ?? 0) + (inviteCountMap.get(shop.id) ?? 0);
+            return <tr key={shop.id}><td className="p-4 font-semibold">{shop.name}</td><td className="p-4">{shop.planTier}{contract ? ` · v${contract.planVersion}` : " · legacy"}</td><td className="p-4 font-semibold">{usageLabel(products, terms?.maxProducts ?? null, configured)}</td><td className="p-4 font-semibold">{usageLabel(orders, terms?.maxOrdersPerMonth ?? null, configured)}</td><td className="p-4 font-semibold">{usageLabel(staff, terms?.includedStaffAccounts ?? null, configured)}</td><td className="p-4">{shop.billingCycle}</td><td className="p-4">{shop.billingCycle === "YEARLY" ? currency(shop.yearlyPrice?.toString() ?? "0") : currency(shop.monthlyPrice?.toString() ?? "0")}</td><td className="p-4 text-slate-500">{shop.subscriptionRenewalAt ? shortDate(shop.subscriptionRenewalAt) : "Not set"}</td><td className="p-4 text-slate-500">{contract?.graceEndsAt ? shortDate(contract.graceEndsAt) : "—"}</td><td className="p-4"><Badge tone={shop.subscriptionStatus === "ACTIVE" ? "green" : shop.subscriptionStatus === "PAST_DUE" ? "red" : "orange"}>{shop.subscriptionStatus}</Badge></td></tr>;
+          })}</tbody></table></div>
         </div>
       </section>
 
