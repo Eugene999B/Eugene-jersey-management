@@ -16,26 +16,30 @@ jobs:
         with:
           ref: agent/release-38-subscription-billing-operations
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Install pinned formatter
-        run: npm ci --ignore-scripts
-      - name: Format guarded settlement changes
-        run: npx --no-install biome format --write src/lib/subscription-billing.ts
-      - name: Verify settlement guards remain present
+      - name: Execute final safeguard patch
+        shell: bash
         run: |
-          grep -F "Payment arrived after this invoice was already settled" src/lib/subscription-billing.ts
-          grep -F "Invoice settled manually. Any later provider debit requires refund or reconciliation." src/lib/subscription-billing.ts
-      - name: Commit formatting
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/apply-release38-final-safeguards.yml').read_text()
+          marker = "          python - <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PY", start)
+          script = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in workflow[start:end].splitlines()
+          )
+          exec(compile(script, 'release38-final-safeguards', 'exec'))
+          PY
+      - name: Remove one-time workflows
         run: |
-          if git diff --quiet; then
-            echo "Settlement guard is already formatted."
-            exit 0
-          fi
+          git rm --ignore-unmatch .github/workflows/apply-release38-settlement-guard.yml
+          git rm --ignore-unmatch .github/workflows/apply-release38-final-safeguards.yml
+      - name: Commit safeguards
+        run: |
           git config user.name "EJM Release Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add src/lib/subscription-billing.ts
-          git commit -m "style: format subscription settlement safeguards"
+          git add -A
+          git commit -m "fix: guard subscription renewal settlement"
           git push origin HEAD:agent/release-38-subscription-billing-operations
