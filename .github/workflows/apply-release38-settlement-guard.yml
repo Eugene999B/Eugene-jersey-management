@@ -16,62 +16,19 @@ jobs:
         with:
           ref: agent/release-38-subscription-billing-operations
           fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install pinned formatter
+        run: npm ci --ignore-scripts
       - name: Format guarded settlement changes
+        run: npx --no-install biome format --write src/lib/subscription-billing.ts
+      - name: Verify settlement guards remain present
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/lib/subscription-billing.ts")
-          text = path.read_text()
-
-          malformed_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-              return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
-            }
-
-            if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
-          malformed_paid = malformed_paid.replace("              return", "    return").replace("            }", "  }").replace("            if", "  if")
-          formatted_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-      return fail(
-        "invoice-already-paid",
-        "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
-      );
-    }
-
-    if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
-          if malformed_paid in text:
-              text = text.replace(malformed_paid, formatted_paid, 1)
-
-          malformed_manual = '''    await tx.subscriptionPaymentAttempt.updateMany({
-    where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
-    data: {
-      status: PaymentStatus.FAILED,
-      failedAt: new Date(),
-      gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
-    },
-  });
-
-  await tx.subscriptionPaymentAttempt.create({'''
-          formatted_manual = '''    await tx.subscriptionPaymentAttempt.updateMany({
-      where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
-      data: {
-        status: PaymentStatus.FAILED,
-        failedAt: new Date(),
-        gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
-      },
-    });
-
-    await tx.subscriptionPaymentAttempt.create({'''
-          if malformed_manual in text:
-              text = text.replace(malformed_manual, formatted_manual, 1)
-
-          if "Payment arrived after this invoice was already settled" not in text:
-              raise SystemExit("paid-invoice settlement guard missing")
-          if "Invoice settled manually. Any later provider debit requires refund or reconciliation." not in text:
-              raise SystemExit("manual settlement pending-attempt guard missing")
-
-          path.write_text(text)
-          PY
-      - name: Commit patch
+          grep -F "Payment arrived after this invoice was already settled" src/lib/subscription-billing.ts
+          grep -F "Invoice settled manually. Any later provider debit requires refund or reconciliation." src/lib/subscription-billing.ts
+      - name: Commit formatting
         run: |
           if git diff --quiet; then
             echo "Settlement guard is already formatted."
