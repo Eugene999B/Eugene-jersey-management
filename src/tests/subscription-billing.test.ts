@@ -23,6 +23,7 @@ describe("subscription billing operations", () => {
   it("keeps billing records immutable, platform-owned, and idempotent", () => {
     const model = source("../prisma/models/subscription-billing.prisma");
     const billing = source("lib/subscription-billing.ts");
+    const terminalGuard = source("../prisma/migrations/20260729112500_release38_invoice_terminal_state_guard/migration.sql");
     const dashboardActions = source("app/dashboard/subscription/actions.ts");
     const webhook = source("app/api/paystack/webhook/route.ts");
 
@@ -31,6 +32,8 @@ describe("subscription billing operations", () => {
     expect(billing).toContain("shopId_periodStart_periodEnd");
     expect(billing).toContain("isolationLevel: Prisma.TransactionIsolationLevel.Serializable");
     expect(billing).toContain("subscription.payment_verified");
+    expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_TERMINAL_STATE");
+    expect(terminalGuard).toContain("OLD.\"status\" IN ('PAID'");
     expect(dashboardActions).not.toContain("@/lib/platform-db");
     expect(webhook).toContain("settleSubscriptionInvoicePayment");
     expect(webhook.indexOf("settleCommunicationCreditPurchase")).toBeLessThan(webhook.indexOf("settleSubscriptionInvoicePayment"));
