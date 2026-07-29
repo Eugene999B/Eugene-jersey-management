@@ -1,0 +1,41 @@
+model ShopLocation {
+  id             String   @id @default(cuid())
+  shopId         String   @unique
+  country        String   @default("Ghana")
+  region         String
+  district       String
+  town           String
+  area           String?
+  digitalAddress String?
+  streetAddress  String?
+  landmark       String?
+  latitude       Float?
+  longitude      Float?
+  searchText     String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([region, district, town])
+  @@index([town, area])
+  @@index([searchText])
+}
+
+model BusinessApplicationLocation {
+  id             String   @id @default(cuid())
+  applicationId  String   @unique
+  country        String   @default("Ghana")
+  region         String
+  district       String
+  town           String
+  area           String?
+  digitalAddress String?
+  streetAddress  String?
+  landmark       String?
+  latitude       Float?
+  longitude      Float?
+  searchText     String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([region, district, town])
+}
