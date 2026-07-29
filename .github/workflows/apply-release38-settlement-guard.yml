@@ -16,7 +16,7 @@ jobs:
         with:
           ref: agent/release-38-subscription-billing-operations
           fetch-depth: 0
-      - name: Apply guarded settlement changes
+      - name: Format guarded settlement changes
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -29,59 +29,38 @@ jobs:
             }
 
             if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
-          alternate_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-            return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
-          }
-
-          if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
+          malformed_paid = malformed_paid.replace("              return", "    return").replace("            }", "  }").replace("            if", "  if")
           formatted_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-              return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
-            }
+      return fail(
+        "invoice-already-paid",
+        "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
+      );
+    }
 
-            if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
-          # Normalise based on the actual TypeScript indentation rather than YAML indentation.
-          actual_malformed_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-              return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
-            }
-
-            if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''.replace("            return", "      return").replace("          }", "    }").replace("          if", "    if")
-          actual_formatted_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-              return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
-            }
-
-            if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''.replace("            return", "      return").replace("          }", "    }").replace("          if", "    if")
-          # Expand the return for readability while preserving behaviour.
-          actual_formatted_paid = '''    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-              return fail(
-                "invoice-already-paid",
-                "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
-              );
-            }
-
-            if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''.replace("            return", "      return").replace("              \"invoice", "        \"invoice").replace("              \"Payment", "        \"Payment").replace("            );", "      );").replace("          }", "    }").replace("          if", "    if")
-          if actual_malformed_paid in text:
-              text = text.replace(actual_malformed_paid, actual_formatted_paid, 1)
+    if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID)'''
+          if malformed_paid in text:
+              text = text.replace(malformed_paid, formatted_paid, 1)
 
           malformed_manual = '''    await tx.subscriptionPaymentAttempt.updateMany({
-              where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
-              data: {
-                status: PaymentStatus.FAILED,
-                failedAt: new Date(),
-                gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
-              },
-            });
+    where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
+    data: {
+      status: PaymentStatus.FAILED,
+      failedAt: new Date(),
+      gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
+    },
+  });
 
-            await tx.subscriptionPaymentAttempt.create({'''.replace("              where", "    where").replace("              data", "    data").replace("                status", "      status").replace("                failedAt", "      failedAt").replace("                gatewayResponse", "      gatewayResponse").replace("              },", "    },").replace("            });", "  });").replace("            await", "  await")
+  await tx.subscriptionPaymentAttempt.create({'''
           formatted_manual = '''    await tx.subscriptionPaymentAttempt.updateMany({
-              where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
-              data: {
-                status: PaymentStatus.FAILED,
-                failedAt: new Date(),
-                gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
-              },
-            });
+      where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
+      data: {
+        status: PaymentStatus.FAILED,
+        failedAt: new Date(),
+        gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
+      },
+    });
 
-            await tx.subscriptionPaymentAttempt.create({'''.replace("              where", "      where").replace("              data", "      data").replace("                status", "        status").replace("                failedAt", "        failedAt").replace("                gatewayResponse", "        gatewayResponse").replace("              },", "      },").replace("            });", "    });").replace("            await", "    await")
+    await tx.subscriptionPaymentAttempt.create({'''
           if malformed_manual in text:
               text = text.replace(malformed_manual, formatted_manual, 1)
 
@@ -95,7 +74,7 @@ jobs:
       - name: Commit patch
         run: |
           if git diff --quiet; then
-            echo "Settlement guard already applied and formatted."
+            echo "Settlement guard is already formatted."
             exit 0
           fi
           git config user.name "EJM Release Bot"
