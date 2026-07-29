@@ -8,9 +8,12 @@ function source(relativePath: string) {
 }
 
 describe("subscription billing operations", () => {
-  it("advances monthly and yearly renewal periods in UTC", () => {
+  it("advances monthly and yearly renewal periods in UTC without skipping short months", () => {
     expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-08-15T12:00:00.000Z");
     expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2027-07-15T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2026-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-02-28T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2024-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2024-02-29T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2024-02-29T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2025-02-28T12:00:00.000Z");
   });
 
   it("marks unpaid invoices overdue only after the due instant", () => {
@@ -32,6 +35,9 @@ describe("subscription billing operations", () => {
     expect(billing).toContain("shopId_periodStart_periodEnd");
     expect(billing).toContain("isolationLevel: Prisma.TransactionIsolationLevel.Serializable");
     expect(billing).toContain("subscription.payment_verified");
+    expect(billing).toContain("subscription-contract-cancelled");
+    expect(billing).toContain("invoice-period-covered");
+    expect(billing).toContain("const renewalBase");
     expect(terminalGuard).toContain("OLD.\"status\" IN ('PAID'");
     expect(terminalGuard).toContain("RETURN OLD");
     expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_PAID_AT_IMMUTABLE");

@@ -22,10 +22,18 @@ function addDays(value: Date, days: number) {
   return new Date(value.getTime() + days * 86_400_000);
 }
 
+function daysInUtcMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
 export function addBillingPeriod(value: Date, cycle: BillingCycle) {
+  const sourceYear = value.getUTCFullYear();
+  const sourceMonth = value.getUTCMonth();
+  const targetYear = cycle === BillingCycle.YEARLY || sourceMonth === 11 ? sourceYear + 1 : sourceYear;
+  const targetMonth = cycle === BillingCycle.YEARLY ? sourceMonth : (sourceMonth + 1) % 12;
+  const targetDay = Math.min(value.getUTCDate(), daysInUtcMonth(targetYear, targetMonth));
   const next = new Date(value);
-  if (cycle === BillingCycle.YEARLY) next.setUTCFullYear(next.getUTCFullYear() + 1);
-  else next.setUTCMonth(next.getUTCMonth() + 1);
+  next.setUTCFullYear(targetYear, targetMonth, targetDay);
   return next;
 }
 
@@ -229,13 +237,18 @@ function appOrigin() {
 async function sendPaymentReceipt(invoiceId: string) {
   const invoice = await platformDb.subscriptionInvoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) return;
+  const contract = await platformDb.shopSubscriptionContract.findUnique({
+    where: { shopId: invoice.shopId },
+    select: { renewalAt: true },
+  });
+  const renewalAt = contract?.renewalAt ?? invoice.periodEnd;
   const contact = await ownerContact(invoice.shopId);
   if (!contact) return;
   const amount = money(invoice.amount, invoice.currency);
   const subscriptionUrl = `${appOrigin()}/dashboard/subscription`;
   const pdfUrl = `${appOrigin()}/api/subscription-invoices/${invoice.id}/pdf`;
   const subject = `Payment received for ${invoice.invoiceNumber}`;
-  const text = `${contact.shop.name}: we received ${amount} for invoice ${invoice.invoiceNumber}. Your subscription now renews on ${invoice.periodEnd.toLocaleDateString("en-GB")}. Invoice PDF: ${pdfUrl}`;
+  const text = `${contact.shop.name}: we received ${amount} for invoice ${invoice.invoiceNumber}. Your subscription now renews on ${renewalAt.toLocaleDateString("en-GB")}. Invoice PDF: ${pdfUrl}`;
   const deliveries: Promise<unknown>[] = [];
   if (contact.email && isEmailDeliveryConfigured()) {
     deliveries.push(sendTransactionalEmail({
@@ -243,7 +256,7 @@ async function sendPaymentReceipt(invoiceId: string) {
       recipientName: contact.name,
       subject,
       text,
-      html: `<p>Hello ${contact.name},</p><p>We received <strong>${amount}</strong> for subscription invoice <strong>${invoice.invoiceNumber}</strong>.</p><p>Your next renewal date is <strong>${invoice.periodEnd.toLocaleDateString("en-GB")}</strong>.</p><p><a href="${pdfUrl}">Download invoice PDF</a> · <a href="${subscriptionUrl}">Open subscription centre</a></p>`,
+      html: `<p>Hello ${contact.name},</p><p>We received <strong>${amount}</strong> for subscription invoice <strong>${invoice.invoiceNumber}</strong>.</p><p>Your next renewal date is <strong>${renewalAt.toLocaleDateString("en-GB")}</strong>.</p><p><a href="${pdfUrl}">Download invoice PDF</a> · <a href="${subscriptionUrl}">Open subscription centre</a></p>`,
       idempotencyKey: `subscription-receipt:${invoice.id}`,
       tags: { category: "subscription-receipt", invoice: invoice.invoiceNumber },
     }));
@@ -290,19 +303,60 @@ export async function settleSubscriptionInvoicePayment(data: PaystackTransaction
     };
 
     if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-    return fail(
-      "invoice-already-paid",
-      "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
-    );
-  }
-
-  if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) return fail("invoice-void", "Payment arrived for a voided subscription invoice and requires manual reconciliation.");
-    if (data.status !== "success") return fail(data.status ?? "not-success", data.gateway_response ?? data.status ?? "Payment not successful");
-    if (typeof data.amount !== "number") return fail("missing-amount", "Verified provider response did not include an amount.");
+      return fail(
+        "invoice-already-paid",
+        "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
+      );
+    }
+    if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) {
+      return fail(
+        "invoice-void",
+        "Payment arrived for a voided subscription invoice and requires manual reconciliation.",
+      );
+    }
+    if (data.status !== "success") {
+      return fail(data.status ?? "not-success", data.gateway_response ?? data.status ?? "Payment not successful");
+    }
+    if (typeof data.amount !== "number") {
+      return fail("missing-amount", "Verified provider response did not include an amount.");
+    }
     const expectedAmount = amountToSubunit(Number(attempt.amount));
-    if (data.amount !== expectedAmount) return fail("amount-mismatch", `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`);
-    if (!data.currency) return fail("missing-currency", "Verified provider response did not include a currency.");
-    if (data.currency.toUpperCase() !== attempt.currency.toUpperCase()) return fail("currency-mismatch", `Currency mismatch: expected ${attempt.currency}, got ${data.currency}`);
+    if (data.amount !== expectedAmount) {
+      return fail("amount-mismatch", `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`);
+    }
+    if (!data.currency) {
+      return fail("missing-currency", "Verified provider response did not include a currency.");
+    }
+    if (data.currency.toUpperCase() !== attempt.currency.toUpperCase()) {
+      return fail("currency-mismatch", `Currency mismatch: expected ${attempt.currency}, got ${data.currency}`);
+    }
+
+    const contract = await tx.shopSubscriptionContract.findFirst({
+      where: { id: attempt.invoice.contractId, shopId: attempt.shopId },
+    });
+    if (!contract) {
+      return fail(
+        "subscription-contract-missing",
+        "The subscription contract attached to this invoice no longer exists. Manual reconciliation is required.",
+      );
+    }
+    if (contract.subscriptionStatus === SubscriptionStatus.CANCELLED) {
+      return fail(
+        "subscription-contract-cancelled",
+        "Payment arrived after the subscription contract was cancelled. Refund or manual reconciliation is required.",
+      );
+    }
+    if (contract.renewalAt && contract.renewalAt.getTime() >= attempt.invoice.periodEnd.getTime()) {
+      return fail(
+        "invoice-period-covered",
+        "Payment arrived after this invoice period had already been covered. Refund or manual reconciliation is required.",
+      );
+    }
+
+    const renewalBase = contract.renewalAt && contract.renewalAt.getTime() > attempt.invoice.periodStart.getTime()
+      ? contract.renewalAt
+      : attempt.invoice.periodStart;
+    const renewalAt = addBillingPeriod(renewalBase, attempt.invoice.billingCycle);
 
     await tx.subscriptionPaymentAttempt.update({
       where: { id: attempt.id },
@@ -319,18 +373,18 @@ export async function settleSubscriptionInvoicePayment(data: PaystackTransaction
       where: { id: attempt.invoiceId },
       data: { status: SubscriptionInvoiceStatus.PAID, paidAt: new Date(), nextReminderAt: null },
     });
-    await tx.shopSubscriptionContract.updateMany({
-      where: { id: attempt.invoice.contractId, shopId: attempt.shopId },
+    await tx.shopSubscriptionContract.update({
+      where: { id: contract.id },
       data: {
         subscriptionStatus: SubscriptionStatus.ACTIVE,
         trialEndsAt: null,
-        renewalAt: attempt.invoice.periodEnd,
+        renewalAt,
         graceEndsAt: null,
       },
     });
     await tx.shop.update({
       where: { id: attempt.shopId },
-      data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: attempt.invoice.periodEnd },
+      data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: renewalAt },
     });
     await tx.auditLog.create({
       data: {
@@ -343,7 +397,7 @@ export async function settleSubscriptionInvoicePayment(data: PaystackTransaction
           reference,
           amount: attempt.amount.toString(),
           currency: attempt.currency,
-          renewalAt: attempt.invoice.periodEnd.toISOString(),
+          renewalAt: renewalAt.toISOString(),
           providerChannel: data.channel ?? null,
         },
       },
@@ -377,16 +431,31 @@ export async function markSubscriptionInvoicePaidManually(input: {
     if (invoice.status === SubscriptionInvoiceStatus.VOID) throw new SubscriptionBillingError("invoice-void", "A void invoice cannot be marked paid.");
     if (invoice.status === SubscriptionInvoiceStatus.PAID) return invoice;
 
-    await tx.subscriptionPaymentAttempt.updateMany({
-    where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
-    data: {
-      status: PaymentStatus.FAILED,
-      failedAt: new Date(),
-      gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
-    },
-  });
+    const contract = await tx.shopSubscriptionContract.findFirst({
+      where: { id: invoice.contractId, shopId: invoice.shopId },
+    });
+    if (!contract) {
+      throw new SubscriptionBillingError("subscription-contract-missing", "The subscription contract attached to this invoice no longer exists.");
+    }
+    if (contract.subscriptionStatus === SubscriptionStatus.CANCELLED) {
+      throw new SubscriptionBillingError("subscription-contract-cancelled", "Assign an active subscription before settling this cancelled contract.");
+    }
+    const renewalAt = contract.renewalAt && contract.renewalAt.getTime() >= invoice.periodEnd.getTime()
+      ? contract.renewalAt
+      : contract.renewalAt && contract.renewalAt.getTime() > invoice.periodStart.getTime()
+        ? addBillingPeriod(contract.renewalAt, invoice.billingCycle)
+        : invoice.periodEnd;
 
-  await tx.subscriptionPaymentAttempt.create({
+    await tx.subscriptionPaymentAttempt.updateMany({
+      where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
+      data: {
+        status: PaymentStatus.FAILED,
+        failedAt: new Date(),
+        gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
+      },
+    });
+
+    await tx.subscriptionPaymentAttempt.create({
       data: {
         invoiceId: invoice.id,
         shopId: invoice.shopId,
@@ -405,13 +474,13 @@ export async function markSubscriptionInvoicePaidManually(input: {
       where: { id: invoice.id },
       data: { status: SubscriptionInvoiceStatus.PAID, paidAt: new Date(), nextReminderAt: null },
     });
-    await tx.shopSubscriptionContract.updateMany({
-      where: { id: invoice.contractId, shopId: invoice.shopId },
-      data: { subscriptionStatus: SubscriptionStatus.ACTIVE, trialEndsAt: null, renewalAt: invoice.periodEnd, graceEndsAt: null },
+    await tx.shopSubscriptionContract.update({
+      where: { id: contract.id },
+      data: { subscriptionStatus: SubscriptionStatus.ACTIVE, trialEndsAt: null, renewalAt, graceEndsAt: null },
     });
     await tx.shop.update({
       where: { id: invoice.shopId },
-      data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: invoice.periodEnd },
+      data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: renewalAt },
     });
     await tx.auditLog.create({
       data: {
@@ -420,7 +489,7 @@ export async function markSubscriptionInvoicePaidManually(input: {
         action: "admin.subscription_invoice_marked_paid",
         entityType: "SubscriptionInvoice",
         entityId: invoice.id,
-        metadata: { invoiceNumber: invoice.invoiceNumber, reference, reason: input.reason },
+        metadata: { invoiceNumber: invoice.invoiceNumber, reference, reason: input.reason, renewalAt: renewalAt.toISOString() },
       },
     });
     return paid;
