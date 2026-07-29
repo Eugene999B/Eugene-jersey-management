@@ -30,6 +30,7 @@ import { currency, titleCase } from "@/lib/format";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { firstProductImage } from "@/lib/product-images";
 import { isPaystackCheckoutReady } from "@/lib/payments";
+import { commercialSubscriptionState, subscriptionFeatureIncluded } from "@/lib/subscription-hardening";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -46,6 +47,7 @@ const errorCopy: Record<string, string> = {
   "delivery-payment": "Delivery orders require online payment. Choose pickup to pay cash.",
   review: "The review could not be saved.",
   "review-purchase": "Only buyers who purchased this product can review it.",
+  subscription: "This shop's subscription currently prevents new orders. Contact the shop or try again after renewal.",
 };
 
 function variantLabel(variant: { sku: string; stockQty: number; attributes: unknown }) {
@@ -101,10 +103,12 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
   });
 
   if (!shop || !shop.isActive || !shop.storefrontEnabled || shop.verificationStatus !== ShopVerificationStatus.VERIFIED) notFound();
+  const subscription = await commercialSubscriptionState(shop.id);
+  const subscriptionOrderingReady = subscription.operational && subscriptionFeatureIncluded(subscription, "STOREFRONT");
   const onlinePaymentReady = isPaystackCheckoutReady(shop.paymentConfig);
   const cashReady = Boolean(shop.paymentConfig?.allowCash);
   const deliveryReady = onlinePaymentReady && shop.deliveryZones.length > 0;
-  const checkoutReady = shop.publicOrderingEnabled && (onlinePaymentReady || cashReady);
+  const checkoutReady = shop.publicOrderingEnabled && subscriptionOrderingReady && (onlinePaymentReady || cashReady);
 
   const style = {
     "--shop-primary": shop.primaryColor,

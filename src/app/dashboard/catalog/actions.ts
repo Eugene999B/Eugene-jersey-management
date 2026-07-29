@@ -12,6 +12,7 @@ import { audit } from "@/lib/audit";
 import { imageListFromUrl } from "@/lib/product-images";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
 import { productVariantAttributes, productVariantSize } from "@/lib/product-variants";
+import { assertProductCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const categorySchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -198,6 +199,16 @@ export async function createProductAction(formData: FormData) {
   let variants = parseVariantRows(formData);
   if (!parsed.success || !variants) redirect("/dashboard/catalog?error=product");
 
+  try {
+    await assertProductCreationAvailable(session.shopId);
+  } catch (error) {
+    const commercial = commercialSubscriptionError(error);
+    if (commercial?.code === "PRODUCT_LIMIT_REACHED") redirect("/dashboard/catalog?error=plan-product-limit");
+    if (commercial?.code === "FEATURE_NOT_INCLUDED") redirect("/dashboard/catalog?error=plan-feature");
+    if (commercial) redirect("/dashboard/catalog?error=subscription-blocked");
+    throw error;
+  }
+
   const category = await resolveCategory(session.shopId, parsed.data.categoryId);
   if (!category) redirect("/dashboard/catalog?error=category-not-found");
   if (parsed.data.isService) variants = serviceRows(variants);
@@ -243,7 +254,11 @@ export async function createProductAction(formData: FormData) {
         },
       },
     });
-  } catch {
+  } catch (error) {
+    const commercial = commercialSubscriptionError(error);
+    if (commercial?.code === "PRODUCT_LIMIT_REACHED") redirect("/dashboard/catalog?error=plan-product-limit");
+    if (commercial?.code === "FEATURE_NOT_INCLUDED") redirect("/dashboard/catalog?error=plan-feature");
+    if (commercial) redirect("/dashboard/catalog?error=subscription-blocked");
     redirect("/dashboard/catalog?error=sku-exists");
   }
   await audit({
