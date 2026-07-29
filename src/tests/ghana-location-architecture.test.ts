@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  GHANA_LOCATION_CATALOGUE_META,
+  bundledDistricts,
+  bundledTowns,
+  hasBundledDistrict,
+} from "@/lib/ghana-location-catalogue";
 import { GHANA_REGIONS, canonicalGhanaRegion } from "@/lib/ghana-locations";
 
 function source(path: string) {
@@ -15,15 +21,35 @@ describe("structured Ghana business locations", () => {
     expect(canonicalGhanaRegion("not a Ghana region")).toBeNull();
   });
 
-  it("loads current districts and communities through the official Ghana directory with a second endpoint fallback", () => {
+  it("bundles districts and towns so required location fields do not depend on an external service", () => {
     const route = source("../app/api/ghana-locations/route.ts");
-    expect(route).toContain("registry.mogcsp.gov.gh/api/locations");
-    expect(route).toContain("registry.mogcsp.gov.gh/api/v2/locations");
-    expect(route).toContain('registryLocations("D"');
-    expect(route).toContain('registryLocations("C"');
-    expect(route).toContain("manualEntryAllowed: false");
-    expect(route).toContain("status: 503");
-    expect(route).toContain("revalidate: 24 * 60 * 60");
+    const helper = source("../lib/ghana-location-catalogue.ts");
+
+    expect(GHANA_LOCATION_CATALOGUE_META.regionCount).toBe(16);
+    expect(GHANA_LOCATION_CATALOGUE_META.districtCount).toBeGreaterThanOrEqual(200);
+    expect(GHANA_LOCATION_CATALOGUE_META.townCount).toBeGreaterThanOrEqual(500);
+    expect(route).toContain("bundledDistricts");
+    expect(route).toContain("bundledTowns");
+    expect(route).toContain("offlineReady: true");
+    expect(route).not.toContain("registry.mogcsp.gov.gh");
+    expect(route).not.toContain("await fetch(");
+    expect(helper).toContain("ghana-location-catalogue.generated.json");
+  });
+
+  it("resolves dependent district and town choices from the bundled catalogue", () => {
+    const greaterAccra = bundledDistricts("Greater Accra");
+    const ashanti = bundledDistricts("Ashanti");
+
+    expect(greaterAccra.some((district) => district.name === "Accra Metropolitan")).toBe(true);
+    expect(ashanti.some((district) => district.name === "Kumasi Metropolitan")).toBe(true);
+    expect(hasBundledDistrict("Greater Accra", "Accra Metropolitan Assembly")).toBe(true);
+    expect(hasBundledDistrict("Ashanti", "Kumasi Metropolitan")).toBe(true);
+
+    const accraTowns = bundledTowns("Greater Accra", "Accra Metropolitan");
+    const kumasiTowns = bundledTowns("Ashanti", "Kumasi Metropolitan");
+    expect(accraTowns.length).toBeGreaterThan(0);
+    expect(kumasiTowns.length).toBeGreaterThan(0);
+    expect(new Set(accraTowns.map((town) => town.name)).size).toBe(accraTowns.length);
   });
 
   it("uses dependent native selects for region, district and town instead of requiring typing", () => {
