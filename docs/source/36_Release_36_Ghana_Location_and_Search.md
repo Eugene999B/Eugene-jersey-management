@@ -2,11 +2,11 @@
 
 ## Objective
 
-Make business locations accurate from registration through marketplace discovery, while keeping the location structure maintainable as districts and communities change.
+Make business locations accurate from registration through marketplace discovery, while keeping required registration and settings fields available even when an external location provider is unavailable.
 
 ## Ghana location hierarchy
 
-The application has a fixed canonical list of Ghana's 16 regions. District, municipal and metropolitan suggestions are loaded from the Ghana National Household Registry location directory. Town and community suggestions are then loaded under the selected district.
+The application has a fixed canonical list of Ghana's 16 regions. District, municipal and metropolitan choices and their town/community choices are served from a generated catalogue bundled with the deployed application. Registration, shop settings and marketplace filtering do not call an external government directory at runtime.
 
 The hierarchy is:
 
@@ -20,7 +20,13 @@ The hierarchy is:
 8. Nearby landmark and directions
 9. Optional latitude and longitude
 
-District and community suggestions are cached for 24 hours. Manual entry remains available because official spellings, administrative boundaries and community records can change, and a newly recognised locality must not prevent a legitimate business from registering.
+Region, district and town use dependent selections. Typing is reserved for the smaller area, street, building, GhanaPost GPS and landmark details. Existing saved district and town values remain visible while a shop completes or corrects its structured location.
+
+## Bundled catalogue
+
+The catalogue is generated from a dated Ghana country snapshot and committed to the repository before release. It contains all 16 regions, hundreds of district-level administrative records and thousands of populated places. Generation fails closed when the source does not provide all 16 regions or returns an obviously incomplete number of districts or towns.
+
+The application normalises provider naming variants and known spelling differences for matching and display. Refreshing the catalogue is a controlled maintenance task: generate a new snapshot, inspect the district and town changes, run the complete validation suite and deploy only after review.
 
 ## Shop registration and approval
 
@@ -38,7 +44,7 @@ A location update also keeps the legacy shop city and address fields synchronise
 
 ## Marketplace search
 
-Marketplace search now supports:
+Marketplace search supports:
 
 - free-text search across shop name, item name, description, brand, team, sport, product type, category and registered location
 - region
@@ -61,4 +67,4 @@ Filters remain URL-backed, mobile-safe and clearable. Shop cards display the reg
 
 Authenticated shop settings use the verified session shop ID for every unrestricted platform-client operation. Public marketplace location queries only read locations belonging to active, verified and publicly visible shops.
 
-No product, stock, order, payment or historical address record is deleted by this release.
+The location catalogue is read-only application data. No product, stock, order, payment, shop location or historical address record is deleted or rewritten when the catalogue is deployed.
