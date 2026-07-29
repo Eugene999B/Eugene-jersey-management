@@ -1,5 +1,6 @@
 import { BusinessApplicationType } from "@prisma/client";
 import { submitBusinessApplicationAction } from "@/app/apply/actions";
+import { GhanaLocationFields } from "@/components/locations/ghana-location-fields";
 
 type ShopOption = { id: string; name: string; city: string | null };
 
@@ -27,11 +28,8 @@ export function BusinessApplicationForm({ type, shops = [] }: Props) {
         <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Phone</span><input className="field" name="phone" required minLength={7} maxLength={40} inputMode="tel" /></label>
         <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Email</span><input className="field" name="email" required type="email" maxLength={180} /></label>
 
-        <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-5"><h2 className="text-xl font-bold">Location and services</h2></div>
-        <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Business address</span><input className="field" name="address" maxLength={500} /></label>
-        <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">City or town</span><input className="field" name="city" maxLength={100} /></label>
-        <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Region</span><input className="field" name="region" maxLength={100} /></label>
-        <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Country</span><input className="field" name="country" maxLength={100} defaultValue="Ghana" /></label>
+        <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-5"><h2 className="text-xl font-bold">Business location</h2><p className="mt-1 text-sm leading-6 text-slate-500">Choose the region first, then the district and town. Add the sub-town, digital address and landmark so customers can find the business accurately.</p></div>
+        <div className="md:col-span-2"><GhanaLocationFields required={!isSupplier} /></div>
         <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Categories</span><input className="field" name="categories" maxLength={700} placeholder={isSupplier ? "Jerseys, footwear, printing materials..." : "Football kits, printing, equipment..."} /></label>
         <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Requested services</span><textarea className="field min-h-28 resize-y" name="requestedServices" maxLength={1000} placeholder={isSupplier ? "What you want to supply and how you operate" : "POS, stock, Design Studio, online marketplace, messaging..."} /></label>
         <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Additional notes</span><textarea className="field min-h-28 resize-y" name="applicantNotes" maxLength={3000} placeholder="Anything the administrator should know during review" /></label>
