@@ -22,7 +22,7 @@ import { CopyLoginIdButton } from "@/components/auth/copy-login-id-button";
 import { Badge } from "@/components/ui/badge";
 import { GhanaLocationFields } from "@/components/locations/ghana-location-fields";
 import { updateShopSettingsAction, updateStorefrontVisibilityAction } from "@/app/dashboard/settings/actions";
-import { prisma } from "@/lib/db";
+import { platformDb } from "@/lib/platform-db";
 import { currency } from "@/lib/format";
 import { formatGhanaLocation } from "@/lib/ghana-locations";
 import { getTenantContext } from "@/lib/tenant";
@@ -37,10 +37,10 @@ export default async function SettingsPage({ searchParams }: Props) {
   const { shop } = await getTenantContext();
   if (!shop) return null;
   const [paymentConfig, account, marketplaceProfile, shopLocation] = await Promise.all([
-    prisma.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
-    prisma.user.findUnique({ where: { id: session.id }, select: { adminLoginId: true } }),
-    prisma.shopMarketplaceProfile.findUnique({ where: { shopId: shop.id } }),
-    prisma.shopLocation.findUnique({ where: { shopId: shop.id } }),
+    platformDb.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
+    platformDb.user.findUnique({ where: { id: session.id, shopId: shop.id }, select: { adminLoginId: true } }),
+    platformDb.shopMarketplaceProfile.findUnique({ where: { shopId: shop.id } }),
+    platformDb.shopLocation.findUnique({ where: { shopId: shop.id } }),
   ]);
   const loginId = account?.adminLoginId ?? session.email;
   const storefrontMode = !shop.storefrontEnabled ? "OFFLINE" : shop.publicOrderingEnabled ? "ONLINE" : "BROWSE";
