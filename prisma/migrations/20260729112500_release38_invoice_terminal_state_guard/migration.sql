@@ -5,8 +5,7 @@ AS $$
 BEGIN
   IF OLD."status" IN ('PAID'::"SubscriptionInvoiceStatus", 'VOID'::"SubscriptionInvoiceStatus")
      AND NEW."status" IS DISTINCT FROM OLD."status" THEN
-    RAISE EXCEPTION 'EJM_SUBSCRIPTION_INVOICE_TERMINAL_STATE: % invoices cannot return to %', OLD."status", NEW."status"
-      USING ERRCODE = 'check_violation';
+    RETURN OLD;
   END IF;
 
   IF OLD."status" = 'PAID'::"SubscriptionInvoiceStatus"
