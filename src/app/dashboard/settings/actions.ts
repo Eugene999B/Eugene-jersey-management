@@ -5,11 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { MediaKind, ShopVerificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { platformDb } from "@/lib/platform-db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
+import { readShopProfileState, saveShopProfileBundle } from "@/lib/shop-profile-store";
 import {
   buildLocationSearchText,
   canonicalGhanaRegion,
@@ -119,11 +119,7 @@ export async function updateShopSettingsAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
-  const [shop, currentMarketplaceProfile, currentLocation] = await Promise.all([
-    platformDb.shop.findUnique({ where: { id: shopId }, select: { isActive: true, slug: true } }),
-    platformDb.shopMarketplaceProfile.findUnique({ where: { shopId } }),
-    platformDb.shopLocation.findUnique({ where: { shopId } }),
-  ]);
+  const [shop, currentMarketplaceProfile, currentLocation] = await readShopProfileState(shopId);
   if (!shop?.isActive) redirect("/login?error=shop-suspended");
 
   const uploadedLogo = formData.get("logoFile");
@@ -162,60 +158,48 @@ export async function updateShopSettingsAction(formData: FormData) {
     : null;
   if (locationData) locationData.searchText = buildLocationSearchText(locationData);
 
-  await platformDb.$transaction(async (tx) => {
-    await tx.shop.update({
-      where: { id: shopId },
-      data: {
-        name: parsed.data.name,
-        logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
-        ...(locationData ? {
-          city: locationData.town,
-          country: locationData.country,
-          credentialAddress: locationData.streetAddress,
-        } : {}),
-        primaryColor: parsed.data.primaryColor,
-        secondaryColor: parsed.data.secondaryColor,
-        cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
-        paymentConfig: {
-          upsert: {
-            create: {
-              settlementBank: parsed.data.settlementBank,
-              settlementAccount: parsed.data.settlementAccount,
-              settlementAccountName: parsed.data.settlementAccountName,
-              shopMomoNumber: parsed.data.shopMomoNumber,
-              shopMomoNetwork: parsed.data.shopMomoNetwork,
-              momoProvider: parsed.data.momoProvider,
-              allowCash: parsed.data.allowCash,
-              allowCard: parsed.data.allowCard,
-              allowMomo: parsed.data.allowMomo,
-            },
-            update: {
-              settlementBank: parsed.data.settlementBank,
-              settlementAccount: parsed.data.settlementAccount,
-              settlementAccountName: parsed.data.settlementAccountName,
-              shopMomoNumber: parsed.data.shopMomoNumber,
-              shopMomoNetwork: parsed.data.shopMomoNetwork,
-              momoProvider: parsed.data.momoProvider,
-              allowCash: parsed.data.allowCash,
-              allowCard: parsed.data.allowCard,
-              allowMomo: parsed.data.allowMomo,
-            },
+  await saveShopProfileBundle({
+    shopId,
+    shopData: {
+      name: parsed.data.name,
+      logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
+      ...(locationData ? {
+        city: locationData.town,
+        country: locationData.country,
+        credentialAddress: locationData.streetAddress,
+      } : {}),
+      primaryColor: parsed.data.primaryColor,
+      secondaryColor: parsed.data.secondaryColor,
+      cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
+      paymentConfig: {
+        upsert: {
+          create: {
+            settlementBank: parsed.data.settlementBank,
+            settlementAccount: parsed.data.settlementAccount,
+            settlementAccountName: parsed.data.settlementAccountName,
+            shopMomoNumber: parsed.data.shopMomoNumber,
+            shopMomoNetwork: parsed.data.shopMomoNetwork,
+            momoProvider: parsed.data.momoProvider,
+            allowCash: parsed.data.allowCash,
+            allowCard: parsed.data.allowCard,
+            allowMomo: parsed.data.allowMomo,
+          },
+          update: {
+            settlementBank: parsed.data.settlementBank,
+            settlementAccount: parsed.data.settlementAccount,
+            settlementAccountName: parsed.data.settlementAccountName,
+            shopMomoNumber: parsed.data.shopMomoNumber,
+            shopMomoNetwork: parsed.data.shopMomoNetwork,
+            momoProvider: parsed.data.momoProvider,
+            allowCash: parsed.data.allowCash,
+            allowCard: parsed.data.allowCard,
+            allowMomo: parsed.data.allowMomo,
           },
         },
       },
-    });
-    await tx.shopMarketplaceProfile.upsert({
-      where: { shopId },
-      create: { shopId, tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
-      update: { tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
-    });
-    if (locationData) {
-      await tx.shopLocation.upsert({
-        where: { shopId },
-        create: { shopId, ...locationData },
-        update: locationData,
-      });
-    }
+    },
+    marketplace: { tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
+    location: locationData,
   });
 
   await audit({
