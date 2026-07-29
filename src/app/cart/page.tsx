@@ -9,6 +9,7 @@ import { nanoid } from "nanoid";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { currency } from "@/lib/format";
 import { firstProductImage } from "@/lib/product-images";
+import { productVariantLabel } from "@/lib/product-variants";
 import { isPaystackCheckoutReady } from "@/lib/payments";
 
 type Props = {
@@ -126,12 +127,13 @@ export default async function CartPage({ searchParams }: Props) {
                           <div className="aspect-square rounded-[8px] bg-[#f6f4ef] bg-cover bg-center" style={image ? { backgroundImage: `url(${image})` } : undefined} />
                           <div>
                             <p className="font-semibold">{product.name}</p>
-                            <p className="mt-1 text-sm text-slate-500">{item.productVariant.sku}</p>
+                            <p className="mt-1 text-sm font-semibold text-cyan-800">{productVariantLabel(item.productVariant, { includeStock: false })}</p>
+                            <p className="mt-1 text-xs text-slate-500">SKU: {item.productVariant.sku}</p>
                             <p className="mt-2 text-sm font-semibold">{currency(price, shop.currency)} each</p>
                           </div>
                           <form action={updateCartItemAction} className="grid gap-2 sm:w-32">
                             <input type="hidden" name="itemId" value={item.id} />
-                            <input className="field" name="quantity" type="number" min="0" max="100" defaultValue={item.quantity} />
+                            <input className="field" name="quantity" type="number" min="0" max={Math.max(item.productVariant.stockQty, item.quantity)} defaultValue={item.quantity} />
                             <div className="grid grid-cols-2 gap-2">
                               <Button variant="outline">Save</Button>
                               <button type="submit" className="inline-flex min-h-10 items-center justify-center rounded-[8px] border border-red-200 bg-red-50 text-red-700" name="quantity" value="0" title="Remove">

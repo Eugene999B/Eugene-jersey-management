@@ -19,7 +19,7 @@ const errorCopy: Record<string, string> = {
   "plan-staff-limit": "This shop has used all staff accounts included in its assigned subscription. Ask the shop owner or platform administrator before accepting this invitation.",
 };
 
-type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; reset?: string; loggedOut?: string; securityChanged?: string }> };
+type LoginPageProps = { searchParams?: Promise<{ error?: string; next?: string; reset?: string; loggedOut?: string; securityChanged?: string; passwordChanged?: string }> };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = (await searchParams) ?? {};
@@ -64,6 +64,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           {error ? <div className="mb-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100" role="alert">{error}</div> : null}
           {params.reset ? <div className="mb-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-100">Password updated. Sign in with the new password.</div> : null}
+          {params.passwordChanged ? <div className="mb-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-100">Password changed successfully. Every previous session was signed out. Sign in with the new password.</div> : null}
           {params.loggedOut ? <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100">You have signed out securely.</div> : null}
           {params.securityChanged ? <div className="mb-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100">Your optional two-factor setting changed successfully. Every previous session was signed out; continue with your current security setting.</div> : null}
 
