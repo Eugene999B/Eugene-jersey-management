@@ -83,7 +83,7 @@ describe("design cut-path conversion", () => {
     expect(dxf).toContain("$INSUNITS");
   });
 
-  it("fails closed for live text, raster artwork and unsupported embedded SVG elements", () => {
+  it("queues editable text for automatic outlining while still failing closed for raster and unsupported embedded SVG elements", () => {
     const result = buildDesignCutPaths({
       sheet,
       weedBox: false,
@@ -132,7 +132,8 @@ describe("design cut-path conversion", () => {
       ],
     });
 
-    expect(result.errors.join(" ")).toContain("live text must be converted to outlines");
+    expect(result.errors.join(" ")).not.toContain("live text must be converted to outlines");
+    expect(result.warnings.join(" ")).toContain("automatically outlined");
     expect(result.errors.join(" ")).toContain("raster or externally linked artwork must be traced");
     expect(result.errors.join(" ")).toContain("text elements must be converted to vector paths");
   });

@@ -508,7 +508,7 @@ export function buildDesignCutPaths(input: {
       continue;
     }
     if (layer.kind === "text") {
-      result.errors.push(`${layer.name}: live text must be converted to outlines before cutter export.`);
+      result.warnings.push(`${layer.name}: editable text will be automatically outlined when cutter output is prepared.`);
       continue;
     }
     if (layer.kind === "image") {
@@ -542,7 +542,8 @@ export function buildDesignCutPaths(input: {
   }
 
   result.paths = result.paths.filter(validPath);
-  if (!result.paths.length && !result.errors.length) result.errors.push("Add at least one native shape or embedded vector SVG before cutter export.");
+  const hasVisibleText = input.layers.some((layer) => layer.visible && layer.kind === "text");
+  if (!result.paths.length && !result.errors.length && !hasVisibleText) result.errors.push("Add at least one native shape, editable text, or embedded vector SVG before cutter export.");
   const outside = result.paths.filter((path) => path.points.some((point) => point.x < -0.01 || point.y < -0.01 || point.x > input.sheet.width + 0.01 || point.y > input.sheet.height + 0.01));
   if (outside.length) result.errors.push(`${outside.length} cutter path${outside.length === 1 ? " is" : "s are"} outside the production sheet.`);
   return result;

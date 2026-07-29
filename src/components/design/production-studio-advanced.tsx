@@ -52,6 +52,7 @@ import {
   buildCutSvg,
   buildDesignCutPaths,
 } from "@/lib/design-cut-path";
+import { outlineDesignTextLayers } from "@/lib/design-text-outline";
 import {
   normalizeMachineOrigin,
   normalizeMachineOutputFormat,
@@ -325,6 +326,8 @@ export function DesignStudioAdvanced({
   const [device, setDevice] = useState<DeviceState>("not-configured");
   const [deviceName, setDeviceName] = useState("No output device selected");
   const [deviceMessage, setDeviceMessage] = useState("System printing and SVG export are ready. A compatible serial cutter can also receive checked HPGL vector jobs.");
+  const [cutExportMessage, setCutExportMessage] = useState("Editable text will be outlined automatically when cutter output is prepared.");
+  const [cutExporting, setCutExporting] = useState(false);
   const [baudRate, setBaudRate] = useState(startingMachineProfile.baudRate);
   const portRef = useRef<SerialPortLike | null>(null);
   const projectInputRef = useRef<HTMLInputElement | null>(null);
@@ -1046,11 +1049,43 @@ export function DesignStudioAdvanced({
     }, null, 2), "application/json");
   }
 
-  function exportCutFile() {
-    if (cutPathResult.errors.length) return;
+  async function prepareCutPaths() {
+    if (cutExporting) return null;
+    setCutExporting(true);
+    setCutExportMessage("Preparing cutter paths and outlining editable text…");
+    try {
+      const outlined = await outlineDesignTextLayers(layers);
+      const errors = [...cutPathResult.errors, ...outlined.errors];
+      const outsideText = outlined.paths.filter((path) => path.points.some((point) => point.x < -0.01 || point.y < -0.01 || point.x > size.width + 0.01 || point.y > size.height + 0.01));
+      if (outsideText.length) errors.push(`${outsideText.length} outlined text path${outsideText.length === 1 ? " is" : "s are"} outside the production sheet.`);
+      if (errors.length) {
+        const message = [...new Set(errors)].join(" ");
+        setCutExportMessage(message);
+        window.alert(message);
+        return null;
+      }
+      const paths = [...cutPathResult.paths, ...outlined.paths];
+      setCutExportMessage(outlined.converted
+        ? `${outlined.converted} editable text layer${outlined.converted === 1 ? "" : "s"} outlined automatically. The downloaded cutter file contains paths only.`
+        : "Cutter paths are ready. The downloaded file contains vector paths only.");
+      return paths;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Automatic text outlining failed.";
+      setCutExportMessage(message);
+      window.alert(message);
+      return null;
+    } finally {
+      setCutExporting(false);
+    }
+  }
+
+  async function exportCutFile() {
+    if (productionErrors.length || cutExporting) return;
+    const paths = await prepareCutPaths();
+    if (!paths) return;
     if (machineProfile.outputFormat === "HPGL") {
       download(`${safeName(jobName)}.plt`, buildCutHpgl({
-        paths: cutPathResult.paths,
+        paths,
         sheet: size,
         mirror,
         origin: machineProfile.origin,
@@ -1060,14 +1095,14 @@ export function DesignStudioAdvanced({
     }
     if (machineProfile.outputFormat === "DXF") {
       download(`${safeName(jobName)}.dxf`, buildCutDxf({
-        paths: cutPathResult.paths,
+        paths,
         sheet: size,
         mirror,
         origin: machineProfile.origin,
       }), "application/dxf");
       return;
     }
-    download(`${safeName(jobName)}-cut.svg`, buildCutSvg({ paths: cutPathResult.paths, sheet: size, mirror }), "image/svg+xml");
+    download(`${safeName(jobName)}-cut.svg`, buildCutSvg({ paths, sheet: size, mirror }), "image/svg+xml");
   }
 
   function printDesign() {
@@ -1133,10 +1168,12 @@ export function DesignStudioAdvanced({
       setDeviceMessage(productionErrors.join(" "));
       return;
     }
+    const paths = await prepareCutPaths();
+    if (!paths) return;
     const writer = port.writable.getWriter();
     try {
       const hpgl = buildCutHpgl({
-        paths: cutPathResult.paths,
+        paths,
         sheet: size,
         mirror,
         origin: machineProfile.origin,
@@ -1393,12 +1430,13 @@ export function DesignStudioAdvanced({
             <div className="mt-3 grid gap-2">
               {machineProfile.outputFormat === "PRINT_RIP"
                 ? <Button disabled={printBlocked} onClick={() => download(`${safeName(jobName)}.svg`, svgDocument(), "image/svg+xml")}><Scissors size={16} /> Export full-colour SVG</Button>
-                : <Button disabled={productionBlocked} onClick={exportCutFile}><Scissors size={16} /> Export {machineProfile.outputFormat.replace("_", " ")}</Button>}
-              {machineProfile.outputFormat === "HPGL" ? <Button variant="secondary" disabled={productionBlocked || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send validated paths to cutter</Button> : null}
+                : <Button disabled={productionBlocked || cutExporting} onClick={exportCutFile}><Scissors size={16} /> {cutExporting ? "Preparing cutter paths…" : `Export ${machineProfile.outputFormat.replace("_", " ")}`}</Button>}
+              {machineProfile.outputFormat === "HPGL" ? <Button variant="secondary" disabled={productionBlocked || cutExporting || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send validated paths to cutter</Button> : null}
               <Button variant="secondary" disabled={printBlocked} onClick={printDesign}><Printer size={16} /> Print {copies} cop{copies === 1 ? "y" : "ies"}</Button>
               <Button variant="outline" onClick={exportManifest}><MonitorCog size={16} /> Export job manifest</Button>
             </div>
-            <p className="mt-3 text-[11px] leading-4 text-slate-500">Cutter exports contain vector polylines only. Live text and raster artwork must be outlined or traced first; the studio never silently converts them into unsafe cut geometry.</p>
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[11px] font-semibold leading-4 text-emerald-900">{cutExportMessage}</p>
+            <p className="mt-2 text-[11px] leading-4 text-slate-500">Editable text stays editable in the saved project. During cutter export, the browser automatically converts the rendered letters into closed vector outlines. Raster pictures still require tracing before they can be cut.</p>
           </section>
         </aside>
       </div>

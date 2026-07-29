@@ -59,18 +59,17 @@ Curves and arcs are flattened into sufficiently dense polylines before HPGL or D
 
 Direct cutter export stops when artwork contains:
 
-- live Design Studio text
 - raster images
 - externally linked artwork
 - embedded SVG text, image, use or foreign-object elements
 - unsupported or malformed SVG geometry
 - paths outside the production sheet
 
-The operator must convert live text to outlines and trace raster artwork in a vector tool before cutter export. The system never pretends those objects are cutter-ready.
+Live Design Studio text is converted automatically at export time using the exact font rendered in the operator browser. The saved project keeps its editable text layer; SVG, HPGL and DXF receive only closed traced letter contours. Raster artwork still requires vector tracing and the system continues to fail closed when safe paths cannot be produced.
 
 ### Output formats
 
-- **Cut-path SVG** contains only path polylines with no raster images or live text.
+- **Cut-path SVG** contains only path polylines. Editable Design Studio text is automatically rendered and traced into closed paths before download; no live text or raster image is placed in the cutter file.
 - **HPGL/PLT** uses the selected shop profile's units per millimetre, origin and mirror setting.
 - **DXF** uses millimetre units and lightweight polylines.
 - **Print/RIP** preserves the existing full-colour SVG and operating-system print workflow.
