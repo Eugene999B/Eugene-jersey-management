@@ -47,6 +47,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -59,7 +60,7 @@ jobs:
             e2e/package-lock.json
 
       - name: Materialize offline Ghana location catalogue
-        if: github.event_name == 'push' && github.ref_name == 'agent/release-36-2-offline-ghana-catalogue' && github.actor != 'github-actions[bot]'
+        if: github.event_name == 'pull_request' && github.head_ref == 'agent/release-36-2-offline-ghana-catalogue' && github.actor != 'github-actions[bot]'
         run: |
           curl --fail --location --retry 5 --retry-delay 3 \
             https://download.geonames.org/export/dump/GH.zip \
@@ -74,7 +75,7 @@ jobs:
             echo "Catalogue is already current."
           else
             git commit -m "data: bundle Ghana districts and towns"
-            git push origin HEAD:agent/release-36-2-offline-ghana-catalogue
+            git push origin HEAD:${{ github.head_ref }}
           fi
 
       - name: Install application dependencies
