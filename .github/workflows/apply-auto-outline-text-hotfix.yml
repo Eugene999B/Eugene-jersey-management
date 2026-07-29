@@ -132,19 +132,14 @@ jobs:
             }'''
           source = source[:export_start] + export_block + source[export_end:]
 
-          writer_anchor = '''    const writer = port.writable.getWriter();
-            try {
-              const hpgl = buildCutHpgl({
-                paths: cutPathResult.paths,'''
-          writer_replacement = '''    const paths = await prepareCutPaths();
+          send_start = source.index("  async function sendHpglJob()")
+          writer_start = source.index("    const writer = port.writable.getWriter();", send_start)
+          source = source[:writer_start] + '''    const paths = await prepareCutPaths();
             if (!paths) return;
-            const writer = port.writable.getWriter();
-            try {
-              const hpgl = buildCutHpgl({
-                paths,'''
-          if writer_anchor not in source:
-              raise SystemExit("studio serial writer anchor did not match")
-          source = source.replace(writer_anchor, writer_replacement, 1)
+          ''' + source[writer_start:]
+          hpgl_start = source.index("      const hpgl = buildCutHpgl({", writer_start)
+          paths_start = source.index("        paths: cutPathResult.paths,", hpgl_start)
+          source = source[:paths_start] + "        paths," + source[paths_start + len("        paths: cutPathResult.paths,"):]
 
           button_anchor = ''': <Button disabled={productionBlocked} onClick={exportCutFile}><Scissors size={16} /> Export {machineProfile.outputFormat.replace("_", " ")}</Button>}
                         {machineProfile.outputFormat === "HPGL" ? <Button variant="secondary" disabled={productionBlocked || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send validated paths to cutter</Button> : null}'''
