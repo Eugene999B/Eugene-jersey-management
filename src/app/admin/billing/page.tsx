@@ -35,6 +35,7 @@ const errorMessages: Record<string, string> = {
   "assignment-values": "Check the tenant, plan, cycle, status, renewal date and reason.",
   "assignment-missing": "The selected tenant or plan no longer exists.",
   "plan-not-assignable": "Only configured and active plans can be assigned to a tenant.",
+  "renewal-date-required": "Active and past-due subscriptions require a renewal date so grace and suspension can be calculated safely.",
 };
 
 function planPrice(value: { toString(): string } | null) {

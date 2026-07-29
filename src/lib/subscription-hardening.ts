@@ -1,5 +1,3 @@
-import "server-only";
-
 import { OrderChannel, Prisma, SubscriptionStatus } from "@prisma/client";
 import { platformDb } from "@/lib/platform-db";
 import {
@@ -256,6 +254,12 @@ async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = n
 
 export async function commercialSubscriptionState(shopId: string, now = new Date()) {
   return commercialStateFromDb(platformDb, shopId, now);
+}
+
+export async function assertCommercialOperationAvailable(shopId: string, now = new Date()) {
+  const state = await commercialSubscriptionState(shopId, now);
+  assertOperational(state);
+  return state;
 }
 
 export function subscriptionFeatureIncluded(state: CommercialSubscriptionState, feature: SubscriptionFeature) {

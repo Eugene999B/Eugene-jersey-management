@@ -209,6 +209,9 @@ export async function assignShopSubscriptionAction(formData: FormData) {
   ]);
   if (!shop || !plan) billingRedirect("assignment-missing");
   if (!plan.isConfigured || !plan.isActive) billingRedirect("plan-not-assignable");
+  if ((parsed.data.subscriptionStatus === SubscriptionStatus.ACTIVE || parsed.data.subscriptionStatus === SubscriptionStatus.PAST_DUE) && !parsed.data.renewalAt) {
+    billingRedirect("renewal-date-required");
+  }
   const selectedPrice = resolvePlanPrice(plan, parsed.data.billingCycle);
   if (selectedPrice === null) billingRedirect("configured-plan-price");
 
