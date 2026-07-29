@@ -37,6 +37,11 @@ const safeImageUrl = z.string().trim().max(2000).refine(
   "Upload the image or use a URL from the configured durable media host.",
 );
 
+const optionalText = (maximum: number) => z.preprocess(
+  (value) => String(value ?? "").trim() || undefined,
+  z.string().max(maximum).optional(),
+);
+
 const optionalCoordinate = (minimum: number, maximum: number) => z.preprocess(
   (value) => String(value ?? "").trim() || undefined,
   z.coerce.number().min(minimum).max(maximum).optional(),
@@ -45,30 +50,39 @@ const optionalCoordinate = (minimum: number, maximum: number) => z.preprocess(
 const schema = z.object({
   name: z.string().trim().min(2).max(140),
   logoUrl: safeImageUrl.optional(),
-  marketplaceTagline: z.string().trim().max(180).optional(),
+  marketplaceTagline: optionalText(180),
   marketplaceHeroUrl: safeImageUrl.optional(),
   clearMarketplaceHero: z.boolean().default(false),
-  region: z.string().trim().min(2).max(100).refine((value) => Boolean(canonicalGhanaRegion(value))),
-  district: z.string().trim().min(2).max(180),
-  city: z.string().trim().min(2).max(160),
-  suburb: z.string().trim().max(160).optional(),
-  digitalAddress: z.string().trim().max(40).optional(),
-  address: z.string().trim().max(500).optional(),
-  landmark: z.string().trim().max(700).optional(),
+  region: optionalText(100),
+  district: optionalText(180),
+  city: optionalText(160),
+  suburb: optionalText(160),
+  digitalAddress: optionalText(40),
+  address: optionalText(500),
+  landmark: optionalText(700),
   latitude: optionalCoordinate(-90, 90),
   longitude: optionalCoordinate(-180, 180),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   cashOrderHoldMinutes: z.coerce.number().int().min(15).max(10080),
-  settlementBank: z.string().trim().max(120).optional(),
-  settlementAccount: z.string().trim().max(80).optional(),
-  settlementAccountName: z.string().trim().max(160).optional(),
-  shopMomoNumber: z.string().trim().max(30).optional(),
-  shopMomoNetwork: z.string().trim().max(80).optional(),
-  momoProvider: z.string().trim().max(80).optional(),
+  settlementBank: optionalText(120),
+  settlementAccount: optionalText(80),
+  settlementAccountName: optionalText(160),
+  shopMomoNumber: optionalText(30),
+  shopMomoNetwork: optionalText(80),
+  momoProvider: optionalText(80),
   allowCash: z.boolean().default(false),
   allowCard: z.boolean().default(false),
   allowMomo: z.boolean().default(false),
+}).superRefine((value, context) => {
+  const coreLocation = [value.region, value.district, value.city];
+  const supplied = coreLocation.filter(Boolean).length;
+  if (supplied > 0 && supplied < coreLocation.length) {
+    context.addIssue({ code: "custom", path: ["region"], message: "Region, district and town must be completed together." });
+  }
+  if (value.region && !canonicalGhanaRegion(value.region)) {
+    context.addIssue({ code: "custom", path: ["region"], message: "Choose one of Ghana's 16 regions." });
+  }
 });
 
 export async function updateShopSettingsAction(formData: FormData) {
@@ -78,27 +92,27 @@ export async function updateShopSettingsAction(formData: FormData) {
   const parsed = schema.safeParse({
     name: formData.get("name"),
     logoUrl: formData.get("logoUrl") || undefined,
-    marketplaceTagline: formData.get("marketplaceTagline") || undefined,
+    marketplaceTagline: formData.get("marketplaceTagline"),
     marketplaceHeroUrl: formData.get("marketplaceHeroUrl") || undefined,
     clearMarketplaceHero: formData.get("clearMarketplaceHero") === "on",
     region: formData.get("region"),
     district: formData.get("district"),
     city: formData.get("city"),
-    suburb: formData.get("suburb") || undefined,
-    digitalAddress: formData.get("digitalAddress") || undefined,
-    address: formData.get("address") || undefined,
-    landmark: formData.get("landmark") || undefined,
+    suburb: formData.get("suburb"),
+    digitalAddress: formData.get("digitalAddress"),
+    address: formData.get("address"),
+    landmark: formData.get("landmark"),
     latitude: formData.get("latitude"),
     longitude: formData.get("longitude"),
     primaryColor: formData.get("primaryColor"),
     secondaryColor: formData.get("secondaryColor"),
     cashOrderHoldMinutes: formData.get("cashOrderHoldMinutes") || 120,
-    settlementBank: formData.get("settlementBank") || undefined,
-    settlementAccount: formData.get("settlementAccount") || undefined,
-    settlementAccountName: formData.get("settlementAccountName") || undefined,
-    shopMomoNumber: formData.get("shopMomoNumber") || undefined,
-    shopMomoNetwork: formData.get("shopMomoNetwork") || undefined,
-    momoProvider: formData.get("momoProvider") || undefined,
+    settlementBank: formData.get("settlementBank"),
+    settlementAccount: formData.get("settlementAccount"),
+    settlementAccountName: formData.get("settlementAccountName"),
+    shopMomoNumber: formData.get("shopMomoNumber"),
+    shopMomoNetwork: formData.get("shopMomoNetwork"),
+    momoProvider: formData.get("momoProvider"),
     allowCash: formData.get("allowCash") === "on",
     allowCard: formData.get("allowCard") === "on",
     allowMomo: formData.get("allowMomo") === "on",
@@ -130,31 +144,35 @@ export async function updateShopSettingsAction(formData: FormData) {
       ?? currentMarketplaceProfile?.heroImageUrl
       ?? null;
   const marketplaceTagline = parsed.data.marketplaceTagline ?? null;
-  const region = canonicalGhanaRegion(parsed.data.region);
-  if (!region) redirect("/dashboard/settings?error=invalid");
-  const location = {
-    country: "Ghana",
-    region,
-    district: parsed.data.district,
-    town: parsed.data.city,
-    area: cleanLocationText(parsed.data.suburb, 160),
-    digitalAddress: cleanLocationText(parsed.data.digitalAddress, 40)?.toUpperCase() ?? null,
-    streetAddress: cleanLocationText(parsed.data.address, 500),
-    landmark: cleanLocationText(parsed.data.landmark, 700),
-    latitude: parsed.data.latitude ?? null,
-    longitude: parsed.data.longitude ?? null,
-  };
-  const locationData = { ...location, searchText: buildLocationSearchText(location) };
+  const region = parsed.data.region ? canonicalGhanaRegion(parsed.data.region) : null;
+  const locationData = region && parsed.data.district && parsed.data.city
+    ? {
+        country: "Ghana",
+        region,
+        district: parsed.data.district,
+        town: parsed.data.city,
+        area: cleanLocationText(parsed.data.suburb, 160),
+        digitalAddress: cleanLocationText(parsed.data.digitalAddress, 40)?.toUpperCase() ?? null,
+        streetAddress: cleanLocationText(parsed.data.address, 500),
+        landmark: cleanLocationText(parsed.data.landmark, 700),
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
+        searchText: "",
+      }
+    : null;
+  if (locationData) locationData.searchText = buildLocationSearchText(locationData);
 
-  await platformDb.$transaction([
-    platformDb.shop.update({
+  await platformDb.$transaction(async (tx) => {
+    await tx.shop.update({
       where: { id: shopId },
       data: {
         name: parsed.data.name,
         logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
-        city: location.town,
-        country: location.country,
-        credentialAddress: location.streetAddress,
+        ...(locationData ? {
+          city: locationData.town,
+          country: locationData.country,
+          credentialAddress: locationData.streetAddress,
+        } : {}),
         primaryColor: parsed.data.primaryColor,
         secondaryColor: parsed.data.secondaryColor,
         cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
@@ -185,18 +203,20 @@ export async function updateShopSettingsAction(formData: FormData) {
           },
         },
       },
-    }),
-    platformDb.shopMarketplaceProfile.upsert({
+    });
+    await tx.shopMarketplaceProfile.upsert({
       where: { shopId },
       create: { shopId, tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
       update: { tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
-    }),
-    platformDb.shopLocation.upsert({
-      where: { shopId },
-      create: { shopId, ...locationData },
-      update: locationData,
-    }),
-  ]);
+    });
+    if (locationData) {
+      await tx.shopLocation.upsert({
+        where: { shopId },
+        create: { shopId, ...locationData },
+        update: locationData,
+      });
+    }
+  });
 
   await audit({
     shopId,
@@ -208,7 +228,7 @@ export async function updateShopSettingsAction(formData: FormData) {
       logoChanged: Boolean(logoAsset || parsed.data.logoUrl),
       marketplaceHeroChanged: Boolean(marketplaceHeroAsset || parsed.data.clearMarketplaceHero || parsed.data.marketplaceHeroUrl),
       marketplaceTaglineUpdated: marketplaceTagline !== currentMarketplaceProfile?.tagline,
-      locationUpdated: currentLocation?.searchText !== locationData.searchText,
+      locationUpdated: Boolean(locationData && currentLocation?.searchText !== locationData.searchText),
       settlementDetailsUpdated: Boolean(parsed.data.settlementBank || parsed.data.settlementAccount || parsed.data.settlementAccountName),
     },
   });
