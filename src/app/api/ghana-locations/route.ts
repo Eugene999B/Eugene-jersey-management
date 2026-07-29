@@ -14,7 +14,7 @@ const querySchema = z.object({
   district: z.string().trim().max(180).optional(),
 });
 
-function catalogueResponse(items: unknown[]) {
+function catalogueResponse(items: readonly unknown[]) {
   return {
     source: GHANA_LOCATION_CATALOGUE_META.source,
     generatedAt: GHANA_LOCATION_CATALOGUE_META.generatedAt,
