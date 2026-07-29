@@ -140,8 +140,8 @@ export default async function SettingsPage({ searchParams }: Props) {
 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
               <div className="flex items-center gap-2"><MapPinned size={18} className="text-emerald-700" /><h2 className="font-semibold text-emerald-950">Business location</h2></div>
-              <p className="mt-1 text-xs leading-5 text-emerald-900/70">Customers can filter the marketplace by region, district, town and sub-town. Keep this address accurate whenever the business moves.</p>
-              <div className="mt-4"><GhanaLocationFields required compact defaults={{
+              <p className="mt-1 text-xs leading-5 text-emerald-900/70">Customers can filter the marketplace by region, district, town and sub-town. Existing shops may complete this profile when ready; once saved, all three core levels stay required together.</p>
+              <div className="mt-4"><GhanaLocationFields required={Boolean(shopLocation)} compact defaults={{
                 region: shopLocation?.region,
                 district: shopLocation?.district,
                 city: shopLocation?.town ?? shop.city,
@@ -179,7 +179,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                 <label className="flex items-center gap-2"><input name="allowMomo" type="checkbox" defaultChecked={paymentConfig?.allowMomo ?? true} />Mobile money</label>
               </div>
             </div>
-            <Button>Save shop, location and marketplace settings</Button>
+            <Button>Save settings — shop, location and marketplace</Button>
           </form>
         </section>
 
