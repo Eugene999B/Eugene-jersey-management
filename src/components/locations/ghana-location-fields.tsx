@@ -14,6 +14,7 @@ type LocationSuggestion = {
 type SuggestionPayload = {
   items?: LocationSuggestion[];
   notice?: string;
+  error?: string;
 };
 
 type Props = {
@@ -36,7 +37,7 @@ async function loadSuggestions(url: string, signal: AbortSignal) {
   const response = await fetch(url, { signal, cache: "no-store" });
   const payload = await response.json().catch(() => null) as SuggestionPayload | null;
   if (!response.ok) {
-    throw new Error(payload?.notice || "The Ghana location directory could not be loaded.");
+    throw new Error(payload?.error || payload?.notice || "The built-in Ghana location list could not be loaded. Refresh this page and try again.");
   }
   return {
     items: Array.isArray(payload?.items) ? payload.items : [],
@@ -77,12 +78,12 @@ export function GhanaLocationFields({ required = false, compact = false, default
         if (controller.signal.aborted) return;
         setDistricts(result.items);
         setNotice(result.notice);
-        if (!result.items.length) setDistrictError("No districts were returned. Retry the directory connection.");
+        if (!result.items.length) setDistrictError("No districts were found in the built-in Ghana location list. Refresh the page and retry.");
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
         setDistricts([]);
-        setDistrictError(error instanceof Error ? error.message : "Districts could not be loaded.");
+        setDistrictError(error instanceof Error ? error.message : "Districts could not be loaded from the built-in Ghana location list.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setDistrictLoading(false);
@@ -105,12 +106,12 @@ export function GhanaLocationFields({ required = false, compact = false, default
         if (controller.signal.aborted) return;
         setCommunities(result.items);
         setNotice(result.notice);
-        if (!result.items.length) setCommunityError("No towns or communities were returned. Retry the directory connection.");
+        if (!result.items.length) setCommunityError("No towns or communities were found in the built-in Ghana location list. Refresh the page and retry.");
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
         setCommunities([]);
-        setCommunityError(error instanceof Error ? error.message : "Towns and communities could not be loaded.");
+        setCommunityError(error instanceof Error ? error.message : "Towns and communities could not be loaded from the built-in Ghana location list.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setCommunityLoading(false);
@@ -170,7 +171,7 @@ export function GhanaLocationFields({ required = false, compact = false, default
           {district && !containsValue(districts, district) ? <option value={district}>{district} — saved location</option> : null}
           {districts.map((item) => <option key={item.code || item.name} value={item.name}>{item.name}{item.capital ? ` — capital: ${item.capital}` : ""}</option>)}
         </select>
-        {districtError ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700"><span>{districtError}</span><button type="button" className="rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold" onClick={() => setDistrictReload((value) => value + 1)}>Retry districts</button></span> : <span className="mt-1 block text-xs text-slate-500">Select from the complete district, municipal and metropolitan list for the chosen region.</span>}
+        {districtError ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700"><span>{districtError}</span><button type="button" className="rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold" onClick={() => setDistrictReload((value) => value + 1)}>Retry districts</button></span> : <span className="mt-1 block text-xs text-slate-500">Select from the district, municipal and metropolitan list bundled with EJM for the chosen region.</span>}
       </label>
 
       <label className="block">

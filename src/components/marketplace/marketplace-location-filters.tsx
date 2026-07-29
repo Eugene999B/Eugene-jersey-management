@@ -14,8 +14,8 @@ type Props = {
 
 async function suggestions(url: string, signal: AbortSignal) {
   const response = await fetch(url, { signal, cache: "no-store" });
-  const payload = await response.json().catch(() => null) as { items?: Suggestion[]; notice?: string } | null;
-  if (!response.ok) throw new Error(payload?.notice || "Location directory unavailable.");
+  const payload = await response.json().catch(() => null) as { items?: Suggestion[]; notice?: string; error?: string } | null;
+  if (!response.ok) throw new Error(payload?.error || payload?.notice || "The built-in Ghana location list could not be loaded.");
   return Array.isArray(payload?.items) ? payload.items : [];
 }
 
@@ -106,13 +106,13 @@ export function MarketplaceLocationFilters({ region: initialRegion = "", distric
         setCity("");
         setTowns([]);
       }} disabled={!region || districtLoading} aria-label="Marketplace district">
-        <option value="">{!region ? "Choose region first" : districtLoading ? "Loading districts..." : districtFailed ? "Districts unavailable" : "All districts"}</option>
+        <option value="">{!region ? "Choose region first" : districtLoading ? "Loading districts..." : districtFailed ? "Districts unavailable — refresh" : "All districts"}</option>
         {district && !containsValue(districts, district) ? <option value={district}>{district}</option> : null}
         {districts.map((item) => <option key={item.code || item.name} value={item.name}>{item.name}</option>)}
       </select>
 
       <select className="field" name="city" value={city} onChange={(event) => setCity(event.target.value)} disabled={!district || townLoading} aria-label="Marketplace town or city">
-        <option value="">{!district ? "Choose district first" : townLoading ? "Loading towns..." : townFailed ? "Towns unavailable" : "All towns and communities"}</option>
+        <option value="">{!district ? "Choose district first" : townLoading ? "Loading towns..." : townFailed ? "Towns unavailable — refresh" : "All towns and communities"}</option>
         {city && !containsValue(towns, city) ? <option value={city}>{city}</option> : null}
         {towns.map((item) => <option key={item.code || item.name} value={item.name}>{item.name}</option>)}
       </select>
