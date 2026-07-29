@@ -62,16 +62,20 @@ test("shows buyer account creation before the login page fold and preserves chec
   await expectNoHorizontalOverflow(page);
 });
 
-test("keeps marketplace filters URL-backed, visible and clearable on mobile", async ({ page }) => {
+test("keeps deep marketplace filters URL-backed, visible and clearable on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/shops?q=Browser&city=Accra&ordering=open&sort=products");
+  await page.goto("/shops?q=Browser&region=Greater%20Accra&district=Accra%20Metropolitan&city=Accra&ordering=open&sort=products");
   await expect(page.getByRole("heading", { name: "EJM Marketplace" })).toBeVisible();
-  await expect(page.getByPlaceholder("Shop, team, brand or item")).toHaveValue("Browser");
-  await expect(page.locator('select[name="city"]')).toHaveValue("Accra");
+  await expect(page.getByPlaceholder("Item, shop, team, brand or location")).toHaveValue("Browser");
+  await expect(page.locator('select[name="region"]')).toHaveValue("Greater Accra");
+  await expect(page.locator('input[name="district"]')).toHaveValue("Accra Metropolitan");
+  await expect(page.locator('input[name="city"]')).toHaveValue("Accra");
   await expect(page.locator('select[name="ordering"]')).toHaveValue("open");
   await expect(page.locator('select[name="sort"]')).toHaveValue("products");
   await expect(page.getByText("Search: Browser", { exact: true })).toBeVisible();
-  await expect(page.getByText("Location: Accra", { exact: true })).toBeVisible();
+  await expect(page.getByText("Region: Greater Accra", { exact: true })).toBeVisible();
+  await expect(page.getByText("District: Accra Metropolitan", { exact: true })).toBeVisible();
+  await expect(page.getByText("Town: Accra", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Clear filters" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole("link", { name: "Clear filters" }).click();
