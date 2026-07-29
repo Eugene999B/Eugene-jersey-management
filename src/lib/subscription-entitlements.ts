@@ -1,6 +1,7 @@
 import { Prisma, Role, type InviteToken, type User } from "@prisma/client";
 import { platformDb } from "@/lib/platform-db";
 import { parseSubscriptionPlanSnapshot, subscriptionPlanSnapshot, type SubscriptionPlanSnapshot } from "@/lib/subscription-plans";
+import { assertCommercialOperationAvailable } from "@/lib/subscription-hardening";
 
 type EntitlementTransaction = Pick<
   Prisma.TransactionClient,
@@ -89,6 +90,7 @@ export async function createStaffAccountWithinPlan(input: {
   role: Role;
   passwordHash: string;
 }): Promise<User> {
+  await assertCommercialOperationAvailable(input.shopId);
   return platformDb.$transaction(async (tx) => {
     const existing = await tx.user.findUnique({ where: { email: input.email }, select: { id: true } });
     if (existing) throw new SubscriptionEntitlementError("EMAIL_EXISTS");
@@ -108,6 +110,8 @@ export async function createStaffAccountWithinPlan(input: {
 }
 
 export async function toggleStaffAccessWithinPlan(input: { shopId: string; userId: string }): Promise<User> {
+  const current = await platformDb.user.findFirst({ where: { id: input.userId, shopId: input.shopId }, select: { isActive: true, role: true } });
+  if (current && !current.isActive && current.role !== Role.OWNER) await assertCommercialOperationAvailable(input.shopId);
   return platformDb.$transaction(async (tx) => {
     const user = await tx.user.findFirst({ where: { id: input.userId, shopId: input.shopId } });
     if (!user) throw new SubscriptionEntitlementError("STAFF_NOT_FOUND");
@@ -127,6 +131,7 @@ export async function createStaffInviteWithinPlan(input: {
   expiresAt: Date;
   createdById: string;
 }): Promise<InviteToken> {
+  await assertCommercialOperationAvailable(input.shopId);
   return platformDb.$transaction(async (tx) => {
     const existing = await tx.user.findUnique({ where: { email: input.email }, select: { id: true } });
     if (existing) throw new SubscriptionEntitlementError("EMAIL_EXISTS");
@@ -153,6 +158,10 @@ export async function acceptStaffInviteWithinPlan(input: {
   name: string;
   passwordHash: string;
 }): Promise<{ user: User; invite: InviteToken }> {
+  const pendingInvite = await platformDb.inviteToken.findUnique({ where: { tokenHash: input.tokenHash }, select: { shopId: true, usedAt: true, expiresAt: true } });
+  if (pendingInvite && !pendingInvite.usedAt && pendingInvite.expiresAt > new Date()) {
+    await assertCommercialOperationAvailable(pendingInvite.shopId);
+  }
   return platformDb.$transaction(async (tx) => {
     const invite = await tx.inviteToken.findUnique({ where: { tokenHash: input.tokenHash } });
     if (!invite || invite.usedAt || invite.expiresAt <= new Date()) {

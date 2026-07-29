@@ -26,6 +26,7 @@ const errors: Record<string, string> = {
   "delivery-zone": "Choose an active delivery zone before requesting delivery.",
   coupon: "That coupon is invalid, expired, or has reached its usage limit.",
   "delivery-payment": "Delivery orders require online payment. Choose pickup to pay cash.",
+  subscription: "This shop's subscription currently prevents new orders. Contact the shop or try again after renewal.",
 };
 
 export default async function CartPage({ searchParams }: Props) {

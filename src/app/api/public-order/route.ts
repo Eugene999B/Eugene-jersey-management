@@ -11,6 +11,7 @@ import { createNumericCode } from "@/lib/phone-codes";
 import { hashToken } from "@/lib/tokens";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
+import { assertOrderCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const orderSchema = z.object({
   shopSlug: z.string().trim().min(1).max(120),
@@ -100,6 +101,13 @@ export async function POST(request: NextRequest) {
     return redirectTo(request, `/shop/${shop.slug}?error=duplicate-request`);
   }
 
+  try {
+    await assertOrderCreationAvailable({ shopId: shop.id, channel: OrderChannel.ONLINE });
+  } catch (error) {
+    if (commercialSubscriptionError(error)) return redirectTo(request, `/shop/${shop.slug}?error=subscription`);
+    throw error;
+  }
+
   const variant = await prisma.productVariant.findFirst({ where: { id: parsed.data.variantId, product: { shopId: shop.id } }, include: { product: true } });
   if (!variant || (!variant.product.isService && variant.stockQty < parsed.data.quantity)) return redirectTo(request, `/shop/${shop.slug}?error=stock`);
 
@@ -149,6 +157,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") return redirectTo(request, `/shop/${shop.slug}?error=stock`);
+    if (commercialSubscriptionError(error)) return redirectTo(request, `/shop/${shop.slug}?error=subscription`);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const existing = await prisma.order.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey } });
       if (existing?.buyerId === buyer.id) return redirectTo(request, `/track/${existing.receiptNumber}?access=${encodeURIComponent(existing.publicAccessToken)}`);

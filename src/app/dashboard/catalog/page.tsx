@@ -35,6 +35,9 @@ const errorCopy: Record<string, string> = {
   "category-not-found": "That category is not available in this shop.",
   "product-not-found": "That product or size record could not be found.",
   "sku-exists": "One of the SKUs is already being used. Leave SKU blank for automatic generation or enter a unique value.",
+  "plan-product-limit": "This shop has reached the product limit in its assigned plan. Review Subscription & usage before creating another product.",
+  "plan-feature": "Inventory and product creation are not included in this shop's assigned plan.",
+  "subscription-blocked": "This shop's subscription term or grace period prevents new commercial changes. Review Subscription & usage.",
 };
 
 type Props = {

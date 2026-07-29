@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, Menu, MessageCircle, MoreHorizontal, Palette, Settings, ShoppingCart, Tags, Truck, Users, X } from "lucide-react";
+import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, Menu, MessageCircle, MoreHorizontal, Palette, ReceiptText, Settings, ShoppingCart, Tags, Truck, Users, X } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -25,6 +25,7 @@ const navItems = [
   { section: "Controls", key: "commerce", href: "/dashboard/commerce", label: "Online selling", shortLabel: "Online", icon: Tags },
   { section: "Controls", key: "reports", href: "/dashboard/reports", label: "Reports", shortLabel: "Reports", icon: BarChart3 },
   { section: "Controls", key: "exports", href: "/dashboard/exports", label: "Export centre", shortLabel: "Exports", icon: FileDown },
+  { section: "Team & setup", key: "subscription", href: "/dashboard/subscription", label: "Subscription & usage", shortLabel: "Plan", icon: ReceiptText },
   { section: "Team & setup", key: "staff", href: "/dashboard/staff", label: "Staff & permissions", shortLabel: "Staff", icon: Users },
   { section: "Team & setup", key: "activity", href: "/dashboard/activity", label: "Activity & security", shortLabel: "Activity", icon: Activity },
   { section: "Team & setup", key: "settings", href: "/dashboard/settings", label: "Shop settings", shortLabel: "Settings", icon: Settings },

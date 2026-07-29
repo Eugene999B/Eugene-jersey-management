@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { DebtStatus, NotificationChannel, PaymentMethod, PaymentStatus, OrderStatus, Role } from "@prisma/client";
+import { DebtStatus, NotificationChannel, OrderChannel, PaymentMethod, PaymentStatus, OrderStatus, Role } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -9,6 +9,7 @@ import { audit } from "@/lib/audit";
 import { sendCustomerMessage } from "@/lib/messaging";
 import { normalizePhone } from "@/lib/phone";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
+import { assertOrderCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().max(100).optional(),
@@ -79,6 +80,13 @@ export async function POST(request: NextRequest) {
   }
 
   const shop = await prisma.shop.findUniqueOrThrow({ where: { id: session.shopId } });
+  try {
+    await assertOrderCreationAvailable({ shopId: session.shopId, channel: OrderChannel.POS });
+  } catch (error) {
+    const commercial = commercialSubscriptionError(error);
+    if (commercial) return NextResponse.json({ error: commercial.message, code: commercial.code }, { status: 409 });
+    throw error;
+  }
   const selectedCustomer = parsed.data.customerId
     ? await prisma.customer.findFirst({ where: { id: parsed.data.customerId, shopId: session.shopId } })
     : null;
@@ -254,6 +262,8 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
       return NextResponse.json({ error: "Stock changed while checking out. Refresh and try again." }, { status: 409 });
     }
+    const commercial = commercialSubscriptionError(error);
+    if (commercial) return NextResponse.json({ error: commercial.message, code: commercial.code }, { status: 409 });
     throw error;
   }
 

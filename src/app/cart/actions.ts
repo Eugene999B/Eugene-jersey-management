@@ -24,6 +24,7 @@ import { initializePaystackTransaction, isPaystackCheckoutReady } from "@/lib/pa
 import { sendDirectMessage } from "@/lib/messaging";
 import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { assertOrderCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const addSchema = z.object({
   shopSlug: z.string().trim().min(1).max(120),
@@ -157,6 +158,12 @@ export async function checkoutCartAction(formData: FormData) {
     parsed.data.deliveryZoneId ? prisma.deliveryZone.findFirst({ where: { id: parsed.data.deliveryZoneId, shopId: parsed.data.shopId, isActive: true } }) : null,
   ]);
   if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled) redirect("/cart?error=closed");
+  try {
+    await assertOrderCreationAvailable({ shopId: shop.id, channel: OrderChannel.ONLINE });
+  } catch (error) {
+    if (commercialSubscriptionError(error)) redirect("/cart?error=subscription");
+    throw error;
+  }
   if (parsed.data.paymentChoice === "PAYSTACK" && !isPaystackCheckoutReady(shop.paymentConfig)) redirect("/cart?error=payment");
   if (parsed.data.paymentChoice === "CASH" && !shop.paymentConfig?.allowCash) redirect("/cart?error=payment");
   if (!cartItems.length) redirect("/cart?error=empty");
@@ -221,6 +228,7 @@ export async function checkoutCartAction(formData: FormData) {
   } catch (error) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") redirect("/cart?error=stock");
     if (error instanceof Error && error.message === "COUPON_EXHAUSTED") redirect("/cart?error=coupon");
+    if (commercialSubscriptionError(error)) redirect("/cart?error=subscription");
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const existing = await prisma.order.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey } });
       if (existing?.buyerId === buyer.id) redirect(`/track/${existing.receiptNumber}?access=${encodeURIComponent(existing.publicAccessToken)}`);
