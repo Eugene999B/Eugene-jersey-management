@@ -116,7 +116,7 @@ export default async function SettingsPage({ searchParams }: Props) {
 
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="panel p-5">
-          <div className="flex items-center gap-2"><Sparkles size={21} className="text-cyan-700" /><h1 className="text-2xl font-semibold">Shop and marketplace branding</h1></div>
+          <div className="flex flex-wrap items-center gap-2"><Sparkles size={21} className="text-cyan-700" /><h1 className="text-2xl font-semibold">Shop settings</h1><Badge tone="blue">Marketplace branding</Badge></div>
           <p className="mt-2 text-sm leading-6 text-slate-500">Your logo identifies the shop everywhere. The optional marketplace photo creates the large visual on your marketplace card. Product brand names are taken automatically from each product&apos;s Brand field.</p>
           <div className="mt-4 rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
             <p className="text-slate-500">Shop network code</p>
