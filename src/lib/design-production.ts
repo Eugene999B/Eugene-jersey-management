@@ -81,7 +81,7 @@ export function checkProductionDesign(input: {
 
   const hasText = visible.some((layer) => layer.kind === "text");
   const hasRaster = visible.some((layer) => layer.kind === "image");
-  if (hasText && input.machineProfile !== "Print/RIP") warnings.push("Text remains live text in SVG. Convert it to outlines in the machine software before cutting on a computer without the same font.");
+  if (hasText && input.machineProfile !== "Print/RIP") warnings.push("Editable text will be converted automatically into closed cutter outlines during SVG, HPGL or DXF production.");
   if (hasRaster && ["Generic SVG", "SignMaster", "VinylMaster"].includes(input.machineProfile)) warnings.push("Image layers are raster artwork. Trace or vectorise them in the cutter software before sending a cut job.");
 
   if (input.machineProfile === "HPGL / PLT cutter") {
