@@ -1,8 +1,7 @@
 import "server-only";
 
-import { BillingCycle, PaymentStatus, Prisma, SubscriptionInvoiceStatus, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, NotificationChannel, PaymentStatus, Prisma, SubscriptionInvoiceStatus, SubscriptionStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
-import { NotificationChannel } from "@prisma/client";
 import { sendDirectMessage } from "@/lib/messaging";
 import { amountToSubunit, initializePlatformPaystackTransaction, verifyPaystackTransaction, type PaystackTransactionData } from "@/lib/payments";
 import { platformDb } from "@/lib/platform-db";
@@ -89,7 +88,7 @@ export async function ensureSubscriptionRenewalInvoice(input: {
       planVersion: contract.planVersion,
       planName: parsed.data.name,
       description: `${parsed.data.name} ${contract.billingCycle.toLowerCase()} subscription renewal`,
-      termsSnapshot: contract.termsSnapshot,
+      termsSnapshot: parsed.data as Prisma.InputJsonObject,
       nextReminderAt,
       createdById: input.createdById ?? null,
     },
@@ -219,8 +218,8 @@ async function ownerContact(shopId: string) {
   };
 }
 
-function money(amount: Prisma.Decimal | number | string, currency: string) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(Number(amount));
+function money(amount: Prisma.Decimal | number | string, currencyCode: string) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: currencyCode }).format(Number(amount));
 }
 
 function appOrigin() {
