@@ -33,6 +33,20 @@ async function enforcePublicApplicationLimits(duplicateFingerprint: string) {
   ]);
 }
 
+type StructuredApplicationLocation = {
+  country: string;
+  region: string;
+  district: string;
+  town: string;
+  area: string | null;
+  digitalAddress: string | null;
+  streetAddress: string | null;
+  landmark: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  searchText: string;
+};
+
 async function createApplicationWithUniqueReference(input: {
   type: BusinessApplicationType;
   statusTokenHash: string;
@@ -52,17 +66,27 @@ async function createApplicationWithUniqueReference(input: {
   requestedServices: string | null;
   requestedShopId: string | null;
   applicantNotes: string | null;
+  location: StructuredApplicationLocation | null;
 }) {
+  const { location, ...applicationInput } = input;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      return await platformDb.businessApplication.create({
-        data: {
-          ...input,
-          reference: createBusinessApplicationReference(input.type),
-          consentGiven: true,
-          consentedAt: new Date(),
-          documentUrls: [],
-        },
+      return await platformDb.$transaction(async (tx) => {
+        const application = await tx.businessApplication.create({
+          data: {
+            ...applicationInput,
+            reference: createBusinessApplicationReference(input.type),
+            consentGiven: true,
+            consentedAt: new Date(),
+            documentUrls: [],
+          },
+        });
+        if (location) {
+          await tx.businessApplicationLocation.create({
+            data: { applicationId: application.id, ...location },
+          });
+        }
+        return application;
       });
     } catch (error) {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002" || attempt === 3) throw error;
@@ -84,6 +108,12 @@ export async function submitBusinessApplicationAction(formData: FormData) {
     address: formData.get("address"),
     city: formData.get("city"),
     region: formData.get("region"),
+    district: formData.get("district"),
+    suburb: formData.get("suburb"),
+    digitalAddress: formData.get("digitalAddress"),
+    landmark: formData.get("landmark"),
+    latitude: formData.get("latitude"),
+    longitude: formData.get("longitude"),
     country: formData.get("country") || "Ghana",
     categories: formData.get("categories"),
     requestedServices: formData.get("requestedServices"),
@@ -144,6 +174,7 @@ export async function submitBusinessApplicationAction(formData: FormData) {
     requestedServices: input.requestedServices,
     requestedShopId: input.requestedShopId,
     applicantNotes: input.applicantNotes,
+    location: input.location,
   });
 
   await setApplicationReceiptCookie({ reference: application.reference, token: statusToken });
