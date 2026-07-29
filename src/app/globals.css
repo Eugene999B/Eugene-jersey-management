@@ -49,6 +49,19 @@ canvas {
   max-width: 100%;
 }
 
+/*
+ * Product photographs are currently rendered as background images in the
+ * marketplace, public storefront, catalogue, POS and cart. `cover` crops tall
+ * jersey photos, so this shared rule scales every uploaded item photograph to
+ * fit its available frame while preserving the original proportions.
+ */
+.bg-cover[style*="background-image"] {
+  background-color: #f8fafc;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain !important;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--shop-secondary), white 35%);
   color: #111827;
