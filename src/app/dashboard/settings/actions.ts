@@ -9,6 +9,11 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
+import {
+  buildLocationSearchText,
+  canonicalGhanaRegion,
+  cleanLocationText,
+} from "@/lib/ghana-locations";
 
 function isManagedImageUrl(value: string) {
   if (value.startsWith("/") && !value.startsWith("//")) return true;
@@ -31,12 +36,26 @@ const safeImageUrl = z.string().trim().max(2000).refine(
   "Upload the image or use a URL from the configured durable media host.",
 );
 
+const optionalCoordinate = (minimum: number, maximum: number) => z.preprocess(
+  (value) => String(value ?? "").trim() || undefined,
+  z.coerce.number().min(minimum).max(maximum).optional(),
+);
+
 const schema = z.object({
   name: z.string().trim().min(2).max(140),
   logoUrl: safeImageUrl.optional(),
   marketplaceTagline: z.string().trim().max(180).optional(),
   marketplaceHeroUrl: safeImageUrl.optional(),
   clearMarketplaceHero: z.boolean().default(false),
+  region: z.string().trim().min(2).max(100).refine((value) => Boolean(canonicalGhanaRegion(value))),
+  district: z.string().trim().min(2).max(180),
+  city: z.string().trim().min(2).max(160),
+  suburb: z.string().trim().max(160).optional(),
+  digitalAddress: z.string().trim().max(40).optional(),
+  address: z.string().trim().max(500).optional(),
+  landmark: z.string().trim().max(700).optional(),
+  latitude: optionalCoordinate(-90, 90),
+  longitude: optionalCoordinate(-180, 180),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   cashOrderHoldMinutes: z.coerce.number().int().min(15).max(10080),
@@ -61,6 +80,15 @@ export async function updateShopSettingsAction(formData: FormData) {
     marketplaceTagline: formData.get("marketplaceTagline") || undefined,
     marketplaceHeroUrl: formData.get("marketplaceHeroUrl") || undefined,
     clearMarketplaceHero: formData.get("clearMarketplaceHero") === "on",
+    region: formData.get("region"),
+    district: formData.get("district"),
+    city: formData.get("city"),
+    suburb: formData.get("suburb") || undefined,
+    digitalAddress: formData.get("digitalAddress") || undefined,
+    address: formData.get("address") || undefined,
+    landmark: formData.get("landmark") || undefined,
+    latitude: formData.get("latitude"),
+    longitude: formData.get("longitude"),
     primaryColor: formData.get("primaryColor"),
     secondaryColor: formData.get("secondaryColor"),
     cashOrderHoldMinutes: formData.get("cashOrderHoldMinutes") || 120,
@@ -76,9 +104,10 @@ export async function updateShopSettingsAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
-  const [shop, currentMarketplaceProfile] = await Promise.all([
+  const [shop, currentMarketplaceProfile, currentLocation] = await Promise.all([
     prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true, slug: true } }),
     prisma.shopMarketplaceProfile.findUnique({ where: { shopId } }),
+    prisma.shopLocation.findUnique({ where: { shopId } }),
   ]);
   if (!shop?.isActive) redirect("/login?error=shop-suspended");
 
@@ -100,6 +129,21 @@ export async function updateShopSettingsAction(formData: FormData) {
       ?? currentMarketplaceProfile?.heroImageUrl
       ?? null;
   const marketplaceTagline = parsed.data.marketplaceTagline ?? null;
+  const region = canonicalGhanaRegion(parsed.data.region);
+  if (!region) redirect("/dashboard/settings?error=invalid");
+  const location = {
+    country: "Ghana",
+    region,
+    district: parsed.data.district,
+    town: parsed.data.city,
+    area: cleanLocationText(parsed.data.suburb, 160),
+    digitalAddress: cleanLocationText(parsed.data.digitalAddress, 40)?.toUpperCase() ?? null,
+    streetAddress: cleanLocationText(parsed.data.address, 500),
+    landmark: cleanLocationText(parsed.data.landmark, 700),
+    latitude: parsed.data.latitude ?? null,
+    longitude: parsed.data.longitude ?? null,
+  };
+  const locationData = { ...location, searchText: buildLocationSearchText(location) };
 
   await prisma.$transaction([
     prisma.shop.update({
@@ -107,6 +151,9 @@ export async function updateShopSettingsAction(formData: FormData) {
       data: {
         name: parsed.data.name,
         logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
+        city: location.town,
+        country: location.country,
+        credentialAddress: location.streetAddress,
         primaryColor: parsed.data.primaryColor,
         secondaryColor: parsed.data.secondaryColor,
         cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
@@ -140,15 +187,13 @@ export async function updateShopSettingsAction(formData: FormData) {
     }),
     prisma.shopMarketplaceProfile.upsert({
       where: { shopId },
-      create: {
-        shopId,
-        tagline: marketplaceTagline,
-        heroImageUrl: marketplaceHeroUrl,
-      },
-      update: {
-        tagline: marketplaceTagline,
-        heroImageUrl: marketplaceHeroUrl,
-      },
+      create: { shopId, tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
+      update: { tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
+    }),
+    prisma.shopLocation.upsert({
+      where: { shopId },
+      create: { shopId, ...locationData },
+      update: locationData,
     }),
   ]);
 
@@ -162,6 +207,7 @@ export async function updateShopSettingsAction(formData: FormData) {
       logoChanged: Boolean(logoAsset || parsed.data.logoUrl),
       marketplaceHeroChanged: Boolean(marketplaceHeroAsset || parsed.data.clearMarketplaceHero || parsed.data.marketplaceHeroUrl),
       marketplaceTaglineUpdated: marketplaceTagline !== currentMarketplaceProfile?.tagline,
+      locationUpdated: currentLocation?.searchText !== locationData.searchText,
       settlementDetailsUpdated: Boolean(parsed.data.settlementBank || parsed.data.settlementAccount || parsed.data.settlementAccountName),
     },
   });
