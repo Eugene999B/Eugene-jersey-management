@@ -1,17 +1,33 @@
 import Link from "next/link";
-import { AlertTriangle, Boxes, CalendarClock, CheckCircle2, CreditCard, ReceiptText, Users } from "lucide-react";
+import { SubscriptionInvoiceStatus } from "@prisma/client";
+import { AlertTriangle, Boxes, CalendarClock, CheckCircle2, CreditCard, Download, ReceiptText, RefreshCw, Users } from "lucide-react";
+import { generateSubscriptionInvoiceAction, startSubscriptionPaymentAction } from "@/app/dashboard/subscription/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
-import { currency, shortDate } from "@/lib/format";
+import { currency, shortDate, titleCase } from "@/lib/format";
 import { permissions } from "@/lib/rbac";
 import { requireRole } from "@/lib/auth";
 import { getTenantContext } from "@/lib/tenant";
+import { listSubscriptionInvoicesForShop } from "@/lib/subscription-billing";
 import { subscriptionFeatureIncluded, subscriptionUsage } from "@/lib/subscription-hardening";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams?: Promise<{ error?: string; feature?: string }>;
+  searchParams?: Promise<{ error?: string; feature?: string; payment?: string; invoice?: string; generated?: string }>;
+};
+
+const errorCopy: Record<string, string> = {
+  "missing-shop": "This account is not connected to a shop subscription.",
+  "invoice-unavailable": "A renewal invoice cannot be generated until a configured paid contract and renewal date are assigned.",
+  "invoice-invalid": "Choose a valid subscription invoice.",
+  "invoice-missing": "That subscription invoice no longer exists.",
+  "invoice-paid": "That invoice has already been paid.",
+  "invoice-void": "That invoice has been voided by the platform administrator.",
+  "invoice-zero": "This invoice does not require an online payment.",
+  "paystack-unavailable": "Paystack subscription collection is not configured yet. Contact the platform administrator.",
+  "checkout-failed": "The secure subscription checkout could not be started. Review the payment attempt below or try again.",
 };
 
 function usageText(current: number, limit: number | null) {
@@ -46,17 +62,28 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
   );
 }
 
+function invoiceTone(status: SubscriptionInvoiceStatus) {
+  if (status === SubscriptionInvoiceStatus.PAID) return "green" as const;
+  if (status === SubscriptionInvoiceStatus.OVERDUE) return "red" as const;
+  if (status === SubscriptionInvoiceStatus.VOID) return "orange" as const;
+  return "blue" as const;
+}
+
 export default async function SubscriptionPage({ searchParams }: Props) {
   await requireRole(permissions.dashboard);
   const params = (await searchParams) ?? {};
   const { session, shop } = await getTenantContext();
   if (!shop) return null;
-  const usage = await subscriptionUsage(shop.id);
+  const [usage, invoices] = await Promise.all([
+    subscriptionUsage(shop.id),
+    listSubscriptionInvoicesForShop(shop.id),
+  ]);
   const snapshot = usage.snapshot;
   const selectedPrice = snapshot
     ? shop.billingCycle === "YEARLY" ? snapshot.yearlyPrice : snapshot.monthlyPrice
     : null;
-  const isOwnerOrManager = session.role === "OWNER" || session.role === "MANAGER";
+  const isOwner = session.role === "OWNER";
+  const isOwnerOrManager = isOwner || session.role === "MANAGER";
   const featureBlocked = params.error === "feature";
 
   return (
@@ -66,7 +93,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Commercial access</p>
           <h1 className="mt-2 text-3xl font-semibold">Subscription &amp; usage</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            See the exact saved plan terms, current product and order usage, staff reservations, renewal deadline and any commercial restriction affecting this shop.
+            See the exact saved plan terms, current usage, renewal invoices, verified payments and any commercial restriction affecting this shop.
           </p>
         </div>
         <Badge tone={usage.operational ? usage.effectiveStatus === "PAST_DUE" ? "orange" : "green" : "red"} className="px-3 py-2 text-sm">
@@ -79,6 +106,10 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           {params.feature?.replaceAll("_", " ") || "That feature"} is not included in the assigned plan. Review the entitlements below and contact the platform administrator before relying on it.
         </div>
       ) : null}
+      {params.error && !featureBlocked ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{errorCopy[params.error] ?? "The subscription operation could not be completed."}</div> : null}
+      {params.payment === "success" ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Payment verified. The invoice is paid and the next subscription term is active.</div> : null}
+      {params.payment === "failed" || params.payment === "invalid" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">The payment could not be verified. No subscription term was extended; review the payment attempt or try again.</div> : null}
+      {params.generated ? <div role="status" className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Renewal invoice generated from the immutable assigned contract.</div> : null}
 
       {usage.notice ? (
         <div role={usage.operational ? "status" : "alert"} className={`rounded-xl border px-4 py-3 text-sm font-semibold ${usage.operational ? "border-amber-200 bg-amber-50 text-amber-900" : "border-red-200 bg-red-50 text-red-800"}`}>
@@ -129,6 +160,46 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           ) : (
             <p className="mt-5 rounded-xl bg-white p-3 text-sm text-slate-600">Ask the shop owner or manager to review renewal or plan changes with the platform administrator.</p>
           )}
+        </div>
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded8cd] p-5">
+          <div>
+            <h2 className="text-xl font-semibold">Invoices &amp; payment history</h2>
+            <p className="mt-1 text-sm text-slate-600">Every invoice is tied to the exact plan version, price, cycle and period assigned to this shop.</p>
+          </div>
+          {isOwner ? <form action={generateSubscriptionInvoiceAction}><Button variant="outline"><RefreshCw size={16} />Generate renewal invoice</Button></form> : null}
+        </div>
+        <div className="grid gap-4 bg-white p-5 lg:grid-cols-2">
+          {invoices.map((invoice) => {
+            const payable = isOwner && (invoice.status === SubscriptionInvoiceStatus.OPEN || invoice.status === SubscriptionInvoiceStatus.OVERDUE);
+            return (
+              <article key={invoice.id} className={`rounded-xl border p-4 ${params.invoice === invoice.id ? "border-cyan-400 ring-4 ring-cyan-100" : "border-slate-200"}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{invoice.invoiceNumber}</p><h3 className="mt-1 text-lg font-semibold">{invoice.planName} renewal</h3></div>
+                  <Badge tone={invoiceTone(invoice.status)}>{titleCase(invoice.status)}</Badge>
+                </div>
+                <p className="mt-4 text-2xl font-semibold">{currency(invoice.amount.toString(), invoice.currency)}</p>
+                <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                  <div className="rounded-lg bg-slate-50 p-3"><dt className="text-xs font-bold uppercase text-slate-500">Due</dt><dd className="mt-1 font-semibold">{shortDate(invoice.dueAt)}</dd></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><dt className="text-xs font-bold uppercase text-slate-500">Coverage</dt><dd className="mt-1 font-semibold">{shortDate(invoice.periodStart)} – {shortDate(invoice.periodEnd)}</dd></div>
+                </dl>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link href={`/api/subscription-invoices/${invoice.id}/pdf`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold"><Download size={15} />Invoice PDF</Link>
+                  {payable ? <form action={startSubscriptionPaymentAction}><input type="hidden" name="invoiceId" value={invoice.id} /><Button>Pay securely</Button></form> : null}
+                </div>
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Payment attempts</p>
+                  <div className="mt-2 space-y-2">
+                    {invoice.paymentAttempts.map((attempt) => <div key={attempt.id} className="rounded-lg bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold">{attempt.provider.toUpperCase()} · {titleCase(attempt.status)}</span><span>{shortDate(attempt.createdAt)}</span></div><p className="mt-1 break-all text-slate-500">{attempt.reference}</p>{attempt.gatewayResponse ? <p className="mt-1 text-slate-500">{attempt.gatewayResponse}</p> : null}</div>)}
+                    {!invoice.paymentAttempts.length ? <p className="text-sm text-slate-500">No payment attempt has been started.</p> : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {!invoices.length ? <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-600 lg:col-span-2">No subscription invoice has been issued. The owner can generate one once a configured paid contract and renewal date exist.</div> : null}
         </div>
       </section>
 

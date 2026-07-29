@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Activity, BarChart3, BookOpen, ClipboardCheck, Coins, CreditCard, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { Activity, BarChart3, BookOpen, ClipboardCheck, Coins, CreditCard, FileText, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
@@ -21,6 +21,7 @@ const adminNav = [
   { href: "/admin/support/cases", label: "Support cases", shortLabel: "Cases", icon: FolderKanban, permission: "support" },
   { href: "/admin/support", label: "Support desk", shortLabel: "Queues", icon: LifeBuoy, permission: "support" },
   { href: "/admin/billing", label: "Billing", shortLabel: "Billing", icon: CreditCard, permission: "billing" },
+  { href: "/admin/billing/invoices", label: "Subscription invoices", shortLabel: "Invoices", icon: FileText, permission: "billing" },
   { href: "/admin/billing/communications", label: "Communication credits", shortLabel: "Credits", icon: Coins, permission: "billing" },
   { href: "/admin/broadcast", label: "Broadcast", shortLabel: "Broadcast", icon: Megaphone, permission: "broadcast" },
   { href: "/admin/activity", label: "Activity logs", shortLabel: "Activity", icon: Activity, permission: "activity" },

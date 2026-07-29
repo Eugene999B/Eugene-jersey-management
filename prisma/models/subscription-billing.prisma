@@ -1,0 +1,68 @@
+enum SubscriptionInvoiceStatus {
+  OPEN
+  OVERDUE
+  PAID
+  VOID
+}
+
+model SubscriptionInvoice {
+  id              String                    @id @default(cuid())
+  shopId          String
+  contractId      String
+  invoiceNumber   String                    @unique
+  currency        String                    @default("GHS")
+  amount          Decimal                   @db.Decimal(12, 2)
+  billingCycle    BillingCycle
+  periodStart     DateTime
+  periodEnd       DateTime
+  dueAt           DateTime
+  status          SubscriptionInvoiceStatus @default(OPEN)
+  planVersion     Int
+  planName        String
+  description     String
+  termsSnapshot   Json
+  issuedAt        DateTime                  @default(now())
+  paidAt          DateTime?
+  voidedAt        DateTime?
+  voidReason      String?
+  reminderCount   Int                       @default(0)
+  lastReminderAt  DateTime?
+  nextReminderAt  DateTime?
+  createdById     String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  paymentAttempts SubscriptionPaymentAttempt[]
+
+  @@unique([shopId, periodStart, periodEnd])
+  @@index([shopId, status, dueAt])
+  @@index([contractId, issuedAt])
+  @@index([status, dueAt, nextReminderAt])
+}
+
+model SubscriptionPaymentAttempt {
+  id                    String              @id @default(cuid())
+  invoiceId             String
+  shopId                String
+  provider              String              @default("paystack")
+  reference             String              @unique
+  amount                Decimal             @db.Decimal(12, 2)
+  currency              String
+  status                PaymentStatus       @default(PENDING)
+  authorizationUrl      String?
+  providerTransactionId String?
+  providerChannel       String?
+  gatewayResponse       String?
+  initializedAt         DateTime            @default(now())
+  verifiedAt            DateTime?
+  failedAt              DateTime?
+  createdById           String?
+  metadata              Json                @default("{}")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  invoice SubscriptionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, status, createdAt])
+  @@index([invoiceId, status, createdAt])
+}

@@ -65,6 +65,34 @@ describe("Paystack helpers", () => {
     });
   });
 
+  it("initializes subscription invoices on the administrator account with an explicit purchase type", async () => {
+    process.env.PAYSTACK_SECRET_KEY = "sk_test_platform";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: true, data: { authorization_url: "https://checkout.test/subscription", reference: "EJM-SUB-1" } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await initializePlatformPaystackTransaction({
+      email: "owner@example.com",
+      amount: 150,
+      currency: "GHS",
+      reference: "EJM-SUB-1",
+      callbackUrl: "https://ejm.test/api/paystack/subscriptions/callback",
+      purchaseType: "subscription_invoice",
+      metadata: { subscription_invoice_id: "invoice-a", purchase_type: "tampered" },
+    });
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body)) as { metadata: Record<string, unknown> };
+    expect(body.metadata).toMatchObject({
+      subscription_invoice_id: "invoice-a",
+      settlement_owner: "ejm_administrator",
+      platform_account: "ejm_administrator",
+      purchase_type: "subscription_invoice",
+    });
+  });
+
   it("normalizes legacy fee-bearer values to safe Paystack choices", () => {
     expect(normalizePaystackChargeBearer("account")).toBe("account");
     expect(normalizePaystackChargeBearer("subaccount")).toBe("subaccount");

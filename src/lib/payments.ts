@@ -20,7 +20,9 @@ type PaystackInitInput = {
   bearer?: string | null;
 };
 
-type PlatformPaystackInitInput = Pick<PaystackInitInput, "email" | "amount" | "currency" | "reference" | "callbackUrl" | "metadata">;
+type PlatformPaystackInitInput = Pick<PaystackInitInput, "email" | "amount" | "currency" | "reference" | "callbackUrl" | "metadata"> & {
+  purchaseType?: "communication_credits" | "subscription_invoice";
+};
 
 type PaystackInitResult = { authorizationUrl: string | null; reference: string; providerEnabled: boolean };
 
@@ -114,7 +116,7 @@ export async function initializePlatformPaystackTransaction(
       ...input.metadata,
       settlement_owner: "ejm_administrator",
       platform_account: "ejm_administrator",
-      purchase_type: "communication_credits",
+      purchase_type: input.purchaseType ?? "communication_credits",
     },
   });
 }
