@@ -1,6 +1,21 @@
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, CircleOff, Cloud, CreditCard, Eye, EyeOff, Globe2, KeyRound, LockKeyhole, MessageSquareText, ShoppingBag } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleOff,
+  Cloud,
+  CreditCard,
+  Eye,
+  EyeOff,
+  Globe2,
+  ImageIcon,
+  KeyRound,
+  LockKeyhole,
+  MessageSquareText,
+  ShoppingBag,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyLoginIdButton } from "@/components/auth/copy-login-id-button";
 import { Badge } from "@/components/ui/badge";
@@ -18,9 +33,10 @@ export default async function SettingsPage({ searchParams }: Props) {
   const session = await requireRole(permissions.settings);
   const { shop } = await getTenantContext();
   if (!shop) return null;
-  const [paymentConfig, account] = await Promise.all([
+  const [paymentConfig, account, marketplaceProfile] = await Promise.all([
     prisma.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
     prisma.user.findUnique({ where: { id: session.id }, select: { adminLoginId: true } }),
+    prisma.shopMarketplaceProfile.findUnique({ where: { shopId: shop.id } }),
   ]);
   const loginId = account?.adminLoginId ?? session.email;
   const storefrontMode = !shop.storefrontEnabled ? "OFFLINE" : shop.publicOrderingEnabled ? "ONLINE" : "BROWSE";
@@ -59,6 +75,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     <div className="space-y-5">
       {params.error === "verification-required" ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Your shop is registered, but the platform administrator must verify it before you can place it on the public marketplace.</div> : null}
       {params.error === "storefront-mode" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Choose a valid online shop status.</div> : null}
+      {params.error === "invalid" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Check the shop and marketplace branding fields, then save again.</div> : null}
       {params.storefront ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Online shop status updated successfully.</div> : null}
 
       <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
@@ -93,22 +110,26 @@ export default async function SettingsPage({ searchParams }: Props) {
         <div className={`rounded-lg border p-4 ${mediaReady ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
           <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Cloud size={18} /><h2 className="font-semibold">Media storage</h2></div>{mediaReady ? <CheckCircle2 size={19} className="text-emerald-700" /> : <AlertTriangle size={19} className="text-amber-700" />}</div>
           <p className="mt-3 text-sm font-semibold">{mediaStatus}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-600">Logos, product photos and raster design artwork are resized and compressed automatically. The large original is discarded; only the small optimized image and thumbnail are stored.</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600">Logos, marketplace photos, product photos and raster design artwork are resized and compressed automatically. The large original is discarded; only the optimized image and thumbnail are stored.</p>
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="panel p-5">
-          <h1 className="text-2xl font-semibold">Shop settings</h1>
-          <p className="mt-2 text-sm text-slate-500">Branding values drive the dashboard CSS theme variables.</p>
+          <div className="flex items-center gap-2"><Sparkles size={21} className="text-cyan-700" /><h1 className="text-2xl font-semibold">Shop and marketplace branding</h1></div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Your logo identifies the shop everywhere. The optional marketplace photo creates the large visual on your marketplace card. Product brand names are taken automatically from each product&apos;s Brand field.</p>
           <div className="mt-4 rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm">
             <p className="text-slate-500">Shop network code</p>
             <p className="mt-1 text-xl font-semibold tracking-wide">{shop.networkCode ?? "Not assigned yet"}</p>
           </div>
           <form action={updateShopSettingsAction} encType="multipart/form-data" className="mt-5 space-y-4">
-            <label className="block"><span className="mb-1 block text-sm font-semibold">Shop name</span><input className="field" name="name" defaultValue={shop.name} required /></label>
+            <label className="block"><span className="mb-1 block text-sm font-semibold">Shop name / brand name</span><input className="field" name="name" defaultValue={shop.name} required /></label>
+            <label className="block"><span className="mb-1 block text-sm font-semibold">Marketplace tagline</span><input className="field" name="marketplaceTagline" maxLength={180} defaultValue={marketplaceProfile?.tagline ?? ""} placeholder="Authentic jerseys, trusted service and fast pickup" /><span className="mt-1 block text-xs text-slate-500">A short promise shown beneath your shop name.</span></label>
             <label className="block"><span className="mb-1 block text-sm font-semibold">Logo URL</span><input className="field" name="logoUrl" defaultValue={shop.logoUrl ?? ""} placeholder="/brand/accra-pro.svg" /></label>
-            <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm"><span className="mb-2 block font-semibold text-slate-700">Upload shop logo</span><input className="block w-full text-sm" name="logoFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs text-slate-500">JPG, PNG, WebP, AVIF, GIF, TIFF, HEIC/HEIF and SVG are converted to a small durable WebP automatically.</span></label>
+            <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm"><span className="mb-2 block font-semibold text-slate-700">Upload shop logo</span><input className="block w-full text-sm" name="logoFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs text-slate-500">Use a square logo where possible. It appears on the marketplace card, public shop, dashboard and receipts.</span></label>
+            <input type="hidden" name="marketplaceHeroUrl" value={marketplaceProfile?.heroImageUrl ?? ""} />
+            <label className="block rounded-[8px] border border-cyan-200 bg-cyan-50/60 p-3 text-sm"><span className="mb-2 flex items-center gap-2 font-semibold text-cyan-950"><ImageIcon size={17} /> Marketplace featured photo</span><input className="block w-full text-sm" name="marketplaceHeroFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs leading-5 text-cyan-900/70">Upload one specific jersey, shop-front or promotional image. The whole photo is fitted inside the card without cutting off the item.</span></label>
+            {marketplaceProfile?.heroImageUrl ? <label className="flex items-start gap-2 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm"><input className="mt-1" name="clearMarketplaceHero" type="checkbox" /><span><strong className="block text-amber-950">Remove the featured photo</strong><span className="text-xs leading-5 text-amber-900/70">The marketplace card will use your logo instead.</span></span></label> : null}
             <div className="grid grid-cols-2 gap-3">
               <label className="block"><span className="mb-1 block text-sm font-semibold">Primary color</span><input className="field h-12" name="primaryColor" type="color" defaultValue={shop.primaryColor} /></label>
               <label className="block"><span className="mb-1 block text-sm font-semibold">Secondary color</span><input className="field h-12" name="secondaryColor" type="color" defaultValue={shop.secondaryColor} /></label>
@@ -134,13 +155,30 @@ export default async function SettingsPage({ searchParams }: Props) {
                 <label className="flex items-center gap-2"><input name="allowMomo" type="checkbox" defaultChecked={paymentConfig?.allowMomo ?? true} />Mobile money</label>
               </div>
             </div>
-            <Button>Save settings</Button>
+            <Button>Save settings and marketplace branding</Button>
           </form>
         </section>
 
         <section className="panel overflow-hidden">
-          <div className="bg-[var(--shop-primary)] p-6 text-white"><Image src={shop.logoUrl || "/brand/accra-pro.svg"} alt={shop.name} width={56} height={56} className="rounded-[8px]" /><h2 className="mt-5 text-3xl font-semibold">{shop.name}</h2><p className="mt-2 text-white/75">Brand preview for dashboards, receipts, and tracking pages.</p>{shop.storefrontEnabled ? <Link className="mt-5 inline-flex rounded-[8px] bg-white px-4 py-2 text-sm font-semibold text-slate-900" href={`/shop/${shop.slug}`}>Open public shop</Link> : <p className="mt-5 rounded-lg bg-white/10 px-4 py-3 text-sm">The public shop is currently offline. Your private dashboard remains active.</p>}</div>
-          <div className="grid gap-3 p-5 md:grid-cols-3">{["Catalog", "POS", "Orders"].map((item) => <div key={item} className="rounded-[8px] border border-[#ded8cd] bg-white p-4"><p className="text-sm text-slate-500">{item}</p><div className="mt-4 h-2 rounded-full bg-[var(--shop-secondary)]" /></div>)}</div>
+          <div className="border-b border-slate-200 bg-slate-950 p-5 text-white">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Marketplace preview</p>
+            <h2 className="mt-2 text-2xl font-semibold">See how customers meet your brand</h2>
+          </div>
+          <div className="p-5">
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.14)]">
+              <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-white to-cyan-50 p-6">
+                {marketplaceProfile?.heroImageUrl ? <Image src={marketplaceProfile.heroImageUrl} alt={`${shop.name} marketplace featured`} width={960} height={540} className="h-full w-full object-contain" /> : <Image src={shop.logoUrl || "/brand/ejm-mark.svg"} alt={shop.name} width={170} height={170} className="max-h-40 w-auto rounded-3xl object-contain shadow-sm" />}
+                {marketplaceProfile?.heroImageUrl ? <div className="absolute bottom-4 left-4 rounded-2xl border border-white/70 bg-white/90 p-2 shadow-lg backdrop-blur"><Image src={shop.logoUrl || "/brand/ejm-mark.svg"} alt={`${shop.name} logo`} width={54} height={54} className="h-12 w-12 rounded-xl object-contain" /></div> : null}
+              </div>
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">{shop.name}</h3><p className="mt-1 text-sm text-slate-600">{marketplaceProfile?.tagline || "Your marketplace tagline will appear here."}</p></div><Badge tone="green">Verified</Badge></div>
+                <div className="mt-4 flex flex-wrap gap-2"><Badge tone={shop.publicOrderingEnabled ? "green" : "orange"}>{shop.publicOrderingEnabled ? "Ordering open" : "Browse only"}</Badge><Badge>Product brands appear automatically</Badge></div>
+                <div className="mt-5 h-2 rounded-full" style={{ background: `linear-gradient(90deg, ${shop.primaryColor}, ${shop.secondaryColor})` }} />
+              </div>
+            </div>
+            <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm leading-6 text-cyan-950"><strong>Photo priority:</strong> selected marketplace photo first, then your shop logo, then a product image only when no logo has been supplied.</div>
+            {shop.storefrontEnabled ? <Link className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white" href="/shops">Open live marketplace</Link> : <p className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">The public shop is currently offline. Your private dashboard remains active.</p>}
+          </div>
         </section>
       </div>
     </div>
