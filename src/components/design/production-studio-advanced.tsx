@@ -1169,7 +1169,7 @@ export function DesignStudioAdvanced({
       return;
     }
     const paths = await prepareCutPaths();
-  if (!paths) return;
+    if (!paths) return;
     const writer = port.writable.getWriter();
     try {
       const hpgl = buildCutHpgl({
