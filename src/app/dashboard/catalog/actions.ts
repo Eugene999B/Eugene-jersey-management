@@ -11,6 +11,7 @@ import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { imageListFromUrl } from "@/lib/product-images";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
+import { productVariantAttributes, productVariantSize } from "@/lib/product-variants";
 
 const categorySchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -22,8 +23,16 @@ async function tenantTemplate(shopId: string, templateId?: string) {
   return prisma.attributeTemplate.findFirst({ where: { id: templateId, shopId }, select: { id: true } });
 }
 
-async function tenantCategory(shopId: string, categoryId: string) {
-  return prisma.category.findFirst({ where: { id: categoryId, shopId }, select: { id: true } });
+async function resolveCategory(shopId: string, categoryId?: string) {
+  if (categoryId) {
+    return prisma.category.findFirst({ where: { id: categoryId, shopId }, select: { id: true } });
+  }
+  return prisma.category.upsert({
+    where: { shopId_name: { shopId, name: "Uncategorised" } },
+    update: {},
+    create: { shopId, name: "Uncategorised" },
+    select: { id: true },
+  });
 }
 
 export async function createCategoryAction(formData: FormData) {
@@ -66,118 +75,287 @@ export async function updateCategoryAction(formData: FormData) {
   revalidatePath("/dashboard/catalog");
 }
 
+const optionalPrice = z.preprocess(
+  (value) => value === "" || value === null || value === undefined ? undefined : Number(value),
+  z.number().positive().max(100_000_000).optional(),
+);
+
+const variantRowSchema = z.object({
+  id: z.string().trim().min(1).max(100).optional(),
+  size: z.string().trim().max(80).default(""),
+  stockQty: z.preprocess((value) => Number(value), z.number().int().min(0).max(10_000_000)),
+  sku: z.string().trim().max(100).default(""),
+  priceOverride: optionalPrice,
+});
+
+const variantRowsSchema = z.array(variantRowSchema).min(1).max(40).superRefine((rows, context) => {
+  const seen = new Set<string>();
+  rows.forEach((row, index) => {
+    const key = (row.size || "Standard").toLocaleLowerCase();
+    if (seen.has(key)) {
+      context.addIssue({ code: "custom", message: "Each size or option must be listed once.", path: [index, "size"] });
+    }
+    seen.add(key);
+  });
+});
+
+type VariantRow = z.infer<typeof variantRowSchema>;
+
 const productSchema = z.object({
   name: z.string().trim().min(2).max(140),
   description: z.string().trim().max(2000).optional(),
-  categoryId: z.string().min(1).max(100),
+  categoryId: z.string().trim().max(100).optional(),
   brand: z.string().trim().max(100).optional(),
   imageUrl: z.string().url().max(2000).optional(),
   productType: z.string().trim().max(100).optional(),
   sportType: z.string().trim().max(100).optional(),
   teamName: z.string().trim().max(120).optional(),
-  sizeGuide: z.string().max(1000).optional(),
-  size: z.string().trim().max(80).optional(),
   color: z.string().trim().max(80).optional(),
   equipmentGroup: z.string().trim().max(100).optional(),
-  condition: z.nativeEnum(ProductCondition),
+  condition: z.nativeEnum(ProductCondition).default(ProductCondition.NEW),
   basePrice: z.coerce.number().positive().max(100_000_000),
-  stockQty: z.coerce.number().int().min(0).max(10_000_000),
-  sku: z.string().trim().max(100).optional(),
   lowStockThreshold: z.coerce.number().int().min(0).max(1_000_000).default(5),
   isPersonalizable: z.boolean().default(false),
   isService: z.boolean().default(false),
   isRentable: z.boolean().default(false),
 });
 
-function compactAttributes(input: Record<string, string | undefined>) {
-  return Object.fromEntries(Object.entries(input).filter(([, value]) => value && value.trim().length > 0));
+function parseProduct(formData: FormData) {
+  return productSchema.safeParse({
+    name: formData.get("name"),
+    description: formData.get("description") || undefined,
+    categoryId: formData.get("categoryId") || undefined,
+    brand: formData.get("brand") || undefined,
+    imageUrl: formData.get("imageUrl") || undefined,
+    productType: formData.get("productType") || undefined,
+    sportType: formData.get("sportType") || undefined,
+    teamName: formData.get("teamName") || undefined,
+    color: formData.get("color") || undefined,
+    equipmentGroup: formData.get("equipmentGroup") || undefined,
+    condition: formData.get("condition") || ProductCondition.NEW,
+    basePrice: formData.get("basePrice"),
+    lowStockThreshold: formData.get("lowStockThreshold") || 5,
+    isPersonalizable: formData.get("isPersonalizable") === "on",
+    isService: formData.get("isService") === "on",
+    isRentable: formData.get("isRentable") === "on",
+  });
+}
+
+function parseVariantRows(formData: FormData): VariantRow[] | null {
+  const raw = formData.get("variantsJson");
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = variantRowsSchema.safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const legacy = variantRowsSchema.safeParse([{
+    id: formData.get("variantId") || undefined,
+    size: String(formData.get("size") || ""),
+    stockQty: Number(formData.get("stockQty") || 0),
+    sku: String(formData.get("sku") || ""),
+    priceOverride: undefined,
+  }]);
+  return legacy.success ? legacy.data : null;
+}
+
+function skuPart(value: string, fallback: string) {
+  const cleaned = value.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 18);
+  return cleaned || fallback;
+}
+
+function variantSku(productName: string, row: VariantRow) {
+  if (row.sku) return row.sku;
+  return `${skuPart(productName, "ITEM")}-${skuPart(row.size || "STD", "STD")}-${nanoid(5).toUpperCase()}`;
+}
+
+function mergeVariantAttributes(existing: unknown, input: { size: string; color?: string; equipmentGroup?: string; sportType?: string; teamName?: string }) {
+  const next: Record<string, string> = { ...productVariantAttributes(existing) };
+  delete next._archived;
+  for (const [key, value] of Object.entries(input)) {
+    if (value?.trim()) next[key] = value.trim();
+    else delete next[key];
+  }
+  return next;
+}
+
+function sizeGuide(rows: VariantRow[]) {
+  return [...new Set(rows.map((row) => row.size.trim()).filter((size) => size && size !== "Service"))].slice(0, 100);
+}
+
+function serviceRows(rows: VariantRow[], firstExistingId?: string): VariantRow[] {
+  const first = rows[0] ?? { size: "Service", stockQty: 9999, sku: "", priceOverride: undefined };
+  return [{ ...first, id: first.id ?? firstExistingId, size: "Service", stockQty: 9999 }];
 }
 
 export async function createProductAction(formData: FormData) {
   const session = await requireRole(permissions.catalogWrite);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
-  const parsed = productSchema.safeParse({
-    name: formData.get("name"), description: formData.get("description") || undefined,
-    categoryId: formData.get("categoryId"), brand: formData.get("brand") || undefined,
-    imageUrl: formData.get("imageUrl") || undefined, productType: formData.get("productType") || undefined,
-    sportType: formData.get("sportType") || undefined, teamName: formData.get("teamName") || undefined,
-    sizeGuide: formData.get("sizeGuide") || undefined, size: formData.get("size") || undefined,
-    color: formData.get("color") || undefined, equipmentGroup: formData.get("equipmentGroup") || undefined,
-    condition: formData.get("condition"), basePrice: formData.get("basePrice"), stockQty: formData.get("stockQty"),
-    sku: formData.get("sku") || undefined, lowStockThreshold: formData.get("lowStockThreshold"),
-    isPersonalizable: formData.get("isPersonalizable") === "on", isService: formData.get("isService") === "on",
-    isRentable: formData.get("isRentable") === "on",
-  });
-  if (!parsed.success) redirect("/dashboard/catalog?error=product");
-  const category = await tenantCategory(session.shopId, parsed.data.categoryId);
+  const parsed = parseProduct(formData);
+  let variants = parseVariantRows(formData);
+  if (!parsed.success || !variants) redirect("/dashboard/catalog?error=product");
+
+  const category = await resolveCategory(session.shopId, parsed.data.categoryId);
   if (!category) redirect("/dashboard/catalog?error=category-not-found");
+  if (parsed.data.isService) variants = serviceRows(variants);
 
   const uploadedPhoto = formData.get("photo");
   const mediaAsset = uploadedPhoto instanceof File && uploadedPhoto.size > 0
     ? await createOptimizedMediaAsset({ file: uploadedPhoto, shopId: session.shopId, uploadedById: session.id, kind: MediaKind.PRODUCT })
     : null;
-  const sku = parsed.data.sku || `${parsed.data.name.slice(0, 3).toUpperCase()}-${nanoid(6).toUpperCase()}`;
-  const sizeGuide = parsed.data.sizeGuide ? parsed.data.sizeGuide.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100) : [];
 
   let product;
   try {
     product = await prisma.product.create({
       data: {
-        shopId: session.shopId, categoryId: category.id, name: parsed.data.name, description: parsed.data.description,
-        brand: parsed.data.brand, productType: parsed.data.productType, sportType: parsed.data.sportType,
-        teamName: parsed.data.teamName, sizeGuide, images: mediaAsset ? [mediaAsset.url] : imageListFromUrl(parsed.data.imageUrl),
-        condition: parsed.data.condition, basePrice: parsed.data.basePrice, lowStockThreshold: parsed.data.lowStockThreshold,
-        isPersonalizable: parsed.data.isPersonalizable, isService: parsed.data.isService, isRentable: parsed.data.isRentable,
-        variants: { create: { sku, stockQty: parsed.data.isService ? 9999 : parsed.data.stockQty, attributes: compactAttributes({ size: parsed.data.size, color: parsed.data.color, equipmentGroup: parsed.data.equipmentGroup, sportType: parsed.data.sportType, teamName: parsed.data.teamName }) } },
+        shopId: session.shopId,
+        categoryId: category.id,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        brand: parsed.data.brand,
+        productType: parsed.data.productType,
+        sportType: parsed.data.sportType,
+        teamName: parsed.data.teamName,
+        sizeGuide: sizeGuide(variants),
+        images: mediaAsset ? [mediaAsset.url] : imageListFromUrl(parsed.data.imageUrl),
+        condition: parsed.data.condition,
+        basePrice: parsed.data.basePrice,
+        lowStockThreshold: parsed.data.lowStockThreshold,
+        isPersonalizable: parsed.data.isPersonalizable,
+        isService: parsed.data.isService,
+        isRentable: parsed.data.isRentable,
+        variants: {
+          create: variants.map((row) => ({
+            sku: variantSku(parsed.data.name, row),
+            stockQty: parsed.data.isService ? 9999 : row.stockQty,
+            priceOverride: row.priceOverride ?? null,
+            attributes: mergeVariantAttributes(null, {
+              size: row.size,
+              color: parsed.data.color,
+              equipmentGroup: parsed.data.equipmentGroup,
+              sportType: parsed.data.sportType,
+              teamName: parsed.data.teamName,
+            }),
+          })),
+        },
       },
     });
   } catch {
     redirect("/dashboard/catalog?error=sku-exists");
   }
-  await audit({ shopId: session.shopId, userId: session.id, action: "catalog.product_created", entityType: "Product", entityId: product.id });
+  await audit({
+    shopId: session.shopId,
+    userId: session.id,
+    action: "catalog.product_created",
+    entityType: "Product",
+    entityId: product.id,
+    metadata: { variantCount: variants.length, categorySelected: Boolean(parsed.data.categoryId) },
+  });
   revalidatePath("/dashboard/catalog");
+  revalidatePath("/dashboard/pos");
 }
 
-const updateProductSchema = productSchema.extend({ productId: z.string().min(1).max(100), variantId: z.string().min(1).max(100) });
+const productIdentitySchema = z.object({ productId: z.string().min(1).max(100) });
 
 export async function updateProductAction(formData: FormData) {
   const session = await requireRole(permissions.catalogWrite);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
-  const parsed = updateProductSchema.safeParse({
-    productId: formData.get("productId"), variantId: formData.get("variantId"), name: formData.get("name"),
-    description: formData.get("description") || undefined, categoryId: formData.get("categoryId"), brand: formData.get("brand") || undefined,
-    imageUrl: formData.get("imageUrl") || undefined, productType: formData.get("productType") || undefined,
-    sportType: formData.get("sportType") || undefined, teamName: formData.get("teamName") || undefined,
-    sizeGuide: formData.get("sizeGuide") || undefined, size: formData.get("size") || undefined,
-    color: formData.get("color") || undefined, equipmentGroup: formData.get("equipmentGroup") || undefined,
-    condition: formData.get("condition"), basePrice: formData.get("basePrice"), stockQty: formData.get("stockQty"),
-    sku: formData.get("sku") || undefined, lowStockThreshold: formData.get("lowStockThreshold"),
-    isPersonalizable: formData.get("isPersonalizable") === "on", isService: formData.get("isService") === "on",
-    isRentable: formData.get("isRentable") === "on",
-  });
-  if (!parsed.success) redirect("/dashboard/catalog?error=product-update");
+  const identity = productIdentitySchema.safeParse({ productId: formData.get("productId") });
+  const parsed = parseProduct(formData);
+  let submittedRows = parseVariantRows(formData);
+  if (!identity.success || !parsed.success || !submittedRows) redirect("/dashboard/catalog?error=product-update");
 
   const [product, category] = await Promise.all([
-    prisma.product.findFirst({ where: { id: parsed.data.productId, shopId: session.shopId }, include: { variants: { where: { id: parsed.data.variantId } } } }),
-    tenantCategory(session.shopId, parsed.data.categoryId),
+    prisma.product.findFirst({ where: { id: identity.data.productId, shopId: session.shopId }, include: { variants: { orderBy: { createdAt: "asc" } } } }),
+    resolveCategory(session.shopId, parsed.data.categoryId),
   ]);
-  if (!product || !category || !product.variants[0]) redirect("/dashboard/catalog?error=product-not-found");
+  if (!product || !category) redirect("/dashboard/catalog?error=product-not-found");
+
+  const existingById = new Map(product.variants.map((variant) => [variant.id, variant]));
+  if (submittedRows.some((row) => row.id && !existingById.has(row.id))) redirect("/dashboard/catalog?error=product-not-found");
+  if (parsed.data.isService) submittedRows = serviceRows(submittedRows, product.variants[0]?.id);
 
   const uploadedPhoto = formData.get("photo");
   const mediaAsset = uploadedPhoto instanceof File && uploadedPhoto.size > 0
     ? await createOptimizedMediaAsset({ file: uploadedPhoto, shopId: session.shopId, uploadedById: session.id, kind: MediaKind.PRODUCT })
     : null;
   const nextImages = mediaAsset ? [mediaAsset.url] : parsed.data.imageUrl ? imageListFromUrl(parsed.data.imageUrl) : undefined;
-  const sizeGuide = parsed.data.sizeGuide ? parsed.data.sizeGuide.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 100) : [];
+
+  const submittedById = new Map(submittedRows.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const mergedRows: VariantRow[] = [
+    ...product.variants.map((variant) => submittedById.get(variant.id) ?? {
+      id: variant.id,
+      size: productVariantSize(variant.attributes),
+      stockQty: variant.stockQty,
+      sku: variant.sku,
+      priceOverride: variant.priceOverride ? Number(variant.priceOverride) : undefined,
+    }),
+    ...submittedRows.filter((row) => !row.id),
+  ];
 
   try {
-    await prisma.$transaction([
-      prisma.product.update({ where: { id: product.id }, data: { categoryId: category.id, name: parsed.data.name, description: parsed.data.description ?? null, brand: parsed.data.brand ?? null, productType: parsed.data.productType ?? null, sportType: parsed.data.sportType ?? null, teamName: parsed.data.teamName ?? null, sizeGuide, images: nextImages, condition: parsed.data.condition, basePrice: parsed.data.basePrice, lowStockThreshold: parsed.data.lowStockThreshold, isPersonalizable: parsed.data.isPersonalizable, isService: parsed.data.isService, isRentable: parsed.data.isRentable } }),
-      prisma.productVariant.update({ where: { id: product.variants[0].id }, data: { sku: parsed.data.sku || product.variants[0].sku, stockQty: parsed.data.isService ? 9999 : parsed.data.stockQty, attributes: compactAttributes({ size: parsed.data.size, color: parsed.data.color, equipmentGroup: parsed.data.equipmentGroup, sportType: parsed.data.sportType, teamName: parsed.data.teamName }) } }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          categoryId: category.id,
+          name: parsed.data.name,
+          description: parsed.data.description ?? null,
+          brand: parsed.data.brand ?? null,
+          productType: parsed.data.productType ?? null,
+          sportType: parsed.data.sportType ?? null,
+          teamName: parsed.data.teamName ?? null,
+          sizeGuide: sizeGuide(parsed.data.isService ? submittedRows : mergedRows),
+          images: nextImages,
+          condition: parsed.data.condition,
+          basePrice: parsed.data.basePrice,
+          lowStockThreshold: parsed.data.lowStockThreshold,
+          isPersonalizable: parsed.data.isPersonalizable,
+          isService: parsed.data.isService,
+          isRentable: parsed.data.isRentable,
+        },
+      });
+
+      for (const row of submittedRows) {
+        const existing = row.id ? existingById.get(row.id) : null;
+        const data = {
+          sku: variantSku(parsed.data.name, row),
+          stockQty: parsed.data.isService ? 9999 : row.stockQty,
+          priceOverride: row.priceOverride ?? null,
+          attributes: mergeVariantAttributes(existing?.attributes, {
+            size: row.size,
+            color: parsed.data.color,
+            equipmentGroup: parsed.data.equipmentGroup,
+            sportType: parsed.data.sportType,
+            teamName: parsed.data.teamName,
+          }),
+        };
+        if (existing) await tx.productVariant.update({ where: { id: existing.id }, data });
+        else await tx.productVariant.create({ data: { productId: product.id, ...data } });
+      }
+
+      if (parsed.data.isService && submittedRows[0]?.id) {
+        await tx.productVariant.updateMany({
+          where: { productId: product.id, id: { not: submittedRows[0].id } },
+          data: { stockQty: 0 },
+        });
+      }
+    });
   } catch {
     redirect("/dashboard/catalog?error=sku-exists");
   }
-  await audit({ shopId: session.shopId, userId: session.id, action: "catalog.product_updated", entityType: "Product", entityId: product.id });
+
+  await audit({
+    shopId: session.shopId,
+    userId: session.id,
+    action: "catalog.product_updated",
+    entityType: "Product",
+    entityId: product.id,
+    metadata: { submittedVariantCount: submittedRows.length, categorySelected: Boolean(parsed.data.categoryId) },
+  });
   revalidatePath("/dashboard/catalog");
+  revalidatePath("/dashboard/pos");
 }
