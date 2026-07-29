@@ -39,9 +39,13 @@ async function submitShopApplication(page: Page, retry: number) {
   await page.getByLabel("Contact name").fill("Release Twenty Six Owner");
   await page.getByLabel("Phone").fill(`+2332000260${String(retry + 1).padStart(2, "0")}`);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Business address").fill("Application Test Street");
-  await page.getByLabel("City or town").fill("Accra");
-  await page.getByLabel("Region").fill("Greater Accra");
+  await page.getByLabel("Region *").selectOption("Greater Accra");
+  await page.getByLabel("District / Municipal / Metropolitan *").fill("Accra Metropolitan");
+  await page.getByLabel("Town, city or community *").fill("Accra");
+  await page.getByLabel("Suburb, area or sub-town").fill("Osu");
+  await page.getByLabel("GhanaPost GPS digital address").fill("GA-123-4567");
+  await page.getByLabel("Street, building or shop number").fill("Application Test Street");
+  await page.getByLabel("Nearby landmark and directions").fill("Opposite the release test landmark");
   await page.getByLabel("Categories").fill("Jerseys, printing and sports equipment");
   await page.getByLabel("Requested services").fill("POS, inventory, Design Studio and marketplace");
   await page.getByRole("checkbox").check();
@@ -124,7 +128,6 @@ test("supplier application remains tied to one shop and exposes only an applican
   await page.getByLabel("Contact name").fill("Release Twenty Six Supplier");
   await page.getByLabel("Phone").fill(`+2332000261${String(testInfo.retry + 1).padStart(2, "0")}`);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("City or town").fill("Kumasi");
   await page.getByLabel("Categories").fill("Jerseys, vinyl and sports equipment");
   await page.getByLabel("Requested services").fill("Supply the selected verified shop only");
   await page.getByRole("checkbox").check();
@@ -161,6 +164,7 @@ test("public application pages remain usable on a 390 pixel viewport", async ({ 
 
   await page.goto("/apply/shop");
   await expect(page.getByRole("heading", { name: "Apply for a shop workspace" })).toBeVisible();
+  await expect(page.getByLabel("Region *")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.goto("/apply/status");
