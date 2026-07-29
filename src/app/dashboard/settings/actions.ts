@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { MediaKind, ShopVerificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { platformDb } from "@/lib/platform-db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
@@ -105,9 +106,9 @@ export async function updateShopSettingsAction(formData: FormData) {
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
   const [shop, currentMarketplaceProfile, currentLocation] = await Promise.all([
-    prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true, slug: true } }),
-    prisma.shopMarketplaceProfile.findUnique({ where: { shopId } }),
-    prisma.shopLocation.findUnique({ where: { shopId } }),
+    platformDb.shop.findUnique({ where: { id: shopId }, select: { isActive: true, slug: true } }),
+    platformDb.shopMarketplaceProfile.findUnique({ where: { shopId } }),
+    platformDb.shopLocation.findUnique({ where: { shopId } }),
   ]);
   if (!shop?.isActive) redirect("/login?error=shop-suspended");
 
@@ -145,8 +146,8 @@ export async function updateShopSettingsAction(formData: FormData) {
   };
   const locationData = { ...location, searchText: buildLocationSearchText(location) };
 
-  await prisma.$transaction([
-    prisma.shop.update({
+  await platformDb.$transaction([
+    platformDb.shop.update({
       where: { id: shopId },
       data: {
         name: parsed.data.name,
@@ -185,12 +186,12 @@ export async function updateShopSettingsAction(formData: FormData) {
         },
       },
     }),
-    prisma.shopMarketplaceProfile.upsert({
+    platformDb.shopMarketplaceProfile.upsert({
       where: { shopId },
       create: { shopId, tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
       update: { tagline: marketplaceTagline, heroImageUrl: marketplaceHeroUrl },
     }),
-    prisma.shopLocation.upsert({
+    platformDb.shopLocation.upsert({
       where: { shopId },
       create: { shopId, ...locationData },
       update: locationData,
