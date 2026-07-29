@@ -28,12 +28,15 @@ function isManagedImageUrl(value: string) {
 
 const safeImageUrl = z.string().trim().max(2000).refine(
   isManagedImageUrl,
-  "Upload the logo or use a URL from the configured durable media host.",
+  "Upload the image or use a URL from the configured durable media host.",
 );
 
 const schema = z.object({
   name: z.string().trim().min(2).max(140),
   logoUrl: safeImageUrl.optional(),
+  marketplaceTagline: z.string().trim().max(180).optional(),
+  marketplaceHeroUrl: safeImageUrl.optional(),
+  clearMarketplaceHero: z.boolean().default(false),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   cashOrderHoldMinutes: z.coerce.number().int().min(15).max(10080),
@@ -53,8 +56,13 @@ export async function updateShopSettingsAction(formData: FormData) {
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
   const parsed = schema.safeParse({
-    name: formData.get("name"), logoUrl: formData.get("logoUrl") || undefined,
-    primaryColor: formData.get("primaryColor"), secondaryColor: formData.get("secondaryColor"),
+    name: formData.get("name"),
+    logoUrl: formData.get("logoUrl") || undefined,
+    marketplaceTagline: formData.get("marketplaceTagline") || undefined,
+    marketplaceHeroUrl: formData.get("marketplaceHeroUrl") || undefined,
+    clearMarketplaceHero: formData.get("clearMarketplaceHero") === "on",
+    primaryColor: formData.get("primaryColor"),
+    secondaryColor: formData.get("secondaryColor"),
     cashOrderHoldMinutes: formData.get("cashOrderHoldMinutes") || 120,
     settlementBank: formData.get("settlementBank") || undefined,
     settlementAccount: formData.get("settlementAccount") || undefined,
@@ -62,54 +70,87 @@ export async function updateShopSettingsAction(formData: FormData) {
     shopMomoNumber: formData.get("shopMomoNumber") || undefined,
     shopMomoNetwork: formData.get("shopMomoNetwork") || undefined,
     momoProvider: formData.get("momoProvider") || undefined,
-    allowCash: formData.get("allowCash") === "on", allowCard: formData.get("allowCard") === "on", allowMomo: formData.get("allowMomo") === "on",
+    allowCash: formData.get("allowCash") === "on",
+    allowCard: formData.get("allowCard") === "on",
+    allowMomo: formData.get("allowMomo") === "on",
   });
   if (!parsed.success) redirect("/dashboard/settings?error=invalid");
 
-  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true } });
+  const [shop, currentMarketplaceProfile] = await Promise.all([
+    prisma.shop.findUnique({ where: { id: shopId }, select: { isActive: true, slug: true } }),
+    prisma.shopMarketplaceProfile.findUnique({ where: { shopId } }),
+  ]);
   if (!shop?.isActive) redirect("/login?error=shop-suspended");
 
   const uploadedLogo = formData.get("logoFile");
-  const logoAsset = uploadedLogo instanceof File && uploadedLogo.size > 0
-    ? await createOptimizedMediaAsset({ file: uploadedLogo, shopId, uploadedById: session.id, kind: MediaKind.SHOP_LOGO })
-    : null;
+  const uploadedMarketplaceHero = formData.get("marketplaceHeroFile");
+  const [logoAsset, marketplaceHeroAsset] = await Promise.all([
+    uploadedLogo instanceof File && uploadedLogo.size > 0
+      ? createOptimizedMediaAsset({ file: uploadedLogo, shopId, uploadedById: session.id, kind: MediaKind.SHOP_LOGO })
+      : null,
+    uploadedMarketplaceHero instanceof File && uploadedMarketplaceHero.size > 0
+      ? createOptimizedMediaAsset({ file: uploadedMarketplaceHero, shopId, uploadedById: session.id, kind: MediaKind.PRODUCT })
+      : null,
+  ]);
 
-  await prisma.shop.update({
-    where: { id: shopId },
-    data: {
-      name: parsed.data.name,
-      logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
-      primaryColor: parsed.data.primaryColor,
-      secondaryColor: parsed.data.secondaryColor,
-      cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
-      paymentConfig: {
-        upsert: {
-          create: {
-            settlementBank: parsed.data.settlementBank,
-            settlementAccount: parsed.data.settlementAccount,
-            settlementAccountName: parsed.data.settlementAccountName,
-            shopMomoNumber: parsed.data.shopMomoNumber,
-            shopMomoNetwork: parsed.data.shopMomoNetwork,
-            momoProvider: parsed.data.momoProvider,
-            allowCash: parsed.data.allowCash,
-            allowCard: parsed.data.allowCard,
-            allowMomo: parsed.data.allowMomo,
-          },
-          update: {
-            settlementBank: parsed.data.settlementBank,
-            settlementAccount: parsed.data.settlementAccount,
-            settlementAccountName: parsed.data.settlementAccountName,
-            shopMomoNumber: parsed.data.shopMomoNumber,
-            shopMomoNetwork: parsed.data.shopMomoNetwork,
-            momoProvider: parsed.data.momoProvider,
-            allowCash: parsed.data.allowCash,
-            allowCard: parsed.data.allowCard,
-            allowMomo: parsed.data.allowMomo,
+  const marketplaceHeroUrl = parsed.data.clearMarketplaceHero
+    ? null
+    : marketplaceHeroAsset?.url
+      ?? parsed.data.marketplaceHeroUrl
+      ?? currentMarketplaceProfile?.heroImageUrl
+      ?? null;
+
+  await prisma.$transaction([
+    prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        name: parsed.data.name,
+        logoUrl: logoAsset?.url ?? parsed.data.logoUrl,
+        primaryColor: parsed.data.primaryColor,
+        secondaryColor: parsed.data.secondaryColor,
+        cashOrderHoldMinutes: parsed.data.cashOrderHoldMinutes,
+        paymentConfig: {
+          upsert: {
+            create: {
+              settlementBank: parsed.data.settlementBank,
+              settlementAccount: parsed.data.settlementAccount,
+              settlementAccountName: parsed.data.settlementAccountName,
+              shopMomoNumber: parsed.data.shopMomoNumber,
+              shopMomoNetwork: parsed.data.shopMomoNetwork,
+              momoProvider: parsed.data.momoProvider,
+              allowCash: parsed.data.allowCash,
+              allowCard: parsed.data.allowCard,
+              allowMomo: parsed.data.allowMomo,
+            },
+            update: {
+              settlementBank: parsed.data.settlementBank,
+              settlementAccount: parsed.data.settlementAccount,
+              settlementAccountName: parsed.data.settlementAccountName,
+              shopMomoNumber: parsed.data.shopMomoNumber,
+              shopMomoNetwork: parsed.data.shopMomoNetwork,
+              momoProvider: parsed.data.momoProvider,
+              allowCash: parsed.data.allowCash,
+              allowCard: parsed.data.allowCard,
+              allowMomo: parsed.data.allowMomo,
+            },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.shopMarketplaceProfile.upsert({
+      where: { shopId },
+      create: {
+        shopId,
+        tagline: parsed.data.marketplaceTagline,
+        heroImageUrl: marketplaceHeroUrl,
+      },
+      update: {
+        tagline: parsed.data.marketplaceTagline,
+        heroImageUrl: marketplaceHeroUrl,
+      },
+    }),
+  ]);
+
   await audit({
     shopId,
     userId: session.id,
@@ -118,14 +159,16 @@ export async function updateShopSettingsAction(formData: FormData) {
     entityId: shopId,
     metadata: {
       logoChanged: Boolean(logoAsset || parsed.data.logoUrl),
+      marketplaceHeroChanged: Boolean(marketplaceHeroAsset || parsed.data.clearMarketplaceHero || parsed.data.marketplaceHeroUrl),
+      marketplaceTaglineUpdated: Boolean(parsed.data.marketplaceTagline),
       settlementDetailsUpdated: Boolean(parsed.data.settlementBank || parsed.data.settlementAccount || parsed.data.settlementAccountName),
     },
   });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/shops");
+  revalidatePath(`/shop/${shop.slug}`);
 }
-
 
 const storefrontModeSchema = z.enum(["ONLINE", "BROWSE", "OFFLINE"]);
 
