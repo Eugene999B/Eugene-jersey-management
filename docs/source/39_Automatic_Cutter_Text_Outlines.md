@@ -5,3 +5,5 @@ Editable Design Studio text remains editable in saved projects and version histo
 The downloaded cutter file contains paths only and does not depend on the cutter computer having the same font installed. The generated text paths are checked against the production sheet before download or direct serial sending.
 
 If the selected font is unavailable in the current browser, the browser fallback is outlined and the operator receives a warning. Raster pictures, externally linked artwork and unsupported embedded SVG elements continue to fail closed because they cannot be converted safely without a deliberate tracing workflow.
+
+Permanent validation covers binary contour tracing, inside-letter holes, editable-project preservation, production-only outline generation, cutter-sheet boundary checks and the complete desktop/mobile acceptance suite.
