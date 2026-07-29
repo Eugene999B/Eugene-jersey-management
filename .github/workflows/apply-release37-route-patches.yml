@@ -1,0 +1,39 @@
+name: Apply Release 37 route patches
+
+on:
+  push:
+    branches:
+      - agent/release-37-commercial-launch-hardening
+    paths:
+      - scripts/apply-release37-route-patches.mjs
+      - .github/workflows/apply-release37-route-patches.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out Release 37 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/release-37-commercial-launch-hardening
+          fetch-depth: 0
+
+      - name: Apply route patches
+        run: node scripts/apply-release37-route-patches.mjs
+
+      - name: Commit patched routes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/dashboard/catalog/actions.ts src/app/dashboard/catalog/page.tsx src/app/api/pos/checkout/route.ts src/app/api/public-order/route.ts src/app/cart/actions.ts src/app/cart/page.tsx 'src/app/shop/[slug]/page.tsx'
+          if git diff --cached --quiet; then
+            echo "Route patches are already applied."
+            exit 0
+          fi
+          git commit -m "feat: enforce subscription limits across products and orders"
+          git push origin HEAD:agent/release-37-commercial-launch-hardening
