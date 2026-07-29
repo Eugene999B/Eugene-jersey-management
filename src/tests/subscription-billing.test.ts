@@ -32,8 +32,10 @@ describe("subscription billing operations", () => {
     expect(billing).toContain("shopId_periodStart_periodEnd");
     expect(billing).toContain("isolationLevel: Prisma.TransactionIsolationLevel.Serializable");
     expect(billing).toContain("subscription.payment_verified");
-    expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_TERMINAL_STATE");
     expect(terminalGuard).toContain("OLD.\"status\" IN ('PAID'");
+    expect(terminalGuard).toContain("RETURN OLD");
+    expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_PAID_AT_IMMUTABLE");
+    expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_VOID_AUDIT_REQUIRED");
     expect(dashboardActions).not.toContain("@/lib/platform-db");
     expect(webhook).toContain("settleSubscriptionInvoicePayment");
     expect(webhook.indexOf("settleCommunicationCreditPurchase")).toBeLessThan(webhook.indexOf("settleSubscriptionInvoicePayment"));
