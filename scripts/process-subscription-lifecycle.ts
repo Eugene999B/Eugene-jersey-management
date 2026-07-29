@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { platformDb } from "../src/lib/platform-db";
+import { processSubscriptionInvoices } from "../src/lib/subscription-billing";
 import { deriveCommercialSubscriptionState } from "../src/lib/subscription-hardening";
 import { parseSubscriptionPlanSnapshot } from "../src/lib/subscription-plans";
 
@@ -76,7 +77,14 @@ async function run() {
     changed += 1;
   }
 
-  console.log(JSON.stringify({ processed: contracts.length, changed, invalidSnapshots, processedAt: now.toISOString() }));
+  const billing = await processSubscriptionInvoices(now);
+  console.log(JSON.stringify({
+    processed: contracts.length,
+    changed,
+    invalidSnapshots,
+    billing,
+    processedAt: now.toISOString(),
+  }));
 }
 
 run()
