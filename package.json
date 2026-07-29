@@ -25,6 +25,7 @@
     "docs:generate": "tsx scripts/generate-docs.ts",
     "docs:handoff": "tsx scripts/generate-handoff-doc.ts",
     "jobs:release-reservations": "tsx scripts/release-expired-reservations.ts",
+    "jobs:subscriptions": "tsx scripts/process-subscription-lifecycle.ts",
     "setup:demo": "prisma generate && prisma db push && tsx prisma/seed.ts --demo"
   },
   "dependencies": {
