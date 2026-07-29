@@ -27,7 +27,7 @@ describe("automatic cutter text outlines", () => {
     const studio = source("components/design/production-studio-advanced.tsx");
     const outline = source("lib/design-text-outline.ts");
     expect(studio).toContain("outlineDesignTextLayers(layers)");
-    expect(studio).toContain("editable text stays editable");
+    expect(studio).toContain("Editable text stays editable");
     expect(studio).toContain("Preparing cutter paths");
     expect(outline).toContain("document.createElement(\"canvas\")");
     expect(outline).toContain("traceBinaryMask");
