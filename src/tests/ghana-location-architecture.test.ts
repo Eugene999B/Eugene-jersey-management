@@ -29,6 +29,7 @@ describe("structured Ghana business locations", () => {
     const migration = source("../../prisma/migrations/20260729033000_release36_ghana_business_locations/migration.sql");
     const application = source("../app/apply/actions.ts");
     const settings = source("../app/dashboard/settings/actions.ts");
+    const profileStore = source("../lib/shop-profile-store.ts");
 
     expect(model).toContain("model ShopLocation");
     expect(model).toContain("model BusinessApplicationLocation");
@@ -36,7 +37,9 @@ describe("structured Ghana business locations", () => {
     expect(model).toContain("@@index([region, district, town])");
     expect(migration).toContain("BusinessApplication_sync_shop_location");
     expect(application).toContain("businessApplicationLocation.create");
-    expect(settings).toContain("shopLocation.upsert");
+    expect(settings).toContain("saveShopProfileBundle");
+    expect(profileStore).toContain("tx.shopLocation.upsert");
+    expect(profileStore).toContain("where: { shopId: input.shopId }");
   });
 
   it("makes marketplace search aware of administrative and product details", () => {
