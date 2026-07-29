@@ -22,9 +22,9 @@ import { CopyLoginIdButton } from "@/components/auth/copy-login-id-button";
 import { Badge } from "@/components/ui/badge";
 import { GhanaLocationFields } from "@/components/locations/ghana-location-fields";
 import { updateShopSettingsAction, updateStorefrontVisibilityAction } from "@/app/dashboard/settings/actions";
-import { platformDb } from "@/lib/platform-db";
 import { currency } from "@/lib/format";
 import { formatGhanaLocation } from "@/lib/ghana-locations";
+import { readShopSettingsProfile } from "@/lib/shop-profile-store";
 import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
@@ -36,12 +36,7 @@ export default async function SettingsPage({ searchParams }: Props) {
   const session = await requireRole(permissions.settings);
   const { shop } = await getTenantContext();
   if (!shop) return null;
-  const [paymentConfig, account, marketplaceProfile, shopLocation] = await Promise.all([
-    platformDb.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
-    platformDb.user.findUnique({ where: { id: session.id, shopId: shop.id }, select: { adminLoginId: true } }),
-    platformDb.shopMarketplaceProfile.findUnique({ where: { shopId: shop.id } }),
-    platformDb.shopLocation.findUnique({ where: { shopId: shop.id } }),
-  ]);
+  const [paymentConfig, account, marketplaceProfile, shopLocation] = await readShopSettingsProfile(shop.id, session.id);
   const loginId = account?.adminLoginId ?? session.email;
   const storefrontMode = !shop.storefrontEnabled ? "OFFLINE" : shop.publicOrderingEnabled ? "ONLINE" : "BROWSE";
   const paystackServerReady = Boolean(process.env.PAYSTACK_SECRET_KEY);
