@@ -72,7 +72,7 @@ export function GhanaLocationFields({ required = false, compact = false, default
     const controller = new AbortController();
     setDistrictLoading(true);
     setDistrictError("");
-    loadSuggestions(`/api/ghana-locations?level=districts&region=${encodeURIComponent(region)}`, controller.signal)
+    loadSuggestions(`/api/ghana-locations?level=districts&region=${encodeURIComponent(region)}&retry=${districtReload}`, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
         setDistricts(result.items);
@@ -100,7 +100,7 @@ export function GhanaLocationFields({ required = false, compact = false, default
     const controller = new AbortController();
     setCommunityLoading(true);
     setCommunityError("");
-    loadSuggestions(`/api/ghana-locations?level=communities&region=${encodeURIComponent(region)}&district=${encodeURIComponent(district)}`, controller.signal)
+    loadSuggestions(`/api/ghana-locations?level=communities&region=${encodeURIComponent(region)}&district=${encodeURIComponent(district)}&retry=${communityReload}`, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
         setCommunities(result.items);
