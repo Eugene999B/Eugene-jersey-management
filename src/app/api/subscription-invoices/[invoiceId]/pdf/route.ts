@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ in
       currency(attempt.amount.toString(), attempt.currency),
     ])],
   });
-  return new NextResponse(Buffer.from(pdf), {
+  return new NextResponse(pdf, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${invoice.invoiceNumber}.pdf"`,
