@@ -2,6 +2,7 @@ import { PosTerminal } from "@/components/pos/pos-terminal";
 import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
 import { firstProductImage } from "@/lib/product-images";
+import { activeProductVariants, productVariantLabel } from "@/lib/product-variants";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
@@ -35,27 +36,32 @@ export default async function PosPage() {
     );
   }
 
+  const posProducts = products.flatMap((product) => {
+    const variants = activeProductVariants(product.variants).filter((variant) => product.isService || variant.stockQty > 0);
+    return variants.map((variant) => ({
+      id: `${product.id}:${variant.id}`,
+      name: variants.length > 1 ? `${product.name} — ${productVariantLabel(variant, { includeStock: false })}` : product.name,
+      category: product.category.name,
+      brand: product.brand,
+      imageUrl: firstProductImage(product.images),
+      isPersonalizable: product.isPersonalizable,
+      isService: product.isService,
+      basePrice: Number(product.basePrice),
+      variants: [{
+        id: variant.id,
+        sku: variant.sku,
+        stockQty: variant.stockQty,
+        attributes: variant.attributes as Record<string, unknown>,
+        price: Number(variant.priceOverride ?? product.basePrice),
+      }],
+    }));
+  });
+
   return (
     <PosTerminal
       currencyCode={shop.currency}
       customers={customers.map((customer) => ({ ...customer, outstandingBalance: outstandingByCustomer.get(customer.id) ?? 0 }))}
-      products={products.map((product) => ({
-        id: product.id,
-        name: product.name,
-        category: product.category.name,
-        brand: product.brand,
-        imageUrl: firstProductImage(product.images),
-        isPersonalizable: product.isPersonalizable,
-        isService: product.isService,
-        basePrice: Number(product.basePrice),
-        variants: product.variants.map((variant) => ({
-          id: variant.id,
-          sku: variant.sku,
-          stockQty: variant.stockQty,
-          attributes: variant.attributes as Record<string, unknown>,
-          price: Number(variant.priceOverride ?? product.basePrice),
-        })),
-      }))}
+      products={posProducts}
     />
   );
 }
