@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { GHANA_REGIONS } from "@/lib/ghana-locations";
 
 type LocationSuggestion = {
@@ -9,6 +9,11 @@ type LocationSuggestion = {
   capital?: string | null;
   gpsCoordinate?: string | null;
   landmark?: string | null;
+};
+
+type SuggestionPayload = {
+  items?: LocationSuggestion[];
+  notice?: string;
 };
 
 type Props = {
@@ -28,18 +33,22 @@ type Props = {
 };
 
 async function loadSuggestions(url: string, signal: AbortSignal) {
-  const response = await fetch(url, { signal });
-  if (!response.ok) return { items: [] as LocationSuggestion[], notice: "" };
-  const payload = await response.json() as { items?: LocationSuggestion[]; notice?: string };
+  const response = await fetch(url, { signal, cache: "no-store" });
+  const payload = await response.json().catch(() => null) as SuggestionPayload | null;
+  if (!response.ok) {
+    throw new Error(payload?.notice || "The Ghana location directory could not be loaded.");
+  }
   return {
-    items: Array.isArray(payload.items) ? payload.items : [],
-    notice: typeof payload.notice === "string" ? payload.notice : "",
+    items: Array.isArray(payload?.items) ? payload.items : [],
+    notice: typeof payload?.notice === "string" ? payload.notice : "",
   };
 }
 
+function containsValue(items: LocationSuggestion[], value: string) {
+  return items.some((item) => item.name === value);
+}
+
 export function GhanaLocationFields({ required = false, compact = false, defaults = {} }: Props) {
-  const districtListId = useId();
-  const communityListId = useId();
   const [region, setRegion] = useState(defaults.region ?? "");
   const [district, setDistrict] = useState(defaults.district ?? "");
   const [town, setTown] = useState(defaults.city ?? "");
@@ -47,46 +56,67 @@ export function GhanaLocationFields({ required = false, compact = false, default
   const [communities, setCommunities] = useState<LocationSuggestion[]>([]);
   const [districtLoading, setDistrictLoading] = useState(false);
   const [communityLoading, setCommunityLoading] = useState(false);
+  const [districtError, setDistrictError] = useState("");
+  const [communityError, setCommunityError] = useState("");
   const [notice, setNotice] = useState("");
+  const [districtReload, setDistrictReload] = useState(0);
+  const [communityReload, setCommunityReload] = useState(0);
 
   useEffect(() => {
     if (!region) {
       setDistricts([]);
+      setDistrictError("");
       return;
     }
+
     const controller = new AbortController();
     setDistrictLoading(true);
-    loadSuggestions(`/api/ghana-locations?level=districts&region=${encodeURIComponent(region)}`, controller.signal)
+    setDistrictError("");
+    loadSuggestions(`/api/ghana-locations?level=districts&region=${encodeURIComponent(region)}&retry=${districtReload}`, controller.signal)
       .then((result) => {
+        if (controller.signal.aborted) return;
         setDistricts(result.items);
         setNotice(result.notice);
+        if (!result.items.length) setDistrictError("No districts were returned. Retry the directory connection.");
       })
-      .catch(() => undefined)
-      .finally(() => setDistrictLoading(false));
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setDistricts([]);
+        setDistrictError(error instanceof Error ? error.message : "Districts could not be loaded.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDistrictLoading(false);
+      });
     return () => controller.abort();
-  }, [region]);
+  }, [region, districtReload]);
 
   useEffect(() => {
     if (!region || !district) {
       setCommunities([]);
+      setCommunityError("");
       return;
     }
+
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      setCommunityLoading(true);
-      loadSuggestions(`/api/ghana-locations?level=communities&region=${encodeURIComponent(region)}&district=${encodeURIComponent(district)}`, controller.signal)
-        .then((result) => {
-          setCommunities(result.items);
-          setNotice(result.notice);
-        })
-        .catch(() => undefined)
-        .finally(() => setCommunityLoading(false));
-    }, 250);
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [region, district]);
+    setCommunityLoading(true);
+    setCommunityError("");
+    loadSuggestions(`/api/ghana-locations?level=communities&region=${encodeURIComponent(region)}&district=${encodeURIComponent(district)}&retry=${communityReload}`, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setCommunities(result.items);
+        setNotice(result.notice);
+        if (!result.items.length) setCommunityError("No towns or communities were returned. Retry the directory connection.");
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setCommunities([]);
+        setCommunityError(error instanceof Error ? error.message : "Towns and communities could not be loaded.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCommunityLoading(false);
+      });
+    return () => controller.abort();
+  }, [region, district, communityReload]);
 
   const spacing = compact ? "gap-3" : "gap-5";
   const labelClass = compact
@@ -107,7 +137,10 @@ export function GhanaLocationFields({ required = false, compact = false, default
             setRegion(event.target.value);
             setDistrict("");
             setTown("");
+            setDistricts([]);
             setCommunities([]);
+            setDistrictError("");
+            setCommunityError("");
           }}
         >
           <option value="">Choose a region</option>
@@ -117,45 +150,47 @@ export function GhanaLocationFields({ required = false, compact = false, default
 
       <label className="block">
         <span className={labelClass}>District / Municipal / Metropolitan{required ? " *" : ""}</span>
-        <input
+        <select
           className="field"
           name="district"
-          list={districtListId}
           required={required}
-          maxLength={180}
           value={district}
-          disabled={!region}
-          placeholder={!region ? "Choose a region first" : districtLoading ? "Loading districts..." : "Choose or type the district"}
+          disabled={!region || districtLoading}
           onChange={(event) => {
             setDistrict(event.target.value);
             setTown("");
+            setCommunities([]);
+            setCommunityError("");
           }}
           autoComplete="address-level2"
-        />
-        <datalist id={districtListId}>
-          {districts.map((item) => <option key={item.code || item.name} value={item.name}>{item.capital ? `Capital: ${item.capital}` : ""}</option>)}
-        </datalist>
-        <span className="mt-1 block text-xs text-slate-500">Suggestions come from Ghana&apos;s official location directory. Manual entry remains available for spelling or boundary updates.</span>
+        >
+          <option value="">
+            {!region ? "Choose a region first" : districtLoading ? "Loading all districts..." : districtError ? "Districts unavailable — retry below" : "Choose a district"}
+          </option>
+          {district && !containsValue(districts, district) ? <option value={district}>{district} — saved location</option> : null}
+          {districts.map((item) => <option key={item.code || item.name} value={item.name}>{item.name}{item.capital ? ` — capital: ${item.capital}` : ""}</option>)}
+        </select>
+        {districtError ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700"><span>{districtError}</span><button type="button" className="rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold" onClick={() => setDistrictReload((value) => value + 1)}>Retry districts</button></span> : <span className="mt-1 block text-xs text-slate-500">Select from the complete district, municipal and metropolitan list for the chosen region.</span>}
       </label>
 
       <label className="block">
         <span className={labelClass}>Town, city or community{required ? " *" : ""}</span>
-        <input
+        <select
           className="field"
           name="city"
-          list={communityListId}
           required={required}
-          maxLength={160}
           value={town}
-          disabled={!district}
-          placeholder={!district ? "Choose a district first" : communityLoading ? "Loading communities..." : "Choose or type the town/community"}
+          disabled={!district || communityLoading}
           onChange={(event) => setTown(event.target.value)}
           autoComplete="address-level3"
-        />
-        <datalist id={communityListId}>
-          {communities.map((item) => <option key={item.code || item.name} value={item.name}>{item.landmark ?? ""}</option>)}
-        </datalist>
-        <span className="mt-1 block text-xs text-slate-500">The list is searchable; type the correct community when it is not yet listed.</span>
+        >
+          <option value="">
+            {!district ? "Choose a district first" : communityLoading ? "Loading all towns and communities..." : communityError ? "Towns unavailable — retry below" : "Choose a town, city or community"}
+          </option>
+          {town && !containsValue(communities, town) ? <option value={town}>{town} — saved location</option> : null}
+          {communities.map((item) => <option key={item.code || item.name} value={item.name}>{item.name}</option>)}
+        </select>
+        {communityError ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700"><span>{communityError}</span><button type="button" className="rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold" onClick={() => setCommunityReload((value) => value + 1)}>Retry towns</button></span> : <span className="mt-1 block text-xs text-slate-500">Select the town or community under the chosen district. Type only the smaller area details below.</span>}
       </label>
 
       <label className="block">
@@ -186,7 +221,7 @@ export function GhanaLocationFields({ required = false, compact = false, default
         </div>
       </details>
 
-      {notice ? <p className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{notice}</p> : null}
+      {notice ? <p className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900" aria-live="polite">{notice}</p> : null}
     </div>
   );
 }

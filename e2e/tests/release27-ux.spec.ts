@@ -6,6 +6,23 @@ function password() {
   return value;
 }
 
+async function mockGhanaLocationDirectory(page: Page) {
+  await page.route("**/api/ghana-locations**", async (route) => {
+    const url = new URL(route.request().url());
+    const level = url.searchParams.get("level");
+    const items = level === "districts"
+      ? [{ code: "0101", name: "Accra Metropolitan" }]
+      : level === "communities"
+        ? [{ code: "010101", name: "Accra" }]
+        : [];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ source: "browser acceptance fixture", manualEntryAllowed: false, items }),
+    });
+  });
+}
+
 async function signInAsAdmin(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
@@ -64,12 +81,13 @@ test("shows buyer account creation before the login page fold and preserves chec
 
 test("keeps deep marketplace filters URL-backed, visible and clearable on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await mockGhanaLocationDirectory(page);
   await page.goto("/shops?q=Browser&region=Greater%20Accra&district=Accra%20Metropolitan&city=Accra&ordering=open&sort=products");
   await expect(page.getByRole("heading", { name: "EJM Marketplace" })).toBeVisible();
   await expect(page.getByPlaceholder("Item, shop, team, brand or location")).toHaveValue("Browser");
   await expect(page.locator('select[name="region"]')).toHaveValue("Greater Accra");
-  await expect(page.locator('input[name="district"]')).toHaveValue("Accra Metropolitan");
-  await expect(page.locator('input[name="city"]')).toHaveValue("Accra");
+  await expect(page.locator('select[name="district"]')).toHaveValue("Accra Metropolitan");
+  await expect(page.locator('select[name="city"]')).toHaveValue("Accra");
   await expect(page.locator('select[name="ordering"]')).toHaveValue("open");
   await expect(page.locator('select[name="sort"]')).toHaveValue("products");
   await expect(page.getByText("Search: Browser", { exact: true })).toBeVisible();

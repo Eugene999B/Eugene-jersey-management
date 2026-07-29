@@ -12,6 +12,23 @@ async function selectOptionContaining(select: Locator, text: string) {
   await select.selectOption(value);
 }
 
+async function mockGhanaLocationDirectory(page: Page) {
+  await page.route("**/api/ghana-locations**", async (route) => {
+    const url = new URL(route.request().url());
+    const level = url.searchParams.get("level");
+    const items = level === "districts"
+      ? [{ code: "0101", name: "Accra Metropolitan", capital: "Accra" }]
+      : level === "communities"
+        ? [{ code: "010101", name: "Accra" }, { code: "010102", name: "Osu" }]
+        : [];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ source: "browser acceptance fixture", manualEntryAllowed: false, items }),
+    });
+  });
+}
+
 async function signInAsApplicationsAdmin(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
@@ -31,6 +48,7 @@ async function submitShopApplication(page: Page, retry: number) {
   const businessName = `Release 26 Approved Shop${retrySuffix}`;
   const email = `release26-shop-applicant${retry ? `-r${retry}` : ""}@ejm.test`;
 
+  await mockGhanaLocationDirectory(page);
   await page.goto("/apply/shop");
   await page.getByLabel("Business name", { exact: true }).fill(businessName);
   await page.getByLabel("Legal business name", { exact: true }).fill(`${businessName} Limited`);
@@ -40,8 +58,12 @@ async function submitShopApplication(page: Page, retry: number) {
   await page.getByLabel("Phone").fill(`+2332000260${String(retry + 1).padStart(2, "0")}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Region *").selectOption("Greater Accra");
-  await page.getByLabel("District / Municipal / Metropolitan *").fill("Accra Metropolitan");
-  await page.getByLabel("Town, city or community *").fill("Accra");
+  const district = page.getByLabel("District / Municipal / Metropolitan *");
+  await expect(district).toBeEnabled();
+  await district.selectOption("Accra Metropolitan");
+  const town = page.getByLabel("Town, city or community *");
+  await expect(town).toBeEnabled();
+  await town.selectOption("Accra");
   await page.getByLabel("Suburb, area or sub-town").fill("Osu");
   await page.getByLabel("GhanaPost GPS digital address").fill("GA-123-4567");
   await page.getByLabel("Street, building or shop number").fill("Application Test Street");
