@@ -289,7 +289,11 @@ export async function settleSubscriptionInvoicePayment(data: PaystackTransaction
       return { status: "failed" as const, reason, invoiceId: attempt.invoiceId };
     };
 
-    if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) return fail("invoice-void", "Payment arrived for a voided subscription invoice and requires manual reconciliation.");
+    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
+    return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
+  }
+
+  if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) return fail("invoice-void", "Payment arrived for a voided subscription invoice and requires manual reconciliation.");
     if (data.status !== "success") return fail(data.status ?? "not-success", data.gateway_response ?? data.status ?? "Payment not successful");
     if (typeof data.amount !== "number") return fail("missing-amount", "Verified provider response did not include an amount.");
     const expectedAmount = amountToSubunit(Number(attempt.amount));
@@ -370,7 +374,16 @@ export async function markSubscriptionInvoicePaidManually(input: {
     if (invoice.status === SubscriptionInvoiceStatus.VOID) throw new SubscriptionBillingError("invoice-void", "A void invoice cannot be marked paid.");
     if (invoice.status === SubscriptionInvoiceStatus.PAID) return invoice;
 
-    await tx.subscriptionPaymentAttempt.create({
+    await tx.subscriptionPaymentAttempt.updateMany({
+    where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
+    data: {
+      status: PaymentStatus.FAILED,
+      failedAt: new Date(),
+      gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
+    },
+  });
+
+  await tx.subscriptionPaymentAttempt.create({
       data: {
         invoiceId: invoice.id,
         shopId: invoice.shopId,
