@@ -21,7 +21,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          from textwrap import dedent
+          from textwrap import dedent, indent
 
           billing_path = Path("src/lib/subscription-billing.ts")
           source = billing_path.read_text()
@@ -57,21 +57,21 @@ jobs:
           receipt_start = source.index("async function sendPaymentReceipt")
           receipt_end = source.index("export async function settleSubscriptionInvoicePayment", receipt_start)
           receipt = source[receipt_start:receipt_end]
-          old_receipt_head = dedent('''\
-            const invoice = await platformDb.subscriptionInvoice.findUnique({ where: { id: invoiceId } });
-            if (!invoice) return;
-            const contact = await ownerContact(invoice.shopId);
-          ''').rstrip()
-          new_receipt_head = dedent('''\
-            const invoice = await platformDb.subscriptionInvoice.findUnique({ where: { id: invoiceId } });
-            if (!invoice) return;
-            const contract = await platformDb.shopSubscriptionContract.findUnique({
-              where: { shopId: invoice.shopId },
-              select: { renewalAt: true },
-            });
-            const renewalAt = contract?.renewalAt ?? invoice.periodEnd;
-            const contact = await ownerContact(invoice.shopId);
-          ''').rstrip()
+          old_receipt_head = indent(dedent('''\
+          const invoice = await platformDb.subscriptionInvoice.findUnique({ where: { id: invoiceId } });
+          if (!invoice) return;
+          const contact = await ownerContact(invoice.shopId);
+          ''').rstrip(), "  ")
+          new_receipt_head = indent(dedent('''\
+          const invoice = await platformDb.subscriptionInvoice.findUnique({ where: { id: invoiceId } });
+          if (!invoice) return;
+          const contract = await platformDb.shopSubscriptionContract.findUnique({
+            where: { shopId: invoice.shopId },
+            select: { renewalAt: true },
+          });
+          const renewalAt = contract?.renewalAt ?? invoice.periodEnd;
+          const contact = await ownerContact(invoice.shopId);
+          ''').rstrip(), "  ")
           if old_receipt_head not in receipt:
             raise SystemExit("receipt source did not match")
           receipt = receipt.replace(old_receipt_head, new_receipt_head, 1)
@@ -81,92 +81,92 @@ jobs:
           settle_start = source.index("export async function settleSubscriptionInvoicePayment")
           block_start = source.index("    if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {", settle_start)
           block_end = source.index("    await tx.auditLog.create({", block_start)
-          settle_block = dedent('''\
-              if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-                return fail(
-                  "invoice-already-paid",
-                  "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
-                );
-              }
-              if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) {
-                return fail(
-                  "invoice-void",
-                  "Payment arrived for a voided subscription invoice and requires manual reconciliation.",
-                );
-              }
-              if (data.status !== "success") {
-                return fail(data.status ?? "not-success", data.gateway_response ?? data.status ?? "Payment not successful");
-              }
-              if (typeof data.amount !== "number") {
-                return fail("missing-amount", "Verified provider response did not include an amount.");
-              }
-              const expectedAmount = amountToSubunit(Number(attempt.amount));
-              if (data.amount !== expectedAmount) {
-                return fail("amount-mismatch", `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`);
-              }
-              if (!data.currency) {
-                return fail("missing-currency", "Verified provider response did not include a currency.");
-              }
-              if (data.currency.toUpperCase() !== attempt.currency.toUpperCase()) {
-                return fail("currency-mismatch", `Currency mismatch: expected ${attempt.currency}, got ${data.currency}`);
-              }
+          settle_block = indent(dedent('''\
+          if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
+            return fail(
+              "invoice-already-paid",
+              "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
+            );
+          }
+          if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) {
+            return fail(
+              "invoice-void",
+              "Payment arrived for a voided subscription invoice and requires manual reconciliation.",
+            );
+          }
+          if (data.status !== "success") {
+            return fail(data.status ?? "not-success", data.gateway_response ?? data.status ?? "Payment not successful");
+          }
+          if (typeof data.amount !== "number") {
+            return fail("missing-amount", "Verified provider response did not include an amount.");
+          }
+          const expectedAmount = amountToSubunit(Number(attempt.amount));
+          if (data.amount !== expectedAmount) {
+            return fail("amount-mismatch", `Amount mismatch: expected ${expectedAmount}, got ${data.amount}`);
+          }
+          if (!data.currency) {
+            return fail("missing-currency", "Verified provider response did not include a currency.");
+          }
+          if (data.currency.toUpperCase() !== attempt.currency.toUpperCase()) {
+            return fail("currency-mismatch", `Currency mismatch: expected ${attempt.currency}, got ${data.currency}`);
+          }
 
-              const contract = await tx.shopSubscriptionContract.findFirst({
-                where: { id: attempt.invoice.contractId, shopId: attempt.shopId },
-              });
-              if (!contract) {
-                return fail(
-                  "subscription-contract-missing",
-                  "The subscription contract attached to this invoice no longer exists. Manual reconciliation is required.",
-                );
-              }
-              if (contract.subscriptionStatus === SubscriptionStatus.CANCELLED) {
-                return fail(
-                  "subscription-contract-cancelled",
-                  "Payment arrived after the subscription contract was cancelled. Refund or manual reconciliation is required.",
-                );
-              }
-              if (contract.renewalAt && contract.renewalAt.getTime() >= attempt.invoice.periodEnd.getTime()) {
-                return fail(
-                  "invoice-period-covered",
-                  "Payment arrived after this invoice period had already been covered. Refund or manual reconciliation is required.",
-                );
-              }
+          const contract = await tx.shopSubscriptionContract.findFirst({
+            where: { id: attempt.invoice.contractId, shopId: attempt.shopId },
+          });
+          if (!contract) {
+            return fail(
+              "subscription-contract-missing",
+              "The subscription contract attached to this invoice no longer exists. Manual reconciliation is required.",
+            );
+          }
+          if (contract.subscriptionStatus === SubscriptionStatus.CANCELLED) {
+            return fail(
+              "subscription-contract-cancelled",
+              "Payment arrived after the subscription contract was cancelled. Refund or manual reconciliation is required.",
+            );
+          }
+          if (contract.renewalAt && contract.renewalAt.getTime() >= attempt.invoice.periodEnd.getTime()) {
+            return fail(
+              "invoice-period-covered",
+              "Payment arrived after this invoice period had already been covered. Refund or manual reconciliation is required.",
+            );
+          }
 
-              const renewalBase = contract.renewalAt && contract.renewalAt.getTime() > attempt.invoice.periodStart.getTime()
-                ? contract.renewalAt
-                : attempt.invoice.periodStart;
-              const renewalAt = addBillingPeriod(renewalBase, attempt.invoice.billingCycle);
+          const renewalBase = contract.renewalAt && contract.renewalAt.getTime() > attempt.invoice.periodStart.getTime()
+            ? contract.renewalAt
+            : attempt.invoice.periodStart;
+          const renewalAt = addBillingPeriod(renewalBase, attempt.invoice.billingCycle);
 
-              await tx.subscriptionPaymentAttempt.update({
-                where: { id: attempt.id },
-                data: {
-                  status: PaymentStatus.SUCCESS,
-                  verifiedAt: new Date(),
-                  failedAt: null,
-                  gatewayResponse: data.gateway_response ?? "Successful",
-                  providerChannel: data.channel,
-                  providerTransactionId: data.id === undefined ? null : String(data.id),
-                },
-              });
-              await tx.subscriptionInvoice.update({
-                where: { id: attempt.invoiceId },
-                data: { status: SubscriptionInvoiceStatus.PAID, paidAt: new Date(), nextReminderAt: null },
-              });
-              await tx.shopSubscriptionContract.update({
-                where: { id: contract.id },
-                data: {
-                  subscriptionStatus: SubscriptionStatus.ACTIVE,
-                  trialEndsAt: null,
-                  renewalAt,
-                  graceEndsAt: null,
-                },
-              });
-              await tx.shop.update({
-                where: { id: attempt.shopId },
-                data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: renewalAt },
-              });
-          ''')
+          await tx.subscriptionPaymentAttempt.update({
+            where: { id: attempt.id },
+            data: {
+              status: PaymentStatus.SUCCESS,
+              verifiedAt: new Date(),
+              failedAt: null,
+              gatewayResponse: data.gateway_response ?? "Successful",
+              providerChannel: data.channel,
+              providerTransactionId: data.id === undefined ? null : String(data.id),
+            },
+          });
+          await tx.subscriptionInvoice.update({
+            where: { id: attempt.invoiceId },
+            data: { status: SubscriptionInvoiceStatus.PAID, paidAt: new Date(), nextReminderAt: null },
+          });
+          await tx.shopSubscriptionContract.update({
+            where: { id: contract.id },
+            data: {
+              subscriptionStatus: SubscriptionStatus.ACTIVE,
+              trialEndsAt: null,
+              renewalAt,
+              graceEndsAt: null,
+            },
+          });
+          await tx.shop.update({
+            where: { id: attempt.shopId },
+            data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: renewalAt },
+          });
+          '''), "    ")
           source = source[:block_start] + settle_block + source[block_end:]
 
           settle_start = source.index("export async function settleSubscriptionInvoicePayment")
@@ -178,59 +178,59 @@ jobs:
           manual_start = source.index("export async function markSubscriptionInvoicePaidManually")
           manual_block_start = source.index("    await tx.subscriptionPaymentAttempt.updateMany({", manual_start)
           manual_block_end = source.index("    await tx.auditLog.create({", manual_block_start)
-          manual_block = dedent('''\
-              const contract = await tx.shopSubscriptionContract.findFirst({
-                where: { id: invoice.contractId, shopId: invoice.shopId },
-              });
-              if (!contract) {
-                throw new SubscriptionBillingError("subscription-contract-missing", "The subscription contract attached to this invoice no longer exists.");
-              }
-              if (contract.subscriptionStatus === SubscriptionStatus.CANCELLED) {
-                throw new SubscriptionBillingError("subscription-contract-cancelled", "Assign an active subscription before settling this cancelled contract.");
-              }
-              const renewalAt = contract.renewalAt && contract.renewalAt.getTime() >= invoice.periodEnd.getTime()
-                ? contract.renewalAt
-                : contract.renewalAt && contract.renewalAt.getTime() > invoice.periodStart.getTime()
-                  ? addBillingPeriod(contract.renewalAt, invoice.billingCycle)
-                  : invoice.periodEnd;
+          manual_block = indent(dedent('''\
+          const contract = await tx.shopSubscriptionContract.findFirst({
+            where: { id: invoice.contractId, shopId: invoice.shopId },
+          });
+          if (!contract) {
+            throw new SubscriptionBillingError("subscription-contract-missing", "The subscription contract attached to this invoice no longer exists.");
+          }
+          if (contract.subscriptionStatus === SubscriptionStatus.CANCELLED) {
+            throw new SubscriptionBillingError("subscription-contract-cancelled", "Assign an active subscription before settling this cancelled contract.");
+          }
+          const renewalAt = contract.renewalAt && contract.renewalAt.getTime() >= invoice.periodEnd.getTime()
+            ? contract.renewalAt
+            : contract.renewalAt && contract.renewalAt.getTime() > invoice.periodStart.getTime()
+              ? addBillingPeriod(contract.renewalAt, invoice.billingCycle)
+              : invoice.periodEnd;
 
-              await tx.subscriptionPaymentAttempt.updateMany({
-                where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
-                data: {
-                  status: PaymentStatus.FAILED,
-                  failedAt: new Date(),
-                  gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
-                },
-              });
+          await tx.subscriptionPaymentAttempt.updateMany({
+            where: { invoiceId: invoice.id, status: PaymentStatus.PENDING },
+            data: {
+              status: PaymentStatus.FAILED,
+              failedAt: new Date(),
+              gatewayResponse: "Invoice settled manually. Any later provider debit requires refund or reconciliation.",
+            },
+          });
 
-              await tx.subscriptionPaymentAttempt.create({
-                data: {
-                  invoiceId: invoice.id,
-                  shopId: invoice.shopId,
-                  provider: "manual",
-                  reference,
-                  amount: invoice.amount,
-                  currency: invoice.currency,
-                  status: PaymentStatus.SUCCESS,
-                  verifiedAt: new Date(),
-                  gatewayResponse: input.reason,
-                  createdById: input.adminId,
-                  metadata: { manualOverride: true, reason: input.reason },
-                },
-              });
-              const paid = await tx.subscriptionInvoice.update({
-                where: { id: invoice.id },
-                data: { status: SubscriptionInvoiceStatus.PAID, paidAt: new Date(), nextReminderAt: null },
-              });
-              await tx.shopSubscriptionContract.update({
-                where: { id: contract.id },
-                data: { subscriptionStatus: SubscriptionStatus.ACTIVE, trialEndsAt: null, renewalAt, graceEndsAt: null },
-              });
-              await tx.shop.update({
-                where: { id: invoice.shopId },
-                data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: renewalAt },
-              });
-          ''')
+          await tx.subscriptionPaymentAttempt.create({
+            data: {
+              invoiceId: invoice.id,
+              shopId: invoice.shopId,
+              provider: "manual",
+              reference,
+              amount: invoice.amount,
+              currency: invoice.currency,
+              status: PaymentStatus.SUCCESS,
+              verifiedAt: new Date(),
+              gatewayResponse: input.reason,
+              createdById: input.adminId,
+              metadata: { manualOverride: true, reason: input.reason },
+            },
+          });
+          const paid = await tx.subscriptionInvoice.update({
+            where: { id: invoice.id },
+            data: { status: SubscriptionInvoiceStatus.PAID, paidAt: new Date(), nextReminderAt: null },
+          });
+          await tx.shopSubscriptionContract.update({
+            where: { id: contract.id },
+            data: { subscriptionStatus: SubscriptionStatus.ACTIVE, trialEndsAt: null, renewalAt, graceEndsAt: null },
+          });
+          await tx.shop.update({
+            where: { id: invoice.shopId },
+            data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionRenewalAt: renewalAt },
+          });
+          '''), "    ")
           source = source[:manual_block_start] + manual_block + source[manual_block_end:]
 
           manual_start = source.index("export async function markSubscriptionInvoicePaidManually")
@@ -246,21 +246,21 @@ jobs:
 
           tests_path = Path("src/tests/subscription-billing.test.ts")
           tests = tests_path.read_text()
-          old_test = dedent('''\
-            it("advances monthly and yearly renewal periods in UTC", () => {
-              expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-08-15T12:00:00.000Z");
-              expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2027-07-15T12:00:00.000Z");
-            });
-          ''').rstrip()
-          new_test = dedent('''\
-            it("advances monthly and yearly renewal periods in UTC without skipping short months", () => {
-              expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-08-15T12:00:00.000Z");
-              expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2027-07-15T12:00:00.000Z");
-              expect(addBillingPeriod(new Date("2026-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-02-28T12:00:00.000Z");
-              expect(addBillingPeriod(new Date("2024-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2024-02-29T12:00:00.000Z");
-              expect(addBillingPeriod(new Date("2024-02-29T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2025-02-28T12:00:00.000Z");
-            });
-          ''').rstrip()
+          old_test = indent(dedent('''\
+          it("advances monthly and yearly renewal periods in UTC", () => {
+            expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-08-15T12:00:00.000Z");
+            expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2027-07-15T12:00:00.000Z");
+          });
+          ''').rstrip(), "  ")
+          new_test = indent(dedent('''\
+          it("advances monthly and yearly renewal periods in UTC without skipping short months", () => {
+            expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-08-15T12:00:00.000Z");
+            expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2027-07-15T12:00:00.000Z");
+            expect(addBillingPeriod(new Date("2026-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-02-28T12:00:00.000Z");
+            expect(addBillingPeriod(new Date("2024-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2024-02-29T12:00:00.000Z");
+            expect(addBillingPeriod(new Date("2024-02-29T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2025-02-28T12:00:00.000Z");
+          });
+          ''').rstrip(), "  ")
           if old_test not in tests:
             raise SystemExit("billing period test source did not match")
           tests = tests.replace(old_test, new_test, 1)
