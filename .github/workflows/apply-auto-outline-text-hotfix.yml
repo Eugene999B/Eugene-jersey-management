@@ -1,0 +1,185 @@
+name: Apply automatic cutter text outlines
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'agent/hotfix-auto-outline-text'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/hotfix-auto-outline-text
+          fetch-depth: 0
+      - name: Patch cutter export workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cut_path = Path("src/lib/design-cut-path.ts")
+          source = cut_path.read_text()
+          old = '''    if (layer.kind === "text") {
+                result.errors.push(`${layer.name}: live text must be converted to outlines before cutter export.`);
+                continue;
+              }'''
+          new = '''    if (layer.kind === "text") {
+                result.warnings.push(`${layer.name}: editable text will be automatically outlined when cutter output is prepared.`);
+                continue;
+              }'''
+          if old not in source:
+              raise SystemExit("design-cut-path text block did not match")
+          source = source.replace(old, new, 1)
+          old_empty = '''  result.paths = result.paths.filter(validPath);
+            if (!result.paths.length && !result.errors.length) result.errors.push("Add at least one native shape or embedded vector SVG before cutter export.");'''
+          new_empty = '''  result.paths = result.paths.filter(validPath);
+            const hasVisibleText = input.layers.some((layer) => layer.visible && layer.kind === "text");
+            if (!result.paths.length && !result.errors.length && !hasVisibleText) result.errors.push("Add at least one native shape, editable text, or embedded vector SVG before cutter export.");'''
+          if old_empty not in source:
+              raise SystemExit("design-cut-path empty block did not match")
+          cut_path.write_text(source.replace(old_empty, new_empty, 1))
+
+          production = Path("src/lib/design-production.ts")
+          source = production.read_text()
+          old = '  if (hasText && input.machineProfile !== "Print/RIP") warnings.push("Text remains live text in SVG. Convert it to outlines in the machine software before cutting on a computer without the same font.");'
+          new = '  if (hasText && input.machineProfile !== "Print/RIP") warnings.push("Editable text will be converted automatically into closed cutter outlines during SVG, HPGL or DXF production.");'
+          if old not in source:
+              raise SystemExit("design-production warning did not match")
+          production.write_text(source.replace(old, new, 1))
+
+          studio = Path("src/components/design/production-studio-advanced.tsx")
+          source = studio.read_text()
+          import_anchor = '''} from "@/lib/design-cut-path";
+          import {'''
+          import_replacement = '''} from "@/lib/design-cut-path";
+          import { outlineDesignTextLayers } from "@/lib/design-text-outline";
+          import {'''
+          if import_anchor not in source:
+              raise SystemExit("studio import anchor did not match")
+          source = source.replace(import_anchor, import_replacement, 1)
+
+          state_anchor = '''  const [deviceMessage, setDeviceMessage] = useState("System printing and SVG export are ready. A compatible serial cutter can also receive checked HPGL vector jobs.");
+            const [baudRate, setBaudRate] = useState(startingMachineProfile.baudRate);'''
+          state_replacement = '''  const [deviceMessage, setDeviceMessage] = useState("System printing and SVG export are ready. A compatible serial cutter can also receive checked HPGL vector jobs.");
+            const [cutExportMessage, setCutExportMessage] = useState("Editable text will be outlined automatically when cutter output is prepared.");
+            const [cutExporting, setCutExporting] = useState(false);
+            const [baudRate, setBaudRate] = useState(startingMachineProfile.baudRate);'''
+          if state_anchor not in source:
+              raise SystemExit("studio state anchor did not match")
+          source = source.replace(state_anchor, state_replacement, 1)
+
+          export_start = source.index("  function exportCutFile() {")
+          export_end = source.index("\n\n  function printDesign()", export_start)
+          export_block = '''  async function prepareCutPaths() {
+              if (cutExporting) return null;
+              setCutExporting(true);
+              setCutExportMessage("Preparing cutter paths and outlining editable text…");
+              try {
+                const outlined = await outlineDesignTextLayers(layers);
+                const errors = [...cutPathResult.errors, ...outlined.errors];
+                const outsideText = outlined.paths.filter((path) => path.points.some((point) => point.x < -0.01 || point.y < -0.01 || point.x > size.width + 0.01 || point.y > size.height + 0.01));
+                if (outsideText.length) errors.push(`${outsideText.length} outlined text path${outsideText.length === 1 ? " is" : "s are"} outside the production sheet.`);
+                if (errors.length) {
+                  const message = [...new Set(errors)].join(" ");
+                  setCutExportMessage(message);
+                  window.alert(message);
+                  return null;
+                }
+                const paths = [...cutPathResult.paths, ...outlined.paths];
+                setCutExportMessage(outlined.converted
+                  ? `${outlined.converted} editable text layer${outlined.converted === 1 ? "" : "s"} outlined automatically. The downloaded cutter file contains paths only.`
+                  : "Cutter paths are ready. The downloaded file contains vector paths only.");
+                return paths;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "Automatic text outlining failed.";
+                setCutExportMessage(message);
+                window.alert(message);
+                return null;
+              } finally {
+                setCutExporting(false);
+              }
+            }
+
+            async function exportCutFile() {
+              if (productionErrors.length || cutExporting) return;
+              const paths = await prepareCutPaths();
+              if (!paths) return;
+              if (machineProfile.outputFormat === "HPGL") {
+                download(`${safeName(jobName)}.plt`, buildCutHpgl({
+                  paths,
+                  sheet: size,
+                  mirror,
+                  origin: machineProfile.origin,
+                  unitsPerMm: machineProfile.unitsPerMm,
+                }), "application/vnd.hp-hpgl");
+                return;
+              }
+              if (machineProfile.outputFormat === "DXF") {
+                download(`${safeName(jobName)}.dxf`, buildCutDxf({
+                  paths,
+                  sheet: size,
+                  mirror,
+                  origin: machineProfile.origin,
+                }), "application/dxf");
+                return;
+              }
+              download(`${safeName(jobName)}-cut.svg`, buildCutSvg({ paths, sheet: size, mirror }), "image/svg+xml");
+            }'''
+          source = source[:export_start] + export_block + source[export_end:]
+
+          writer_anchor = '''    const writer = port.writable.getWriter();
+            try {
+              const hpgl = buildCutHpgl({
+                paths: cutPathResult.paths,'''
+          writer_replacement = '''    const paths = await prepareCutPaths();
+            if (!paths) return;
+            const writer = port.writable.getWriter();
+            try {
+              const hpgl = buildCutHpgl({
+                paths,'''
+          if writer_anchor not in source:
+              raise SystemExit("studio serial writer anchor did not match")
+          source = source.replace(writer_anchor, writer_replacement, 1)
+
+          button_anchor = ''': <Button disabled={productionBlocked} onClick={exportCutFile}><Scissors size={16} /> Export {machineProfile.outputFormat.replace("_", " ")}</Button>}
+                        {machineProfile.outputFormat === "HPGL" ? <Button variant="secondary" disabled={productionBlocked || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send validated paths to cutter</Button> : null}'''
+          button_replacement = ''': <Button disabled={productionBlocked || cutExporting} onClick={exportCutFile}><Scissors size={16} /> {cutExporting ? "Preparing cutter paths…" : `Export ${machineProfile.outputFormat.replace("_", " ")}`}</Button>}
+                        {machineProfile.outputFormat === "HPGL" ? <Button variant="secondary" disabled={productionBlocked || cutExporting || device !== "connected"} onClick={sendHpglJob}><Send size={16} /> Send validated paths to cutter</Button> : null}'''
+          if button_anchor not in source:
+              raise SystemExit("studio output button anchor did not match")
+          source = source.replace(button_anchor, button_replacement, 1)
+
+          note_anchor = '''            <p className="mt-3 text-[11px] leading-4 text-slate-500">Cutter exports contain vector polylines only. Live text and raster artwork must be outlined or traced first; the studio never silently converts them into unsafe cut geometry.</p>'''
+          note_replacement = '''            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[11px] font-semibold leading-4 text-emerald-900">{cutExportMessage}</p>
+                      <p className="mt-2 text-[11px] leading-4 text-slate-500">Editable text stays editable in the saved project. During cutter export, the browser automatically converts the rendered letters into closed vector outlines. Raster pictures still require tracing before they can be cut.</p>'''
+          if note_anchor not in source:
+              raise SystemExit("studio output note anchor did not match")
+          studio.write_text(source.replace(note_anchor, note_replacement, 1))
+
+          tests = Path("src/tests/design-cut-path.test.ts")
+          source = tests.read_text()
+          source = source.replace('it("fails closed for live text, raster artwork and unsupported embedded SVG elements", () => {', 'it("queues editable text for automatic outlining while still failing closed for raster and unsupported embedded SVG elements", () => {', 1)
+          source = source.replace('    expect(result.errors.join(" ")).toContain("live text must be converted to outlines");', '    expect(result.errors.join(" ")).not.toContain("live text must be converted to outlines");\n    expect(result.warnings.join(" ")).toContain("automatically outlined");', 1)
+          tests.write_text(source)
+
+          docs = Path("docs/source/18_Design_Studio_Machine_Profiles_and_Cut_Paths.md")
+          source = docs.read_text()
+          source = source.replace('- live Design Studio text\n', '', 1)
+          source = source.replace('The operator must convert live text to outlines and trace raster artwork in a vector tool before cutter export. The system never pretends those objects are cutter-ready.', 'Live Design Studio text is converted automatically at export time using the exact font rendered in the operator browser. The saved project keeps its editable text layer; SVG, HPGL and DXF receive only closed traced letter contours. Raster artwork still requires vector tracing and the system continues to fail closed when safe paths cannot be produced.', 1)
+          source = source.replace('- **Cut-path SVG** contains only path polylines with no raster images or live text.', '- **Cut-path SVG** contains only path polylines. Editable Design Studio text is automatically rendered and traced into closed paths before download; no live text or raster image is placed in the cutter file.', 1)
+          docs.write_text(source)
+          PY
+      - name: Remove one-time workflow
+        run: git rm .github/workflows/apply-auto-outline-text-hotfix.yml
+      - name: Commit hotfix
+        run: |
+          git config user.name "EJM Hotfix Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/lib/design-cut-path.ts src/lib/design-production.ts src/components/design/production-studio-advanced.tsx src/tests/design-cut-path.test.ts docs/source/18_Design_Studio_Machine_Profiles_and_Cut_Paths.md
+          git commit -m "fix: outline editable text during cutter export"
+          git push origin HEAD:agent/hotfix-auto-outline-text
