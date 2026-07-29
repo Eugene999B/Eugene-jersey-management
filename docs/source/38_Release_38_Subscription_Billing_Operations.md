@@ -61,7 +61,9 @@ Both browser callback and signed webhook processing call the same settlement fun
 - provider amount exactly matches the invoice amount in subunits;
 - provider currency matches the invoice currency;
 - invoice has not been voided;
-- payment reference belongs to a recorded subscription attempt.
+- payment reference belongs to a recorded subscription attempt;
+- the attached subscription contract still exists and has not been cancelled;
+- the invoice period has not already been covered by a later renewal.
 
 Settlement runs in a serializable database transaction. A successful result:
 
@@ -69,11 +71,13 @@ Settlement runs in a serializable database transaction. A successful result:
 - marks the invoice paid;
 - sets the contract and shop status to `ACTIVE`;
 - clears trial and grace deadlines;
-- advances renewal to the invoice period end;
+- advances renewal from the current due base without shortening an administrator-adjusted deadline;
 - writes a shop audit record;
 - sends the owner a payment receipt through configured email and SMS channels.
 
-Duplicate webhook or callback processing returns the already-verified result without extending the term twice.
+Duplicate webhook or callback processing returns the already-verified result without extending the term twice. A payment cannot reactivate a cancelled contract. A payment for an invoice period already covered by a later renewal is recorded as failed and sent for refund or manual reconciliation.
+
+Monthly and yearly periods preserve the intended calendar day where possible. Month-end renewals clamp to the last valid day of shorter months, including leap-year handling, rather than skipping into the following month.
 
 ## Provider event routing
 
@@ -131,7 +135,7 @@ Email uses the configured transactional Gmail or Resend provider. SMS uses the e
 
 Manual payment and void actions require a written operational reason of at least eight characters.
 
-A manual settlement creates a successful `SubscriptionPaymentAttempt` with provider `manual`, activates the next term, sends a receipt and writes the administrator identity and reason to the audit log.
+A manual settlement creates a successful `SubscriptionPaymentAttempt` with provider `manual`, activates the next term, sends a receipt and writes the administrator identity, reason and resulting renewal date to the audit log. It cannot reactivate a cancelled contract or shorten a later renewal date.
 
 A paid invoice cannot be voided. Voiding an open or overdue invoice closes pending attempts so an old checkout cannot be treated as normal settlement later. A payment arriving for a void invoice is marked failed for manual reconciliation rather than activating service.
 
@@ -155,13 +159,14 @@ Railway should continue to run `npm run jobs:subscriptions` once daily. No secon
 
 Permanent validation covers:
 
-- monthly and yearly renewal period calculation;
+- monthly and yearly renewal calculation, including month-end and leap-year clamping;
 - due versus overdue status boundaries;
 - immutable invoice period uniqueness;
 - globally unique payment references;
 - platform purchase-type metadata;
 - signed webhook routing order;
 - serializable settlement and audit requirements;
+- cancelled-contract and already-covered-period settlement guards;
 - explicit manual-decision reasons;
 - owner invoice and payment-history experience;
 - administrator reconciliation command centre;
