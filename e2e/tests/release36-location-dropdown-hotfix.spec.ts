@@ -11,7 +11,9 @@ async function signInAsOwner(page: Page) {
   await page.getByRole("button", { name: "Enter credentials" }).click();
   const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
   const passwordField = page.getByPlaceholder("Click, then enter password");
+  await loginId.click();
   await loginId.fill("EJM-E2E-R25-OWNER");
+  await passwordField.click();
   await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await page.waitForURL((url) => url.pathname !== "/login", { timeout: 30_000 });
