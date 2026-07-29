@@ -290,7 +290,10 @@ export async function settleSubscriptionInvoicePayment(data: PaystackTransaction
     };
 
     if (attempt.invoice.status === SubscriptionInvoiceStatus.PAID) {
-    return fail("invoice-already-paid", "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.");
+    return fail(
+      "invoice-already-paid",
+      "Payment arrived after this invoice was already settled. Refund or manual reconciliation is required.",
+    );
   }
 
   if (attempt.invoice.status === SubscriptionInvoiceStatus.VOID) return fail("invoice-void", "Payment arrived for a voided subscription invoice and requires manual reconciliation.");
