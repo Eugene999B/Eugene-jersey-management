@@ -15,13 +15,34 @@ describe("structured Ghana business locations", () => {
     expect(canonicalGhanaRegion("not a Ghana region")).toBeNull();
   });
 
-  it("loads current districts and communities through the official Ghana directory with a manual fallback", () => {
+  it("loads current districts and communities through the official Ghana directory with a second endpoint fallback", () => {
     const route = source("../app/api/ghana-locations/route.ts");
     expect(route).toContain("registry.mogcsp.gov.gh/api/locations");
+    expect(route).toContain("registry.mogcsp.gov.gh/api/v2/locations");
     expect(route).toContain('registryLocations("D"');
     expect(route).toContain('registryLocations("C"');
-    expect(route).toContain("manualEntryAllowed: true");
+    expect(route).toContain("manualEntryAllowed: false");
+    expect(route).toContain("status: 503");
     expect(route).toContain("revalidate: 24 * 60 * 60");
+  });
+
+  it("uses dependent native selects for region, district and town instead of requiring typing", () => {
+    const fields = source("../components/locations/ghana-location-fields.tsx");
+    const marketplaceFilters = source("../components/marketplace/marketplace-location-filters.tsx");
+
+    expect(fields).toContain('name="region"');
+    expect(fields).toContain('name="district"');
+    expect(fields).toContain('name="city"');
+    expect(fields).toContain("Loading all districts...");
+    expect(fields).toContain("Loading all towns and communities...");
+    expect(fields).toContain("Retry districts");
+    expect(fields).toContain("Retry towns");
+    expect(fields).not.toContain("<datalist");
+    expect(fields).not.toContain("Choose or type");
+
+    expect(marketplaceFilters).toContain('name="district"');
+    expect(marketplaceFilters).toContain('name="city"');
+    expect(marketplaceFilters).not.toContain("<datalist");
   });
 
   it("persists registration and shop settings locations separately from legacy address text", () => {
