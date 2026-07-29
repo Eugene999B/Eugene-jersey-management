@@ -71,7 +71,8 @@
     },
     {
       "includes": [
-        "src/app/admin/applications/*/page.tsx"
+        "src/app/admin/applications/*/page.tsx",
+        "src/app/dashboard/catalog/page.tsx"
       ],
       "linter": {
         "rules": {
