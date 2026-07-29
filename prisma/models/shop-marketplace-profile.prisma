@@ -1,0 +1,10 @@
+model ShopMarketplaceProfile {
+  id           String   @id @default(cuid())
+  shopId       String   @unique
+  tagline      String?
+  heroImageUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([shopId])
+}
