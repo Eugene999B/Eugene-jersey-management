@@ -30,8 +30,9 @@ describe("Phase 3 interface design system", () => {
     expect(selection).toContain("CheckCircle2");
     expect(feedback).toContain("aria-live");
     expect(feedback).toContain('role={state === "error" ? "alert" : "status"}');
-    expect(table).toContain('role="region"');
-    expect(table).toContain("tabIndex={0}");
+    expect(table).toContain("<section");
+    expect(table).toContain("aria-label={label}");
+    expect(table).not.toContain("tabIndex={0}");
   });
 
   test("applies obvious selected states to checkout and customer choice", () => {
