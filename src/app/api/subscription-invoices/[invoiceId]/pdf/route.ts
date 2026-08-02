@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ in
   }
   const shop = await platformDb.shop.findUnique({ where: { id: invoice.shopId }, select: { name: true } });
   const pdf = buildTablePdf({
-    title: `Eugene Jersey Management Subscription Invoice ${invoice.invoiceNumber}`,
+    title: `Eugene Shop Management Subscription Invoice ${invoice.invoiceNumber}`,
     subtitle: `${shop?.name ?? "Shop"} · ${invoice.planName} plan · version ${invoice.planVersion}`,
     metrics: [
       { label: "Status", value: titleCase(invoice.status) },

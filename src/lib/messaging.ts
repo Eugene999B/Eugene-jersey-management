@@ -34,7 +34,7 @@ function providerConfig(channel: NotificationChannel) {
       provider: process.env.SMS_PROVIDER ?? "console",
       url: process.env.SMS_API_URL,
       token: process.env.SMS_API_TOKEN ?? process.env.ARKESEL_API_KEY,
-      sender: process.env.SMS_SENDER_ID ?? process.env.ARKESEL_SENDER_ID ?? "Jersey",
+      sender: process.env.SMS_SENDER_ID ?? process.env.ARKESEL_SENDER_ID ?? "ESM",
     };
   }
   if (channel === NotificationChannel.WHATSAPP) {
@@ -94,7 +94,7 @@ async function sendViaGenericProvider(input: ProviderMessageInput) {
 
   try {
     if (input.channel === NotificationChannel.SMS && config.provider.toLowerCase() === "arkesel" && config.token && input.recipientPhone) {
-      return await sendViaArkesel(input, config.token, config.sender ?? "Jersey");
+      return await sendViaArkesel(input, config.token, config.sender ?? "ESM");
     }
     if (!config.url || !config.token) {
       console.warn(`[messaging] ${input.channel} provider is not configured; message queued without exposing recipient or content.`);

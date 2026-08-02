@@ -7,7 +7,7 @@ import { TwoFactorSecurityPanel } from "@/components/account/two-factor-security
 import { requireSession } from "@/lib/auth";
 import { getTwoFactorStatus } from "@/lib/two-factor-account";
 
-export const metadata: Metadata = { title: "Account security | EJM" };
+export const metadata: Metadata = { title: "Account security | ESM" };
 export const dynamic = "force-dynamic";
 
 function workspacePath(role: Role) {

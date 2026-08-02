@@ -31,7 +31,7 @@ export default async function PublicChatPage({ params, searchParams }: Props) {
           <Image src={shop.logoUrl || "/brand/accra-pro.svg"} alt={shop.name} width={54} height={54} className="rounded-[8px]" />
           <h1 className="mt-6 text-4xl font-semibold">Chat with {shop.name}</h1>
           <p className="mt-3 leading-7 text-white/75">
-            Ask about stock, custom jerseys, design files, debt payment, pickup times, or bulk team orders.
+            Ask about items, services, customization, payments, collection times or bulk orders.
           </p>
           <Link className="mt-6 inline-flex rounded-[8px] bg-white px-4 py-2 text-sm font-semibold text-slate-950" href={`/shop/${shop.slug}`}>
             Back to shop

@@ -67,7 +67,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     ? currency(Number(paymentConfig.paystackTransactionCharge) / 100, shop.currency)
     : "No flat platform charge";
   const chargeBearer = paymentConfig?.paystackChargeBearer === "account"
-    ? "EJM platform account"
+    ? "ESM platform account"
     : "Shop subaccount";
   const locationLabel = shopLocation
     ? formatGhanaLocation({ region: shopLocation.region, district: shopLocation.district, town: shopLocation.town, area: shopLocation.area })
@@ -93,7 +93,7 @@ export default async function SettingsPage({ searchParams }: Props) {
 
         <div className="panel p-5">
           <div className="flex items-center gap-2"><KeyRound size={20} /><h2 className="text-xl font-semibold">Your Login ID</h2></div>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Use this ID or your email on the EJM sign-in page. Keep it with your password instructions.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Use this ID or your email on the ESM sign-in page. Keep it with your password instructions.</p>
           <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-cyan-700">Login ID</p><p className="mt-2 break-all text-xl font-semibold text-cyan-950">{loginId}</p><div className="mt-3"><CopyLoginIdButton loginId={loginId} /></div></div>
         </div>
       </section>
@@ -102,7 +102,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         <div className={`rounded-lg border p-4 ${paystackServerReady && paystackShopReady ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
           <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><CreditCard size={18} /><h2 className="font-semibold">Paystack readiness</h2></div>{paystackServerReady && paystackShopReady ? <CheckCircle2 size={19} className="text-emerald-700" /> : <AlertTriangle size={19} className="text-amber-700" />}</div>
           <p className="mt-3 text-sm font-semibold">{paystackServerReady && paystackShopReady ? "Store settlement route connected" : "Not ready for live online payments"}</p>
-          <ul className="mt-2 space-y-1 text-xs text-slate-600"><li>EJM administrator account: {paystackServerReady ? "connected on the server" : "missing"}</li><li>Your store subaccount: {paystackShopReady ? "assigned" : "not assigned"}</li><li>Customer sales settle to your store subaccount; EJM charges settle to the administrator account.</li></ul>
+          <ul className="mt-2 space-y-1 text-xs text-slate-600"><li>ESM administrator account: {paystackServerReady ? "connected on the server" : "missing"}</li><li>Your store subaccount: {paystackShopReady ? "assigned" : "not assigned"}</li><li>Customer sales settle to your store subaccount; ESM charges settle to the administrator account.</li></ul>
         </div>
         <div className={`rounded-lg border p-4 ${smsReady ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
           <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><MessageSquareText size={18} /><h2 className="font-semibold">SMS readiness</h2></div>{smsReady ? <CheckCircle2 size={19} className="text-emerald-700" /> : <CircleOff size={19} className="text-slate-500" />}</div>
@@ -126,11 +126,11 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
           <form action={updateShopSettingsAction} encType="multipart/form-data" className="mt-5 space-y-4">
             <label className="block"><span className="mb-1 block text-sm font-semibold">Shop name / brand name</span><input className="field" name="name" defaultValue={shop.name} required /></label>
-            <label className="block"><span className="mb-1 block text-sm font-semibold">Marketplace tagline</span><input className="field" name="marketplaceTagline" maxLength={180} defaultValue={marketplaceProfile?.tagline ?? ""} placeholder="Authentic jerseys, trusted service and fast pickup" /><span className="mt-1 block text-xs text-slate-500">A short promise shown beneath your shop name.</span></label>
+            <label className="block"><span className="mb-1 block text-sm font-semibold">Marketplace tagline</span><input className="field" name="marketplaceTagline" maxLength={180} defaultValue={marketplaceProfile?.tagline ?? ""} placeholder="Quality products, trusted service and fast fulfilment" /><span className="mt-1 block text-xs text-slate-500">A short promise shown beneath your shop name.</span></label>
             <label className="block"><span className="mb-1 block text-sm font-semibold">Logo URL</span><input className="field" name="logoUrl" defaultValue={shop.logoUrl ?? ""} placeholder="/brand/accra-pro.svg" /></label>
             <label className="block rounded-[8px] border border-[#ded8cd] bg-white p-3 text-sm"><span className="mb-2 block font-semibold text-slate-700">Upload shop logo</span><input className="block w-full text-sm" name="logoFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs text-slate-500">Use a square logo where possible. It appears on the marketplace card, public shop, dashboard and receipts.</span></label>
             <input type="hidden" name="marketplaceHeroUrl" value={marketplaceProfile?.heroImageUrl ?? ""} />
-            <label className="block rounded-[8px] border border-cyan-200 bg-cyan-50/60 p-3 text-sm"><span className="mb-2 flex items-center gap-2 font-semibold text-cyan-950"><ImageIcon size={17} /> Marketplace featured photo</span><input className="block w-full text-sm" name="marketplaceHeroFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs leading-5 text-cyan-900/70">Upload one specific jersey, shop-front or promotional image. The whole photo is fitted inside the card without cutting off the item.</span></label>
+            <label className="block rounded-[8px] border border-cyan-200 bg-cyan-50/60 p-3 text-sm"><span className="mb-2 flex items-center gap-2 font-semibold text-cyan-950"><ImageIcon size={17} /> Marketplace featured photo</span><input className="block w-full text-sm" name="marketplaceHeroFile" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /><span className="mt-2 block text-xs leading-5 text-cyan-900/70">Upload one specific item, service, shop-front or promotional image. The whole photo is fitted inside the card without cutting off the item.</span></label>
             {marketplaceProfile?.heroImageUrl ? <label className="flex items-start gap-2 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm"><input className="mt-1" name="clearMarketplaceHero" type="checkbox" /><span><strong className="block text-amber-950">Remove the featured photo</strong><span className="text-xs leading-5 text-amber-900/70">The marketplace card will use your logo instead.</span></span></label> : null}
 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
@@ -161,9 +161,9 @@ export default async function SettingsPage({ searchParams }: Props) {
               <div className="flex items-center gap-2"><LockKeyhole size={17} /><h2 className="text-sm font-semibold uppercase text-slate-500">Store-owned payment settlement</h2></div>
               <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
                 <p><strong className="text-slate-900">Store subaccount:</strong> {paymentConfig?.paystackSubaccountCode ?? "Awaiting platform assignment"}</p>
-                <p><strong className="text-slate-900">EJM platform charge:</strong> {platformCharge}</p>
+                <p><strong className="text-slate-900">ESM platform charge:</strong> {platformCharge}</p>
                 <p><strong className="text-slate-900">Paystack fee bearer:</strong> {chargeBearer}</p>
-                <p>The platform administrator controls the subaccount connection and EJM charge. Your store controls its settlement details and which customer payment methods it accepts.</p>
+                <p>The platform administrator controls the subaccount connection and ESM charge. Your store controls its settlement details and which customer payment methods it accepts.</p>
               </div>
               <input className="field mt-3" name="momoProvider" placeholder="Mobile money provider" defaultValue={paymentConfig?.momoProvider ?? "Paystack"} />
               <div className="mt-3 grid grid-cols-2 gap-2"><input className="field" name="shopMomoNumber" placeholder="Shop mobile money number" defaultValue={paymentConfig?.shopMomoNumber ?? ""} /><input className="field" name="shopMomoNetwork" placeholder="Mobile money network" defaultValue={paymentConfig?.shopMomoNetwork ?? ""} /></div>
@@ -186,8 +186,8 @@ export default async function SettingsPage({ searchParams }: Props) {
           <div className="p-5">
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.14)]">
               <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-white to-cyan-50 p-6">
-                {marketplaceProfile?.heroImageUrl ? <Image src={marketplaceProfile.heroImageUrl} alt={`${shop.name} marketplace featured`} width={960} height={540} className="h-full w-full object-contain" /> : <Image src={shop.logoUrl || "/brand/ejm-mark.svg"} alt={shop.name} width={170} height={170} className="max-h-40 w-auto rounded-3xl object-contain shadow-sm" />}
-                {marketplaceProfile?.heroImageUrl ? <div className="absolute bottom-4 left-4 rounded-2xl border border-white/70 bg-white/90 p-2 shadow-lg backdrop-blur"><Image src={shop.logoUrl || "/brand/ejm-mark.svg"} alt={`${shop.name} logo`} width={54} height={54} className="h-12 w-12 rounded-xl object-contain" /></div> : null}
+                {marketplaceProfile?.heroImageUrl ? <Image src={marketplaceProfile.heroImageUrl} alt={`${shop.name} marketplace featured`} width={960} height={540} className="h-full w-full object-contain" /> : <Image src={shop.logoUrl || "/brand/esm-mark.svg"} alt={shop.name} width={170} height={170} className="max-h-40 w-auto rounded-3xl object-contain shadow-sm" />}
+                {marketplaceProfile?.heroImageUrl ? <div className="absolute bottom-4 left-4 rounded-2xl border border-white/70 bg-white/90 p-2 shadow-lg backdrop-blur"><Image src={shop.logoUrl || "/brand/esm-mark.svg"} alt={`${shop.name} logo`} width={54} height={54} className="h-12 w-12 rounded-xl object-contain" /></div> : null}
               </div>
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">{shop.name}</h3><p className="mt-1 text-sm text-slate-600">{marketplaceProfile?.tagline || "Your marketplace tagline will appear here."}</p><p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500"><MapPinned size={14} /> {locationLabel}</p></div><Badge tone="green">Verified</Badge></div>

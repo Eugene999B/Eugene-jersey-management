@@ -159,7 +159,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
               {onlinePaymentReady ? <Badge tone="orange">Card / Mastercard / Visa</Badge> : cashReady ? <Badge tone="orange">Cash pickup</Badge> : null}
             </div>
             <h2 className="mt-6 max-w-3xl text-3xl font-semibold leading-tight sm:text-5xl">
-              Jerseys, team kits, equipment, and custom print orders.
+              Products, services, rentals and custom production orders.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/70">
               {onlinePaymentReady && cashReady

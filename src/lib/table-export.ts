@@ -88,7 +88,7 @@ export async function buildTableDocx(exportData: TableExport) {
     ],
   });
   const document = new Document({
-    creator: "Eugene Jersey Management",
+    creator: "Eugene Shop Management",
     title: exportData.title,
     description: exportData.subtitle,
     sections: [{

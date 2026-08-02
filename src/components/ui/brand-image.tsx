@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-const DEFAULT_BRAND_IMAGE = "/brand/ejm-mark.svg";
+const DEFAULT_BRAND_IMAGE = "/brand/esm-mark.svg";
 
 type BrandImageProps = {
   src?: string | null;

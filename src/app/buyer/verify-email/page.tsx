@@ -55,7 +55,7 @@ export default async function BuyerVerifyEmailPage({ searchParams }: Props) {
   return (
     <main className="min-h-screen bg-[#07111f] px-4 py-8 text-white sm:px-6">
       <section className="mx-auto max-w-2xl">
-        <Link href="/shops" className="inline-flex items-center gap-3"><Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={44} height={44} priority /><div><p className="text-sm font-bold">Eugene Jersey Management</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Buyer email verification</p></div></Link>
+        <Link href="/shops" className="inline-flex items-center gap-3"><Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={44} height={44} priority /><div><p className="text-sm font-bold">Eugene Shop Management</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">Buyer email verification</p></div></Link>
 
         <div className="mt-8 rounded-[32px] border border-white/10 bg-[#f4f7fb] p-5 text-[#07111f] shadow-[0_35px_120px_rgba(0,0,0,0.28)] sm:p-8">
           <span className="inline-flex rounded-2xl bg-cyan-50 p-3 text-cyan-700"><Mail size={24} /></span>

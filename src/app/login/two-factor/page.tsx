@@ -10,7 +10,7 @@ import {
   verifyTwoFactorChallenge,
 } from "@/lib/two-factor-challenge";
 
-export const metadata: Metadata = { title: "Security verification | EJM" };
+export const metadata: Metadata = { title: "Security verification | ESM" };
 export const dynamic = "force-dynamic";
 
 export default async function TwoFactorLoginPage() {
@@ -49,8 +49,8 @@ export default async function TwoFactorLoginPage() {
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/[0.08] blur-[120px]" />
       <div className="relative z-10 w-full max-w-[520px]">
         <div className="mb-5 text-center">
-          <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={48} height={48} className="mx-auto" priority />
-          <p className="mt-4 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">EJM · Secure sign in</p>
+          <Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={48} height={48} className="mx-auto" priority />
+          <p className="mt-4 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">ESM · Secure sign in</p>
           <h1 className="mt-3 text-4xl font-black tracking-[-0.05em]">One more private check.</h1>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48">The password for <span className="font-bold text-white/75">{accountName}</span> was accepted. Optional two-factor authentication is enabled on this {accountType}.</p>
         </div>

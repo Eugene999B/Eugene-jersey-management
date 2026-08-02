@@ -112,7 +112,7 @@ export async function checkDatabaseHealth(): Promise<IntegrationHealthCheck> {
 export async function checkPaystackHealth(): Promise<IntegrationHealthCheck> {
   const started = Date.now();
   const secret = paystackSecret();
-  const accountLabel = process.env.PAYSTACK_PLATFORM_ACCOUNT_LABEL?.trim() || "EJM administrator main account";
+  const accountLabel = process.env.PAYSTACK_PLATFORM_ACCOUNT_LABEL?.trim() || "ESM administrator main account";
   if (!secret) {
     return {
       key: "paystack",

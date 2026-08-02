@@ -4,6 +4,7 @@ import {
   BillingCycle,
   BusinessApplicationStatus,
   BusinessApplicationType,
+  BusinessType,
   CommunicationCreditChannel,
   Prisma,
   Role,
@@ -189,6 +190,7 @@ export async function approveShopBusinessApplicationAction(formData: FormData) {
       const shop = await tx.shop.create({
         data: {
           name: current.businessName,
+          businessType: current.businessType ?? BusinessType.MIXED,
           slug: parsed.data.slug,
           networkCode: shopNetworkCode(parsed.data.slug),
           staffLoginId: parsed.data.staffLoginId,
@@ -244,7 +246,7 @@ export async function approveShopBusinessApplicationAction(formData: FormData) {
         },
       });
       if (changed.count !== 1) throw new Error("APPLICATION_CHANGED");
-      await tx.auditLog.create({ data: { shopId: shop.id, userId: session.id, action: "admin.shop_application_approved", entityType: "BusinessApplication", entityId: current.id, metadata: { reference: current.reference, shopId: shop.id, ownerUserId: owner.id, planId: plan.id, planVersion: plan.version, billingCycle: parsed.data.billingCycle, loginId: parsed.data.staffLoginId, credentialDelivery: "out-of-band" } } });
+      await tx.auditLog.create({ data: { shopId: shop.id, userId: session.id, action: "admin.shop_application_approved", entityType: "BusinessApplication", entityId: current.id, metadata: { reference: current.reference, businessType: current.businessType ?? BusinessType.MIXED, shopId: shop.id, ownerUserId: owner.id, planId: plan.id, planVersion: plan.version, billingCycle: parsed.data.billingCycle, loginId: parsed.data.staffLoginId, credentialDelivery: "out-of-band" } } });
       approvedShopId = shop.id;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch {

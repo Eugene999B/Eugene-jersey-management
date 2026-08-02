@@ -81,7 +81,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
       {canPurchaseCredits ? (
         <section className="panel p-4 sm:p-5">
           <div className="flex items-center gap-2"><WalletCards size={19} className="text-[var(--shop-primary)]" /><h2 className="text-xl font-semibold">Purchase communication credits</h2></div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Configured packages are paid through the EJM administrator Paystack account. Store sales still settle separately to this shop’s own subaccount.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Configured packages are paid through the ESM administrator Paystack account. Store sales still settle separately to this shop’s own subaccount.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {credits.packages.map((creditPackage) => (
               <article key={creditPackage.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">

@@ -1,10 +1,14 @@
-# Eugene Jersey Management
+# Eugene Shop Management
 
-Production-ready multi-tenant sports shop platform for jersey shops, sports equipment retailers, suppliers, buyers, and platform admins. The app is built with Next.js App Router, Prisma, PostgreSQL, role-based access, structural tenant isolation, public storefronts, POS, debts, daily closing, supplier/network tools, exports, buyer ordering, chat, optional personal two-factor authentication, production integration health monitoring, store-owned Paystack settlement routing, and an advanced jersey design studio.
+Production-ready multi-tenant general business-management platform for retailers, wholesalers, service businesses, production shops and rental operators, suppliers, buyers, and platform admins. The app is built with Next.js App Router, Prisma, PostgreSQL, role-based access, structural tenant isolation, public storefronts, POS, debts, daily closing, supplier/network tools, exports, buyer ordering, chat, optional personal two-factor authentication, production integration health monitoring, store-owned Paystack settlement routing, and an optional advanced garment-printing and production design studio.
 
 Live Railway app: https://web-production-8ee56.up.railway.app
 
 GitHub repository: https://github.com/Eugene999B/Eugene-jersey-management
+
+## Business types and compatibility
+
+Every tenant is classified as Retail, Wholesale, Services, Production / printing, Rental or Mixed business. Existing tenants are preserved as Mixed business until an administrator deliberately changes their classification. Sports-specific catalogue fields are optional and appear only inside the sports-shop template. Legacy cookie names, payment reference prefixes and the default `EJM-ADMIN-ROOT` Login ID remain technically unchanged in Phase 1 to avoid invalidating sessions, payment reconciliation or production administrator access.
 
 ## Core Stack
 
@@ -29,7 +33,7 @@ GitHub repository: https://github.com/Eugene999B/Eugene-jersey-management
 - `/buyer/login`: Buyer phone/password login plus SMS setup/recovery.
 - `/buyer/security`: Personal optional 2FA controls for buyers.
 - `/dashboard`: Shop operations dashboard.
-- `/dashboard/designs`: Advanced jersey and transfer-sheet design studio.
+- `/dashboard/designs`: Optional advanced garment and transfer-sheet production studio.
 - `/admin`: Super Admin platform command center.
 - `/admin/integrations`: Read-only provider, storage, scheduler and settlement health control centre.
 - `/supplier`: Supplier portal.
@@ -76,13 +80,13 @@ Do not reuse `SESSION_SECRET` as `TWO_FACTOR_ENCRYPTION_KEY`. Keep both as separ
 
 The platform uses one administrator Paystack integration with a separate store subaccount for each shop.
 
-1. The EJM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
+1. The ESM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
 2. Every store has its own Paystack subaccount and settlement bank account.
 3. Customer payments for a store are initialized with that store's `subaccount` code.
 4. The store receives its settlement through its own subaccount.
-5. The configured EJM flat `transaction_charge`, when present, remains with the administrator main account.
+5. The configured ESM flat `transaction_charge`, when present, remains with the administrator main account.
 6. Platform subscriptions and future SMS/WhatsApp credit purchases belong to the administrator account.
-7. Stores may edit their settlement details and accepted payment methods, but cannot assign the Paystack subaccount, EJM charge or fee bearer.
+7. Stores may edit their settlement details and accepted payment methods, but cannot assign the Paystack subaccount, ESM charge or fee bearer.
 8. Only a platform administrator with Billing permission can verify and save those routing fields.
 9. A store card checkout is disabled unless a valid `ACCT_...` subaccount is assigned.
 10. Full settlement account numbers are masked in administrator views and excluded from audit metadata.
@@ -118,7 +122,7 @@ The Super Admin area controls:
 
 - Platform overview
 - Tenant shops
-- Store settlement and EJM payment routing
+- Store settlement and ESM payment routing
 - Production integration health
 - Admin staff/workers
 - Buyer and marketplace health
@@ -245,7 +249,7 @@ The purge refuses to run unless an active shop-independent real Super Admin exis
 
 See `docs/source/11_Production_Activation.md` for activation, password recovery and permanent demo-cleanup procedures.
 
-Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not connect this repository to the Chalin project. This repository deploys to the Railway project named `Eugene Jersey Management`.
+Use `npm.cmd run db:seed:demo` only for intentional local demo data. Do not connect this repository to the Chalin project. This repository deploys to the Railway project named `Eugene Shop Management`.
 
 ## Important Files
 
@@ -300,7 +304,7 @@ Before editing:
 7. Never make 2FA mandatory without a new explicit product decision. The approved rule is optional personal opt-in/opt-out for every account type.
 8. Never expose, log or store plaintext authenticator secrets or recovery codes after setup.
 9. Never replace store-owned Paystack settlement with a shared tenant balance.
-10. Never let a store user change the EJM platform fee, assigned subaccount or Paystack fee bearer.
+10. Never let a store user change the ESM platform fee, assigned subaccount or Paystack fee bearer.
 11. Provider health checks must remain read-only and must not initialize payments, send messages, upload files or release stock.
 12. If changing design studio behaviour, test selection, movement, mirror view, zoom, save, reload and mobile layout.
 13. Use GitHub pull requests and Railway deployment as the production source of truth.
@@ -319,7 +323,7 @@ Highest-priority status from the latest audit:
 - Release #16 optional personal 2FA is deployed successfully on Railway.
 - Structural tenant database isolation and permanent two-shop attack verification are active.
 - Desktop/mobile Chromium covers shop-owner, buyer, public, supplier and platform-admin surfaces.
-- Store card payments require a store-owned Paystack subaccount; EJM platform income remains with the administrator main account.
+- Store card payments require a store-owned Paystack subaccount; ESM platform income remains with the administrator main account.
 - `/admin/integrations` checks provider reachability without mutating payment, messaging, media or stock state.
 - POS, cart checkout, and public ordering use transaction-safe conditional stock decrements.
 - Design Studio has undo, redo, delete selected, grouped templates, richer shapes, improved selection math, and clearer machine connection details.

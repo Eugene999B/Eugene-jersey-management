@@ -66,7 +66,7 @@ export default async function CommunicationCreditsAdminPage({ searchParams }: Pa
           <Link href="/admin/billing" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-800 hover:text-cyan-950"><ArrowLeft size={16} /> Back to subscriptions</Link>
           <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Administrator-owned messaging commerce</p>
           <h1 className="mt-2 text-3xl font-semibold">Communication Credits</h1>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Configure and save SMS and WhatsApp packages immediately, monitor shop balances and reconcile Paystack purchases that settle to the EJM administrator account.</p>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Configure and save SMS and WhatsApp packages immediately, monitor shop balances and reconcile Paystack purchases that settle to the ESM administrator account.</p>
         </div>
       </div>
 

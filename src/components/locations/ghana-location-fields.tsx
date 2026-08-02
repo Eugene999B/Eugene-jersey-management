@@ -171,7 +171,7 @@ export function GhanaLocationFields({ required = false, compact = false, default
           {district && !containsValue(districts, district) ? <option value={district}>{district} — saved location</option> : null}
           {districts.map((item) => <option key={item.code || item.name} value={item.name}>{item.name}{item.capital ? ` — capital: ${item.capital}` : ""}</option>)}
         </select>
-        {districtError ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700"><span>{districtError}</span><button type="button" className="rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold" onClick={() => setDistrictReload((value) => value + 1)}>Retry districts</button></span> : <span className="mt-1 block text-xs text-slate-500">Select from the district, municipal and metropolitan list bundled with EJM for the chosen region.</span>}
+        {districtError ? <span className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-700"><span>{districtError}</span><button type="button" className="rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold" onClick={() => setDistrictReload((value) => value + 1)}>Retry districts</button></span> : <span className="mt-1 block text-xs text-slate-500">Select from the district, municipal and metropolitan list bundled with ESM for the chosen region.</span>}
       </label>
 
       <label className="block">

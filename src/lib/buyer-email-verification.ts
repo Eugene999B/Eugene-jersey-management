@@ -69,9 +69,9 @@ export async function createBuyerEmailCode(input: {
     const sent = await sendTransactionalEmail({
       to: email,
       recipientName: input.name,
-      subject: "Verify your Eugene Jersey Management email",
+      subject: "Verify your Eugene Shop Management email",
       text: `Hello ${input.name}, your email verification code is ${code}. It expires in ${minutes} minutes. Do not share it.`,
-      html: `<p>Hello ${safeName(input.name)},</p><p>Your Eugene Jersey Management email verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${minutes} minutes. Do not share it.</p>`,
+      html: `<p>Hello ${safeName(input.name)},</p><p>Your Eugene Shop Management email verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${minutes} minutes. Do not share it.</p>`,
       idempotencyKey: `buyer-email-verification/${record.id}/${codeHash.slice(0, 20)}`,
       tags: { category: "buyer_email_verification", buyer_id: input.buyerId },
     });

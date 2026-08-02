@@ -14,6 +14,15 @@ enum PlanTier {
   ENTERPRISE
 }
 
+enum BusinessType {
+  RETAIL
+  WHOLESALE
+  SERVICES
+  PRODUCTION_PRINTING
+  RENTAL
+  MIXED
+}
+
 enum Role {
   SUPER_ADMIN
   OWNER
@@ -228,6 +237,7 @@ model Shop {
   primaryColor               String                 @default("#0f766e")
   secondaryColor             String                 @default("#f97316")
   planTier                   PlanTier               @default(BASIC)
+  businessType               BusinessType           @default(MIXED)
   isActive                   Boolean                @default(true)
   city                       String?
   country                    String?                @default("Ghana")
@@ -291,6 +301,7 @@ model Shop {
   returnRequests        ReturnRequest[]
 
   @@index([isActive, planTier])
+  @@index([businessType, isActive])
   @@index([subscriptionStatus, subscriptionRenewalAt])
   @@index([networkCode])
   @@index([staffLoginId])

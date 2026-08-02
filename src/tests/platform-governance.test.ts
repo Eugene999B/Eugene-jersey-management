@@ -13,7 +13,7 @@ describe("platform governance settings", () => {
   it("returns only governance values that changed", () => {
     const next = { ...DEFAULT_PLATFORM_GOVERNANCE, platformName: "EJM Commerce", maintenanceMode: true, allowedUploadTypes: [...DEFAULT_PLATFORM_GOVERNANCE.allowedUploadTypes, "text/csv"] };
     expect(governanceChanges(DEFAULT_PLATFORM_GOVERNANCE, next)).toEqual({
-      platformName: { previous: "Eugene Jersey Management", next: "EJM Commerce" },
+      platformName: { previous: "Eugene Shop Management", next: "EJM Commerce" },
       maintenanceMode: { previous: false, next: true },
       allowedUploadTypes: { previous: DEFAULT_PLATFORM_GOVERNANCE.allowedUploadTypes, next: next.allowedUploadTypes },
     });

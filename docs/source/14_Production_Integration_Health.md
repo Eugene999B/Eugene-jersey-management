@@ -10,11 +10,11 @@ Health checks do not create payments, send messages, upload files or release sto
 
 ## Payment ownership rule
 
-1. The EJM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
+1. The ESM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
 2. Every store receives its own Paystack subaccount and settlement bank destination.
 3. Customer payments for a store are initialized with that store's `subaccount` code.
 4. The store receives its settlement through its own subaccount.
-5. The configured flat `transaction_charge`, when present, remains with the EJM administrator main account.
+5. The configured flat `transaction_charge`, when present, remains with the ESM administrator main account.
 6. Platform subscriptions, communication-credit purchases and other EJM-owned charges belong to the administrator main account.
 7. A store owner can maintain settlement contact details and accepted methods, but cannot assign the Paystack subaccount, EJM charge or Paystack fee bearer.
 8. Only a platform administrator with Billing permission can verify and save those routing fields.
@@ -79,7 +79,7 @@ RESERVATION_JOB_INTERVAL_MINUTES
 1. Confirm the Release #16 Railway deployment and independent 2FA encryption key.
 2. Deploy Release #17 with provider features still disabled where credentials are incomplete.
 3. Open `/admin/integrations` and resolve unreachable or unconfigured services.
-4. Verify the EJM administrator Paystack account.
+4. Verify the ESM administrator Paystack account.
 5. Verify each store's own Paystack subaccount from its admin shop page.
 6. Configure the scheduler and confirm a successful heartbeat.
 7. Perform controlled test transactions and delivery tests before broad customer use.

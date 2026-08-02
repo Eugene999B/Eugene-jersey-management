@@ -43,7 +43,7 @@ describe("production integration health", () => {
 
   it("recognises a reachable live administrator Paystack account", async () => {
     process.env.PAYSTACK_SECRET_KEY = "sk_live_platform_test_value";
-    process.env.PAYSTACK_PLATFORM_ACCOUNT_LABEL = "EJM platform settlement";
+    process.env.PAYSTACK_PLATFORM_ACCOUNT_LABEL = "ESM platform settlement";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       status: true,
       data: [{ currency: "GHS", balance: 125050 }],

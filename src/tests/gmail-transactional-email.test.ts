@@ -27,7 +27,7 @@ afterEach(() => {
 describe("Gmail transactional delivery", () => {
   it("refreshes OAuth and sends a multipart OTP message through the authenticated Gmail mailbox", async () => {
     process.env.EMAIL_PROVIDER = "gmail";
-    process.env.EMAIL_FROM = "Eugene Jersey Management <eugenejerseymanagement@gmail.com>";
+    process.env.EMAIL_FROM = "Eugene Shop Management <eugenejerseymanagement@gmail.com>";
     process.env.GMAIL_CLIENT_ID = "gmail-client-id";
     process.env.GMAIL_CLIENT_SECRET = "gmail-client-secret";
     process.env.GMAIL_REFRESH_TOKEN = "gmail-refresh-token";
@@ -52,7 +52,7 @@ describe("Gmail transactional delivery", () => {
     const result = await sendTransactionalEmail({
       to: "customer@gmail.com",
       recipientName: "Customer",
-      subject: "Your Eugene Jersey Management code",
+      subject: "Your Eugene Shop Management code",
       text: "Your code is 123456.",
       html: "<p>Your code is <strong>123456</strong>.</p>",
       idempotencyKey: "test/gmail/otp/123456",
@@ -63,9 +63,9 @@ describe("Gmail transactional delivery", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://oauth2.googleapis.com/token");
     expect(String(fetchMock.mock.calls[1]?.[0])).toBe("https://gmail.googleapis.com/gmail/v1/users/me/messages/send");
-    expect(sentRaw).toContain("From: Eugene Jersey Management <eugenejerseymanagement@gmail.com>");
+    expect(sentRaw).toContain("From: Eugene Shop Management <eugenejerseymanagement@gmail.com>");
     expect(sentRaw).toContain("To: customer@gmail.com");
-    expect(sentRaw).toContain("Subject: Your Eugene Jersey Management code");
+    expect(sentRaw).toContain("Subject: Your Eugene Shop Management code");
     expect(sentRaw).toContain("Content-Type: multipart/alternative");
     expect(sentRaw).toContain(Buffer.from("Your code is 123456.", "utf8").toString("base64"));
     expect(sentRaw).toContain(Buffer.from("<p>Your code is <strong>123456</strong>.</p>", "utf8").toString("base64"));

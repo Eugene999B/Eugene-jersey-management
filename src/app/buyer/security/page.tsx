@@ -8,7 +8,7 @@ import { TwoFactorSecurityPanel } from "@/components/account/two-factor-security
 import { getBuyerSession } from "@/lib/buyer-session";
 import { getTwoFactorStatus } from "@/lib/two-factor-account";
 
-export const metadata: Metadata = { title: "Buyer security | EJM" };
+export const metadata: Metadata = { title: "Buyer security | ESM" };
 export const dynamic = "force-dynamic";
 
 export default async function BuyerSecurityPage() {

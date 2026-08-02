@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ImageInputCompatibility } from "@/components/media/image-input-compatibility";
+import { PLATFORM_DESCRIPTION, PLATFORM_LOGO_PATH, PLATFORM_MARK_PATH, PLATFORM_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -16,27 +17,27 @@ function metadataBase() {
 
 export const metadata: Metadata = {
   metadataBase: metadataBase(),
-  title: { default: "Eugene Jersey Management", template: "%s | Eugene Jersey Management" },
-  description: "Professional multi-shop commerce, jersey production, POS, customer, credit, stock and design operations.",
-  applicationName: "Eugene Jersey Management",
+  title: { default: PLATFORM_NAME, template: `%s | ${PLATFORM_NAME}` },
+  description: PLATFORM_DESCRIPTION,
+  applicationName: PLATFORM_NAME,
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: "/icon.svg",
-    apple: "/brand/ejm-mark.svg",
+    apple: PLATFORM_MARK_PATH,
   },
   openGraph: {
     type: "website",
-    siteName: "Eugene Jersey Management",
-    title: "Eugene Jersey Management",
-    description: "One secure operating system for sports retail, jersey production and multi-shop control.",
-    images: [{ url: "/brand/ejm-logo.svg", width: 920, height: 220, alt: "Eugene Jersey Management" }],
+    siteName: PLATFORM_NAME,
+    title: PLATFORM_NAME,
+    description: PLATFORM_DESCRIPTION,
+    images: [{ url: PLATFORM_LOGO_PATH, width: 920, height: 220, alt: PLATFORM_NAME }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Eugene Jersey Management",
-    description: "Professional sports retail, production and multi-shop operations.",
-    images: ["/brand/ejm-logo.svg"],
+    title: PLATFORM_NAME,
+    description: PLATFORM_DESCRIPTION,
+    images: [PLATFORM_LOGO_PATH],
   },
 };
 

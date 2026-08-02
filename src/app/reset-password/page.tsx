@@ -19,7 +19,7 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f6f4ef] p-5">
       <div className="panel w-full max-w-md p-6">
-        <Link href="/" className="mb-5 inline-flex items-center gap-3"><Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={44} height={44} /><span className="font-semibold">Eugene Jersey Management</span></Link>
+        <Link href="/" className="mb-5 inline-flex items-center gap-3"><Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={44} height={44} /><span className="font-semibold">Eugene Shop Management</span></Link>
         <p className="text-sm font-semibold uppercase text-[#0f766e]">Staff password reset</p>
         <h1 className="mt-2 text-3xl font-semibold">Create a new password</h1>
         <p className="mt-2 text-sm text-slate-600">Use at least {PASSWORD_MIN_LENGTH} characters with a letter and number.</p>

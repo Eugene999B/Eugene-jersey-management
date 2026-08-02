@@ -1,13 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <title>Eugene Jersey Management</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Eugene Shop Management</title>
+  <desc id="desc">ESM monogram representing connected commerce, services and production.</desc>
   <defs>
-    <linearGradient id="surface" x1="26" y1="22" x2="226" y2="238" gradientUnits="userSpaceOnUse"><stop stop-color="#10243E"/><stop offset="1" stop-color="#050B14"/></linearGradient>
-    <linearGradient id="signal" x1="52" y1="54" x2="202" y2="202" gradientUnits="userSpaceOnUse"><stop stop-color="#00D4FF"/><stop offset=".52" stop-color="#4F7CFF"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient>
-    <linearGradient id="accent" x1="58" y1="194" x2="199" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FF4D8D"/><stop offset="1" stop-color="#FF7A59"/></linearGradient>
+    <linearGradient id="surface" x1="22" y1="18" x2="230" y2="238" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10243E"/>
+      <stop offset="1" stop-color="#050B14"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="44" y1="46" x2="208" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00D4FF"/>
+      <stop offset=".52" stop-color="#4F7CFF"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="58" y1="202" x2="205" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D8D"/>
+      <stop offset="1" stop-color="#FF7A59"/>
+    </linearGradient>
   </defs>
-  <rect width="256" height="256" rx="58" fill="url(#surface)"/>
-  <path d="M49 76c0-14 11-25 25-25h64v25H79a5 5 0 0 0-5 5v16h54v25H74v28c0 3 2 5 5 5h53v25H74c-14 0-25-11-25-25V76Z" fill="#F8FAFC"/>
-  <path d="M139 51h27v94c0 11-5 17-15 17-8 0-14-4-20-12l-19 16c10 15 23 23 41 23 26 0 42-16 42-43V76h12V51h-68Z" fill="url(#signal)"/>
-  <path d="m102 188 22-52 20 34 19-34 24 52h-29l-14-25-14 25h-28Z" fill="url(#accent)"/>
-  <path d="M63 207h130" stroke="#00D4FF" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+  <rect x="10" y="10" width="236" height="236" rx="62" fill="url(#surface)"/>
+  <path d="M48 68c0-12 10-22 22-22h72v25H76a4 4 0 0 0-4 4v18h58v24H72v31c0 3 2 5 5 5h61v25H70c-12 0-22-10-22-22V68Z" fill="#F8FAFC"/>
+  <path d="M151 46h43c8 0 14 6 14 14v18h-25v-7h-29c-4 0-7 3-7 7 0 3 2 5 5 6l35 10c15 4 24 17 24 32 0 20-16 36-36 36h-42v-25h42c6 0 11-5 11-11 0-5-3-9-8-10l-34-10c-14-4-23-16-23-31 0-16 13-29 30-29Z" fill="url(#signal)"/>
+  <path d="m98 205 24-58 22 37 22-37 27 58h-29l-20-34-19 34H98Z" fill="url(#accent)"/>
+  <path d="M58 218h140" stroke="#00D4FF" stroke-width="5" stroke-linecap="round" opacity=".85"/>
 </svg>

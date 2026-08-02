@@ -1,4 +1,4 @@
-# Eugene Jersey Management - Production Security and Logic Audit
+# Eugene Shop Management - Production Security and Logic Audit
 
 **Audit date:** 26 July 2026  
 **Branch:** `agent/full-system-hardening-and-brand`  

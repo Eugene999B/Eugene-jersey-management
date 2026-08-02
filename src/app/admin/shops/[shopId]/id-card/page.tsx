@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { shortDate, titleCase } from "@/lib/format";
+import { businessTypeLabel } from "@/lib/brand";
 
 type Props = {
   params: Promise<{ shopId: string }>;
@@ -25,9 +26,9 @@ export default async function ShopIdCardPage({ params }: Props) {
               <Image src={shop.logoUrl || "/brand/accra-pro.svg"} alt={shop.name} width={54} height={54} className="rounded-[8px]" />
               <BadgeCheck size={34} className="text-emerald-300" />
             </div>
-            <p className="mt-6 text-xs font-semibold uppercase text-white/60">Verified seller ID</p>
+            <p className="mt-6 text-xs font-semibold uppercase text-white/60">Verified business ID</p>
             <h1 className="mt-1 text-2xl font-semibold">{shop.name}</h1>
-            <p className="mt-1 text-sm text-white/65">/{shop.slug}</p>
+            <p className="mt-1 text-sm text-white/65">{businessTypeLabel(shop.businessType)} · /{shop.slug}</p>
           </div>
           <div className="grid gap-3 p-5 text-sm">
             <div className="rounded-[8px] bg-[#f6f4ef] px-3 py-2">
@@ -48,7 +49,7 @@ export default async function ShopIdCardPage({ params }: Props) {
         <div className="rounded-[8px] border border-[#ded8cd] bg-white p-5">
           <div className="mb-4 flex items-center gap-2">
             <Store size={18} className="text-[#0f766e]" />
-            <h2 className="font-semibold">Seller information</h2>
+            <h2 className="font-semibold">Business information</h2>
           </div>
           <div className="space-y-3 text-sm">
             <p><span className="font-semibold">Legal name:</span> {shop.legalBusinessName || "Not provided"}</p>
@@ -57,7 +58,7 @@ export default async function ShopIdCardPage({ params }: Props) {
             <p><span className="font-semibold">Address:</span> {shop.credentialAddress || "Not provided"}</p>
           </div>
           <div className="mt-6 rounded-[8px] bg-[#f6f4ef] p-4 text-sm leading-6 text-slate-600">
-            This seller ID is valid only while the shop is active and verified on Eugene Jersey Management.
+            This business ID is valid only while the shop is active and verified on Eugene Shop Management.
           </div>
         </div>
       </section>

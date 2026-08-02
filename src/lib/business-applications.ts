@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { BusinessApplicationStatus, BusinessApplicationType } from "@prisma/client";
+import { BusinessApplicationStatus, BusinessApplicationType, BusinessType } from "@prisma/client";
 import { cookies, headers } from "next/headers";
 import { z } from "zod";
 import { platformDb } from "@/lib/platform-db";
@@ -41,6 +41,7 @@ export const publicBusinessApplicationSchema = z
   .object({
     type: z.nativeEnum(BusinessApplicationType),
     businessName: z.string().trim().min(2).max(160),
+    businessType: z.preprocess((value) => String(value ?? "").trim() || undefined, z.nativeEnum(BusinessType).optional()),
     legalBusinessName: optionalText(180),
     businessRegistrationNumber: optionalText(100),
     taxIdentificationNumber: optionalText(100),
@@ -69,6 +70,12 @@ export const publicBusinessApplicationSchema = z
     if (value.website) context.addIssue({ code: "custom", path: ["website"], message: "Automated submission rejected." });
     if (value.type === BusinessApplicationType.SUPPLIER && !value.requestedShopId) {
       context.addIssue({ code: "custom", path: ["requestedShopId"], message: "Choose the shop you want to supply." });
+    }
+    if (value.type === BusinessApplicationType.SHOP && !value.businessType) {
+      context.addIssue({ code: "custom", path: ["businessType"], message: "Choose the business type." });
+    }
+    if (value.type === BusinessApplicationType.SUPPLIER && value.businessType) {
+      context.addIssue({ code: "custom", path: ["businessType"], message: "Supplier applications do not use a tenant business type." });
     }
     if (value.type === BusinessApplicationType.SHOP && value.requestedShopId) {
       context.addIssue({ code: "custom", path: ["requestedShopId"], message: "Shop applications cannot request a supplier relationship." });

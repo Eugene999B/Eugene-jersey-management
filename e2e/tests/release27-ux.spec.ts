@@ -83,7 +83,7 @@ test("keeps deep marketplace filters URL-backed, visible and clearable on mobile
   await page.setViewportSize({ width: 390, height: 844 });
   await mockGhanaLocationDirectory(page);
   await page.goto("/shops?q=Browser&region=Greater%20Accra&district=Accra%20Metropolitan&city=Accra&ordering=open&sort=products");
-  await expect(page.getByRole("heading", { name: "EJM Marketplace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ESM Marketplace" })).toBeVisible();
   await expect(page.getByPlaceholder("Item, shop, team, brand or location")).toHaveValue("Browser");
   await expect(page.locator('select[name="region"]')).toHaveValue("Greater Accra");
   await expect(page.locator('select[name="district"]')).toHaveValue("Accra Metropolitan");

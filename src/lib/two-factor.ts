@@ -138,7 +138,7 @@ export function findRecoveryCodeIndex(candidate: string, hashes: string[]) {
 export function createTwoFactorSetup(accountLabel: string) {
   const secret = base32Encode(randomBytes(20));
   const recoveryCodes = generateRecoveryCodes();
-  const issuer = "Eugene Jersey Management";
+  const issuer = "Eugene Shop Management";
   const otpauthUri = `otpauth://totp/${encodeURIComponent(`${issuer}:${accountLabel}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 
   return {

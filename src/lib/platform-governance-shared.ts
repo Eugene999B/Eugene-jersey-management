@@ -2,7 +2,7 @@ export const PLATFORM_GOVERNANCE_ID = "platform";
 
 export const DEFAULT_PLATFORM_GOVERNANCE = {
   id: PLATFORM_GOVERNANCE_ID,
-  platformName: "Eugene Jersey Management",
+  platformName: "Eugene Shop Management",
   legalCompanyName: "",
   supportEmail: "",
   supportPhone: "",

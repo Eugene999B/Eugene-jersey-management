@@ -11,6 +11,7 @@ import {
   startBusinessApplicationReviewAction,
 } from "@/app/admin/applications/actions";
 import { platformDb } from "@/lib/platform-db";
+import { businessTypeLabel } from "@/lib/brand";
 import { requirePlatformPermission } from "@/lib/platform-admin";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { formatGhanaLocation } from "@/lib/ghana-locations";
@@ -87,7 +88,7 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-5">
           <article className="panel p-5"><h2 className="text-xl font-semibold">Applicant information</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{[
-            ["Business name", application.businessName], ["Legal name", application.legalBusinessName ?? "Not supplied"], ["Registration", application.businessRegistrationNumber ?? "Not supplied"], ["Tax ID", application.taxIdentificationNumber ?? "Not supplied"], ["Contact", application.contactName], ["Email", application.email], ["Phone", application.phone], ["Business location", structuredLocationLabel], ["Country", applicationLocation?.country ?? application.country], ["Categories", application.categories ?? "Not supplied"], ["Requested shop", requestedShop ?? (application.type === BusinessApplicationType.SHOP ? "New tenant workspace" : "Unavailable")],
+            ["Business name", application.businessName], ...(application.type === BusinessApplicationType.SHOP ? [["Business type", businessTypeLabel(application.businessType)]] : []), ["Legal name", application.legalBusinessName ?? "Not supplied"], ["Registration", application.businessRegistrationNumber ?? "Not supplied"], ["Tax ID", application.taxIdentificationNumber ?? "Not supplied"], ["Contact", application.contactName], ["Email", application.email], ["Phone", application.phone], ["Business location", structuredLocationLabel], ["Country", applicationLocation?.country ?? application.country], ["Categories", application.categories ?? "Not supplied"], ["Requested shop", requestedShop ?? (application.type === BusinessApplicationType.SHOP ? "New tenant workspace" : "Unavailable")],
           ].map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3 text-sm"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words font-semibold">{value}</p></div>)}</div>{applicationLocation ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4"><h3 className="font-semibold text-emerald-950">Structured Ghana location</h3><div className="mt-3 grid gap-3 sm:grid-cols-2">{[
             ["Region", applicationLocation.region],
             ["District", applicationLocation.district],
@@ -114,7 +115,7 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
             <Field label="Subscription plan"><select className="field" name="planId" required defaultValue=""><option value="" disabled>Select a configured plan</option>{sortedPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · monthly {currency(plan.monthlyPrice?.toString() ?? "0")} · yearly {currency(plan.yearlyPrice?.toString() ?? "0")}</option>)}</select></Field>
             <Field label="Billing cycle"><select className="field" name="billingCycle" defaultValue={BillingCycle.MONTHLY}>{Object.values(BillingCycle).map((cycle) => <option key={cycle} value={cycle}>{titleCase(cycle)}</option>)}</select></Field>
             <Field label="Temporary password"><input className="field" type="password" name="temporaryPassword" required minLength={12} autoComplete="new-password" /></Field>
-            <Field label="Applicant-facing approval message"><textarea className="field min-h-24 resize-y" name="decisionReason" required minLength={5} maxLength={3000} defaultValue="Your shop application was approved. Eugene Jersey Management will deliver your temporary Login ID and password through a separate secure channel." /></Field>
+            <Field label="Applicant-facing approval message"><textarea className="field min-h-24 resize-y" name="decisionReason" required minLength={5} maxLength={3000} defaultValue="Your shop application was approved. Eugene Shop Management will deliver your temporary Login ID and password through a separate secure channel." /></Field>
             <Field label="Internal review notes"><textarea className="field min-h-24 resize-y" name="reviewNotes" maxLength={5000} /></Field>
           </div><Button className="mt-4">Approve and create shop</Button></form> : null}
 
@@ -124,7 +125,7 @@ export default async function BusinessApplicationDetailPage({ params, searchPara
             <Field label="Temporary password"><input className="field" type="password" name="temporaryPassword" required minLength={12} autoComplete="new-password" /></Field>
             <Field label="Payment terms"><input className="field" name="paymentTerms" maxLength={500} /></Field>
             <Field label="Lead time in days"><input className="field" name="leadTimeDays" type="number" min={0} max={365} defaultValue={7} /></Field>
-            <Field label="Applicant-facing approval message"><textarea className="field min-h-24 resize-y" name="decisionReason" required minLength={5} maxLength={3000} defaultValue="Your supplier application was approved for the selected shop. Eugene Jersey Management will deliver your temporary portal credentials through a separate secure channel." /></Field>
+            <Field label="Applicant-facing approval message"><textarea className="field min-h-24 resize-y" name="decisionReason" required minLength={5} maxLength={3000} defaultValue="Your supplier application was approved for the selected shop. Eugene Shop Management will deliver your temporary portal credentials through a separate secure channel." /></Field>
             <Field label="Internal review notes"><textarea className="field min-h-24 resize-y" name="reviewNotes" maxLength={5000} /></Field>
           </div><Button className="mt-4">Approve supplier relationship</Button></form> : null}
 

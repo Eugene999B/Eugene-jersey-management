@@ -1,4 +1,4 @@
-# Eugene Jersey Management - Production Activation and Demo Cleanup
+# Eugene Shop Management - Production Activation and Demo Cleanup
 
 Updated: 2026-07-26
 

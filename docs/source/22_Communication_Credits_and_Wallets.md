@@ -10,9 +10,9 @@ This is not a shared tenant cash balance. It is a channel-specific allowance for
 
 ## Payment ownership
 
-1. Communication-credit purchases use the EJM administrator Paystack integration configured by `PAYSTACK_SECRET_KEY`.
+1. Communication-credit purchases use the ESM administrator Paystack integration configured by `PAYSTACK_SECRET_KEY`.
 2. Credit purchases do not include a shop Paystack subaccount.
-3. The complete package payment settles to the EJM administrator account.
+3. The complete package payment settles to the ESM administrator account.
 4. Normal customer purchases from a shop remain unchanged: they still require that shop's verified Paystack subaccount and settlement destination.
 5. The credit callback and webhook both verify the provider transaction before adding units.
 6. Callback and webhook settlement are idempotent; the same purchase cannot credit a wallet twice.
@@ -97,6 +97,6 @@ It uses the existing variables:
 Before shops can purchase credits:
 
 1. Configure, activate and publish at least one package for the required channel.
-2. Confirm the EJM administrator Paystack integration is healthy.
+2. Confirm the ESM administrator Paystack integration is healthy.
 3. Complete a controlled package purchase and verify that exactly one purchase ledger entry is created.
 4. Complete controlled SMS and WhatsApp delivery tests before enabling broad paid messaging.

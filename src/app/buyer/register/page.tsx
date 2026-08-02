@@ -28,7 +28,7 @@ export default async function BuyerRegisterPage({ searchParams }: Props) {
     <main className="min-h-screen bg-[#07111f] text-white">
       <header className="border-b border-white/10 bg-[#07111f]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <Link href="/" className="flex min-w-0 items-center gap-3"><Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={42} height={42} priority /><div className="min-w-0"><p className="truncate text-sm font-bold">Eugene Jersey Management</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Buyer registration</p></div></Link>
+          <Link href="/" className="flex min-w-0 items-center gap-3"><Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={42} height={42} priority /><div className="min-w-0"><p className="truncate text-sm font-bold">Eugene Shop Management</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Buyer registration</p></div></Link>
           <Link href={`/buyer/login?next=${encodeURIComponent(next)}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-white"><ArrowLeft size={15} /> Buyer login</Link>
         </div>
       </header>

@@ -92,6 +92,7 @@ model BusinessApplication {
   type                       BusinessApplicationType
   status                     BusinessApplicationStatus @default(SUBMITTED)
   businessName               String
+  businessType               BusinessType?
   legalBusinessName          String?
   businessRegistrationNumber String?
   taxIdentificationNumber    String?
@@ -121,6 +122,7 @@ model BusinessApplication {
   updatedAt                  DateTime                  @updatedAt
 
   @@index([type, status, submittedAt])
+  @@index([businessType, status, submittedAt])
   @@index([assignedReviewerId, status, updatedAt])
   @@index([duplicateFingerprint, status])
   @@index([email, status])

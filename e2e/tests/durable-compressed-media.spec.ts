@@ -64,16 +64,16 @@ test("stores compressed shop, product and Design Studio images durably in Postgr
   await expectCompressedWebp(page, databasePathFromImageSource(await logo.getAttribute("src")));
 
   await page.goto("/dashboard/catalog");
-  const productForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Create product" }) });
+  const productForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Create item" }) });
   await expect(productForm.locator('input[name="photo"]')).toHaveAttribute("accept", /\.heif/);
-  await productForm.getByLabel("Product name").fill("Release 30 Compressed Product");
+  await productForm.getByLabel("Item or service name").fill("Release 30 Compressed Product");
   await productForm.getByLabel("Base price").fill("125");
   await productForm.getByLabel("Quantity").fill("7");
   await productForm.getByLabel(/SKU/).fill("R30-MEDIA-001");
-  await productForm.getByText("Optional product details").click();
+  await productForm.getByText("Optional item details").click();
   await productForm.getByLabel(/Category/).selectOption({ label: "Release 30 Products" });
   await productForm.locator('input[name="photo"]').setInputFiles(uploadedFile("release30-product.png"));
-  await productForm.getByRole("button", { name: "Create product" }).click();
+  await productForm.getByRole("button", { name: "Create item" }).click();
 
   const productCard = page.locator("article").filter({ hasText: "Release 30 Compressed Product" });
   await expect(productCard).toBeVisible();

@@ -14,7 +14,7 @@ test("presents a rich brand-led marketplace on desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto("/shops");
 
-  await expect(page.getByRole("heading", { name: "EJM Marketplace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ESM Marketplace" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shop brands worth opening" })).toBeVisible();
   await expect(page.getByText("Brands available").first()).toBeVisible();
   await expect(page.getByRole("link", { name: /Open shop/ }).first()).toBeVisible();
