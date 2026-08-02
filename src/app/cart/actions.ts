@@ -82,7 +82,7 @@ export async function addCartItemAction(formData: FormData) {
   if (!parsed.success) redirect(`/shop/${shopSlug}?error=invalid`);
 
   const variant = await prisma.productVariant.findFirst({
-    where: { id: parsed.data.variantId, product: { shop: { slug: parsed.data.shopSlug, isActive: true, storefrontEnabled: true, publicOrderingEnabled: true } } },
+    where: { id: parsed.data.variantId, product: { shop: { slug: parsed.data.shopSlug, isActive: true, storefrontEnabled: true, publicOrderingEnabled: true, enabledModules: { has: "ONLINE_SELLING" } } } },
     include: { product: { include: { shop: true } } },
   });
   if (!variant) redirect(`/shop/${parsed.data.shopSlug}?error=stock`);
@@ -111,7 +111,7 @@ export async function updateCartItemAction(formData: FormData) {
     include: { productVariant: { include: { product: { include: { shop: true } } } } },
   });
   if (!item) redirect("/cart?error=invalid");
-  if (!item.productVariant.product.shop.isActive || !item.productVariant.product.shop.publicOrderingEnabled || !item.productVariant.product.shop.storefrontEnabled) redirect("/cart?error=closed");
+  if (!item.productVariant.product.shop.isActive || !item.productVariant.product.shop.publicOrderingEnabled || !item.productVariant.product.shop.storefrontEnabled || !item.productVariant.product.shop.enabledModules.includes("ONLINE_SELLING")) redirect("/cart?error=closed");
   if (!item.productVariant.product.isService && parsed.data.quantity > item.productVariant.stockQty) redirect("/cart?error=stock");
 
   if (parsed.data.quantity === 0) await prisma.buyerCartItem.delete({ where: { id: item.id } });
@@ -157,7 +157,7 @@ export async function checkoutCartAction(formData: FormData) {
     prisma.buyerCartItem.findMany({ where: { buyerId: buyer.id, shopId: parsed.data.shopId }, include: { productVariant: { include: { product: true } } }, orderBy: { createdAt: "asc" } }),
     parsed.data.deliveryZoneId ? prisma.deliveryZone.findFirst({ where: { id: parsed.data.deliveryZoneId, shopId: parsed.data.shopId, isActive: true } }) : null,
   ]);
-  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled) redirect("/cart?error=closed");
+  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING")) redirect("/cart?error=closed");
   try {
     await assertOrderCreationAvailable({ shopId: shop.id, channel: OrderChannel.ONLINE });
   } catch (error) {

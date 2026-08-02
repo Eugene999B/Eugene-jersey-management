@@ -83,7 +83,7 @@ async function generate() {
   for (const fileName of sourceFiles) {
     const markdown = await readFile(path.join(sourceDir, fileName), "utf8");
     const document = new Document({
-      creator: "Eugene Jersey Management",
+      creator: "Eugene Shop Management",
       title: markdown.match(/^#\s+(.+)$/m)?.[1] ?? safeFileName(fileName),
       numbering: {
         config: [{

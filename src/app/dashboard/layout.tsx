@@ -6,8 +6,10 @@ import { Role } from "@prisma/client";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
+import { businessModuleEnabled, businessModuleForDashboardPath } from "@/lib/business-modules";
 import { canAccessDashboardPath } from "@/lib/dashboard-access";
-import { subscriptionAccessForDashboardPath } from "@/lib/subscription-hardening";
+import { SUPPORTED_PLAN_FEATURES } from "@/lib/subscription-plans";
+import { subscriptionAccessForDashboardPath, subscriptionFeatureIncluded } from "@/lib/subscription-hardening";
 import { getTenantContext } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -39,9 +41,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const subscription = await subscriptionAccessForDashboardPath(shop.id, pathname);
   const isSubscriptionPath = pathname === "/dashboard/subscription" || pathname.startsWith("/dashboard/subscription/");
   const isSettingsPath = pathname === "/dashboard/settings" || pathname.startsWith("/dashboard/settings/");
+  const requiredModule = businessModuleForDashboardPath(pathname);
+  const includedFeatures = SUPPORTED_PLAN_FEATURES.filter((feature) => subscriptionFeatureIncluded(subscription, feature));
 
   if (!subscription.operational && !isSubscriptionPath && !isSettingsPath) {
     redirect(`/dashboard/subscription?error=${encodeURIComponent(subscription.blockCode ?? "subscription")}`);
+  }
+  if (requiredModule && !businessModuleEnabled(shop.enabledModules, requiredModule.key) && !isSubscriptionPath) {
+    redirect(`/dashboard/subscription?error=module&module=${encodeURIComponent(requiredModule.key)}`);
   }
   if (!subscription.featureIncluded && !isSubscriptionPath) {
     redirect(`/dashboard/subscription?error=feature&feature=${encodeURIComponent(subscription.feature ?? "PLAN_FEATURE")}`);
@@ -54,9 +61,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div style={style} className="grid min-h-screen min-w-0 bg-slate-100 lg:grid-cols-[260px_1fr]">
-      <div className="hidden lg:block"><DashboardSidebar role={session.role} shop={shop} /></div>
+      <div className="hidden lg:block"><DashboardSidebar role={session.role} shop={shop} includedFeatures={includedFeatures} /></div>
       <div className="min-w-0 overflow-x-clip">
-        <div className="lg:hidden"><DashboardSidebar role={session.role} shop={shop} variant="mobile" /></div>
+        <div className="lg:hidden"><DashboardSidebar role={session.role} shop={shop} includedFeatures={includedFeatures} variant="mobile" /></div>
         <DashboardTopbar session={session} shopId={shop.id} />
         {subscription.notice && !isSubscriptionPath ? (
           <div className={`mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold sm:mx-4 lg:mx-6 ${subscription.operational ? "border-amber-200 bg-amber-50 text-amber-900" : "border-red-200 bg-red-50 text-red-800"}`}>

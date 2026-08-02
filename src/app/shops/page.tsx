@@ -77,6 +77,7 @@ export default async function ShopsPage({ searchParams }: Props) {
     isActive: true,
     storefrontEnabled: true,
     verificationStatus: ShopVerificationStatus.VERIFIED,
+    enabledModules: { has: "MARKETPLACE" },
   };
   const orderBy: Prisma.ShopOrderByWithRelationInput[] = sort === "newest"
     ? [{ createdAt: "desc" }, { name: "asc" }]

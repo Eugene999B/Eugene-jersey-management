@@ -36,7 +36,7 @@ export async function createProductReviewAction(formData: FormData) {
   const product = await prisma.product.findFirst({
     where: {
       id: parsed.data.productId,
-      shop: { slug: parsed.data.shopSlug, isActive: true, storefrontEnabled: true },
+      shop: { slug: parsed.data.shopSlug, isActive: true, storefrontEnabled: true, enabledModules: { has: "ONLINE_SELLING" } },
     },
     include: { shop: true },
   });

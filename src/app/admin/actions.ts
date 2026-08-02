@@ -8,6 +8,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { AVAILABLE_OPTIONAL_BUSINESS_MODULES, OPTIONAL_BUSINESS_MODULE_KEYS, normalizeEnabledModules } from "@/lib/business-modules";
 import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
 import { platformPermissionValues, requirePlatformPermission } from "@/lib/platform-admin";
 
@@ -56,6 +57,43 @@ export async function toggleShopAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/shops");
   revalidatePath(`/admin/shops/${shopId}`);
+}
+
+const shopModulesSchema = z.object({
+  shopId: z.string().min(1).max(100),
+  enabledModules: z.array(z.enum(OPTIONAL_BUSINESS_MODULE_KEYS)),
+});
+
+export async function updateShopModulesAction(formData: FormData) {
+  const session = await requirePlatformPermission("shops");
+  const parsed = shopModulesSchema.safeParse({
+    shopId: formData.get("shopId"),
+    enabledModules: formData.getAll("enabledModules").map(String),
+  });
+  if (!parsed.success) redirect("/admin/shops?error=modules");
+
+  const existing = await prisma.shop.findUniqueOrThrow({
+    where: { id: parsed.data.shopId },
+    select: { enabledModules: true },
+  });
+  const available = new Set(AVAILABLE_OPTIONAL_BUSINESS_MODULES.map((module) => module.key));
+  const enabledModules = normalizeEnabledModules(parsed.data.enabledModules).filter((key) => available.has(key));
+
+  await prisma.shop.update({
+    where: { id: parsed.data.shopId },
+    data: { enabledModules },
+  });
+  await audit({
+    shopId: parsed.data.shopId,
+    userId: session.id,
+    action: "admin.shop_modules_updated",
+    entityType: "Shop",
+    entityId: parsed.data.shopId,
+    metadata: { previous: normalizeEnabledModules(existing.enabledModules), next: enabledModules },
+  });
+  revalidatePath(`/admin/shops/${parsed.data.shopId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/subscription");
 }
 
 const announcementSchema = z.object({ title: z.string().min(2), body: z.string().min(2) });

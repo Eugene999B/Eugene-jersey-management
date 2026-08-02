@@ -3,39 +3,55 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, Menu, MessageCircle, MoreHorizontal, Palette, ReceiptText, Settings, ShoppingCart, Tags, Truck, Users, X } from "lucide-react";
+import { Activity, BarChart3, Boxes, ClipboardCheck, ClipboardList, CreditCard, FileDown, LayoutDashboard, Link2, Menu, MessageCircle, MoreHorizontal, Palette, ReceiptText, Settings, ShoppingCart, Tags, Truck, Users, X, type LucideIcon } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { BrandImage } from "@/components/ui/brand-image";
+import { businessModuleEnabled, type BusinessModuleKey } from "@/lib/business-modules";
 import { canSeeNav, roleLabels } from "@/lib/rbac";
+import type { SubscriptionFeature } from "@/lib/subscription-hardening";
 
-const navItems = [
+type NavKey = keyof ReturnType<typeof canSeeNav>;
+type NavSection = "Run shop" | "Customers" | "Stock & supply" | "Controls" | "Team & setup";
+type NavItem = {
+  section: NavSection;
+  key: NavKey;
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: LucideIcon;
+  requiredModule?: BusinessModuleKey;
+  requiredFeature?: SubscriptionFeature;
+};
+
+const navItems: readonly NavItem[] = [
   { section: "Run shop", key: "dashboard", href: "/dashboard", label: "Overview", shortLabel: "Home", icon: LayoutDashboard },
-  { section: "Run shop", key: "pos", href: "/dashboard/pos", label: "Sales & POS", shortLabel: "POS", icon: ShoppingCart },
-  { section: "Run shop", key: "orders", href: "/dashboard/orders", label: "Orders & production", shortLabel: "Orders", icon: ClipboardList },
-  { section: "Run shop", key: "designs", href: "/dashboard/designs", label: "Design Studio", shortLabel: "Design", icon: Palette },
-  { section: "Customers", key: "customers", href: "/dashboard/customers", label: "Customer records", shortLabel: "Customers", icon: Users },
-  { section: "Customers", key: "debts", href: "/dashboard/debts", label: "Credit & debts", shortLabel: "Debts", icon: CreditCard },
-  { section: "Customers", key: "messages", href: "/dashboard/messages", label: "Messages", shortLabel: "Messages", icon: MessageCircle },
-  { section: "Stock & supply", key: "catalog", href: "/dashboard/catalog", label: "Products & stock", shortLabel: "Stock", icon: Boxes },
-  { section: "Stock & supply", key: "suppliers", href: "/dashboard/suppliers", label: "Suppliers", shortLabel: "Suppliers", icon: Truck },
-  { section: "Stock & supply", key: "network", href: "/dashboard/network", label: "Partner shops", shortLabel: "Network", icon: Link2 },
+  { section: "Run shop", key: "pos", href: "/dashboard/pos", label: "Sales & POS", shortLabel: "Sell", icon: ShoppingCart },
+  { section: "Run shop", key: "orders", href: "/dashboard/orders", label: "Orders & jobs", shortLabel: "Orders", icon: ClipboardList },
+  { section: "Run shop", key: "designs", href: "/dashboard/designs", label: "Printing & production", shortLabel: "Production", icon: Palette, requiredModule: "PRINTING_PRODUCTION", requiredFeature: "DESIGN_STUDIO" },
+  { section: "Customers", key: "customers", href: "/dashboard/customers", label: "Customers", shortLabel: "Customers", icon: Users },
+  { section: "Customers", key: "debts", href: "/dashboard/debts", label: "Payments & credit", shortLabel: "Payments", icon: CreditCard },
+  { section: "Customers", key: "messages", href: "/dashboard/messages", label: "Customer messages", shortLabel: "Messages", icon: MessageCircle, requiredFeature: "CUSTOMER_MESSAGING" },
+  { section: "Stock & supply", key: "catalog", href: "/dashboard/catalog", label: "Items & stock", shortLabel: "Items", icon: Boxes },
+  { section: "Stock & supply", key: "suppliers", href: "/dashboard/suppliers", label: "Suppliers & purchasing", shortLabel: "Suppliers", icon: Truck, requiredModule: "SUPPLIERS_PURCHASING", requiredFeature: "SUPPLIERS" },
+  { section: "Stock & supply", key: "network", href: "/dashboard/network", label: "Marketplace network", shortLabel: "Market", icon: Link2, requiredModule: "MARKETPLACE", requiredFeature: "SHOP_NETWORK" },
   { section: "Controls", key: "closing", href: "/dashboard/closing", label: "Daily closing", shortLabel: "Closing", icon: ClipboardCheck },
-  { section: "Controls", key: "commerce", href: "/dashboard/commerce", label: "Online selling", shortLabel: "Online", icon: Tags },
+  { section: "Controls", key: "commerce", href: "/dashboard/commerce", label: "Online selling", shortLabel: "Online", icon: Tags, requiredModule: "ONLINE_SELLING", requiredFeature: "STOREFRONT" },
   { section: "Controls", key: "reports", href: "/dashboard/reports", label: "Reports", shortLabel: "Reports", icon: BarChart3 },
-  { section: "Controls", key: "exports", href: "/dashboard/exports", label: "Export centre", shortLabel: "Exports", icon: FileDown },
-  { section: "Team & setup", key: "subscription", href: "/dashboard/subscription", label: "Subscription & usage", shortLabel: "Plan", icon: ReceiptText },
+  { section: "Controls", key: "exports", href: "/dashboard/exports", label: "Advanced exports", shortLabel: "Exports", icon: FileDown, requiredFeature: "ADVANCED_REPORTS" },
+  { section: "Team & setup", key: "subscription", href: "/dashboard/subscription", label: "Modules, plan & usage", shortLabel: "Plan", icon: ReceiptText },
   { section: "Team & setup", key: "staff", href: "/dashboard/staff", label: "Staff & permissions", shortLabel: "Staff", icon: Users },
   { section: "Team & setup", key: "activity", href: "/dashboard/activity", label: "Activity & security", shortLabel: "Activity", icon: Activity },
   { section: "Team & setup", key: "settings", href: "/dashboard/settings", label: "Shop settings", shortLabel: "Settings", icon: Settings },
-] as const;
-const navSections = ["Run shop", "Customers", "Stock & supply", "Controls", "Team & setup"] as const;
-const mobilePrimaryKeys = ["dashboard", "pos", "orders", "catalog"] as const;
+];
+const navSections: readonly NavSection[] = ["Run shop", "Customers", "Stock & supply", "Controls", "Team & setup"];
+const mobilePrimaryKeys: readonly NavKey[] = ["dashboard", "pos", "orders", "catalog"];
 
 type SidebarProps = {
   role: Role;
-  shop: { name: string; logoUrl: string | null; planTier: string };
+  shop: { name: string; logoUrl: string | null; planTier: string; enabledModules: string[] };
+  includedFeatures: readonly SubscriptionFeature[];
   variant?: "desktop" | "mobile";
 };
 
@@ -43,11 +59,15 @@ function isItemActive(pathname: string, href: string) {
   return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 }
 
-export function DashboardSidebar({ role, shop, variant = "desktop" }: SidebarProps) {
+export function DashboardSidebar({ role, shop, includedFeatures, variant = "desktop" }: SidebarProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const visible = canSeeNav(role);
-  const items = navItems.filter((item) => visible[item.key]);
+  const items = navItems.filter((item) =>
+    visible[item.key]
+    && (!item.requiredModule || businessModuleEnabled(shop.enabledModules, item.requiredModule))
+    && (!item.requiredFeature || includedFeatures.includes(item.requiredFeature)),
+  );
   const currentItem = items.find((item) => isItemActive(pathname, item.href));
   const primaryItems = mobilePrimaryKeys.flatMap((key) => {
     const item = items.find((candidate) => candidate.key === key);

@@ -6,6 +6,7 @@ import { BillingCycle, BusinessType, Role, ShopVerificationStatus, SubscriptionS
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
+import { defaultEnabledModulesForBusinessType } from "@/lib/business-modules";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { strongPasswordSchema } from "@/lib/password-policy";
@@ -79,7 +80,7 @@ export async function createSecureShopAction(formData: FormData) {
   const shop = await prisma.$transaction(async (tx) => {
     const createdShop = await tx.shop.create({
       data: {
-        name: parsed.data.name, slug: parsed.data.slug, businessType: parsed.data.businessType, networkCode: shopNetworkCode(parsed.data.slug), staffLoginId: proposedStaffLoginId,
+        name: parsed.data.name, slug: parsed.data.slug, businessType: parsed.data.businessType, enabledModules: defaultEnabledModulesForBusinessType(parsed.data.businessType), networkCode: shopNetworkCode(parsed.data.slug), staffLoginId: proposedStaffLoginId,
         verificationStatus: ShopVerificationStatus.PENDING, storefrontEnabled: false, publicOrderingEnabled: false, planTier: plan.tier,
         billingCycle: parsed.data.billingCycle, monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, subscriptionStatus: SubscriptionStatus.TRIAL,
         subscriptionRenewalAt: dates.renewalAt, legalBusinessName: parsed.data.legalBusinessName,

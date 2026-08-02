@@ -9,6 +9,8 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { requireBusinessModuleAccess } from "@/lib/business-module-access";
+import { businessModuleEnabled } from "@/lib/business-modules";
 
 function networkOrderNumber() {
   return `NX-${Date.now().toString().slice(-8)}-${nanoid(4).toUpperCase()}`;
@@ -19,11 +21,12 @@ const linkSchema = z.object({ partnerCode: z.string().trim().min(3).max(32) });
 export async function linkShopByCodeAction(formData: FormData) {
   const session = await requireRole(permissions.network);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
+  await requireBusinessModuleAccess(session.shopId, "MARKETPLACE");
   const parsed = linkSchema.safeParse({ partnerCode: formData.get("partnerCode") });
   if (!parsed.success) redirect("/dashboard/network?error=code");
 
   const partner = await prisma.shop.findUnique({ where: { networkCode: parsed.data.partnerCode.toUpperCase() } });
-  if (!partner || partner.id === session.shopId || !partner.isActive || partner.verificationStatus !== ShopVerificationStatus.VERIFIED) {
+  if (!partner || partner.id === session.shopId || !partner.isActive || partner.verificationStatus !== ShopVerificationStatus.VERIFIED || !businessModuleEnabled(partner.enabledModules, "MARKETPLACE")) {
     redirect("/dashboard/network?error=shop");
   }
 
@@ -48,6 +51,7 @@ const networkOrderSchema = z.object({
 export async function createNetworkOrderAction(formData: FormData) {
   const session = await requireRole(permissions.network);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
+  await requireBusinessModuleAccess(session.shopId, "MARKETPLACE");
   const parsed = networkOrderSchema.safeParse({
     partnerShopId: formData.get("partnerShopId"), productVariantId: formData.get("productVariantId") || undefined,
     description: formData.get("description"), quantity: formData.get("quantity"), unitPrice: formData.get("unitPrice"),
@@ -59,7 +63,7 @@ export async function createNetworkOrderAction(formData: FormData) {
     prisma.shopNetworkLink.findFirst({
       where: { status: NetworkLinkStatus.ACTIVE, OR: [{ requesterShopId: session.shopId, partnerShopId: parsed.data.partnerShopId }, { requesterShopId: parsed.data.partnerShopId, partnerShopId: session.shopId }] },
     }),
-    prisma.shop.findFirst({ where: { id: parsed.data.partnerShopId, isActive: true, verificationStatus: ShopVerificationStatus.VERIFIED }, select: { id: true } }),
+    prisma.shop.findFirst({ where: { id: parsed.data.partnerShopId, isActive: true, verificationStatus: ShopVerificationStatus.VERIFIED, enabledModules: { has: "MARKETPLACE" } }, select: { id: true } }),
     parsed.data.productVariantId
       ? prisma.productVariant.findFirst({ where: { id: parsed.data.productVariantId, product: { shopId: parsed.data.partnerShopId } }, select: { id: true } })
       : null,
@@ -81,6 +85,7 @@ export async function createNetworkOrderAction(formData: FormData) {
 export async function fulfillNetworkOrderAction(formData: FormData) {
   const session = await requireRole(permissions.network);
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "MARKETPLACE");
   if (!shopId) redirect("/login");
   const orderId = String(formData.get("orderId") ?? "");
   if (!orderId) redirect("/dashboard/network?error=fulfill");

@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { hashPassword } from "@/lib/auth";
+import { defaultEnabledModulesForBusinessType } from "@/lib/business-modules";
 import { strongPasswordSchema } from "@/lib/password-policy";
 import { platformDb } from "@/lib/platform-db";
 import { requirePlatformPermission } from "@/lib/platform-admin";
@@ -187,10 +188,12 @@ export async function approveShopBusinessApplicationAction(formData: FormData) {
     await platformDb.$transaction(async (tx) => {
       const current = await tx.businessApplication.findUnique({ where: { id: application.id } });
       if (!current || current.type !== BusinessApplicationType.SHOP || !isReviewable(current.status)) throw new Error("APPLICATION_NOT_REVIEWABLE");
+      const businessType = current.businessType ?? BusinessType.MIXED;
       const shop = await tx.shop.create({
         data: {
           name: current.businessName,
-          businessType: current.businessType ?? BusinessType.MIXED,
+          businessType,
+          enabledModules: defaultEnabledModulesForBusinessType(businessType),
           slug: parsed.data.slug,
           networkCode: shopNetworkCode(parsed.data.slug),
           staffLoginId: parsed.data.staffLoginId,

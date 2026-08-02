@@ -2,6 +2,7 @@ import { DesignJobStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
+import { businessModuleAccessForShop } from "@/lib/business-module-access";
 import { requireRole } from "@/lib/auth";
 import { ensureShopMachineProfiles, serializeMachineProfile } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
@@ -26,6 +27,10 @@ export async function POST(request: NextRequest) {
   const session = await requireRole(permissions.designs);
   if (!session.shopId) return NextResponse.json({ error: "A shop workspace is required." }, { status: 403 });
   const shopId = session.shopId;
+  const moduleAccess = await businessModuleAccessForShop(shopId, "PRINTING_PRODUCTION");
+  if (!moduleAccess.operational || !moduleAccess.enabled || !moduleAccess.featureIncluded) {
+    return NextResponse.json({ error: "Printing and production is not available for this business." }, { status: 403 });
+  }
 
   if (!isTrustedApplicationOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
