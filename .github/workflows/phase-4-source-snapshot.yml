@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           cat phase4-patch/part-* | tr -d '\n\r' | base64 --decode | gunzip > /tmp/phase4-navigation.patch
-          echo "e3da58c6678e28bcc3bdb270846e6fe9725f0a619aa9fab80f5ff76b889ecc95  /tmp/phase4-navigation.patch" | sha256sum --check --strict
+          echo "d869ed959deb4cb1771b9b4c77ccc8cf9682a2d207c5a6013e2cfdeaf86a1946  /tmp/phase4-navigation.patch" | sha256sum --check --strict
 
       - name: Apply to clean Phase 4 branch
         shell: bash
