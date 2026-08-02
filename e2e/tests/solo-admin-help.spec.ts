@@ -41,7 +41,7 @@ test("gives the sole administrator page help and downloadable handbooks", async 
   const handbookDownload = page.waitForEvent("download");
   await page.getByRole("link", { name: "Download complete handbook", exact: true }).click();
   const handbook = await handbookDownload;
-  expect(handbook.suggestedFilename()).toBe("EJM-Complete-Administrator-Handbook.docx");
+  expect(handbook.suggestedFilename()).toBe("ESM-Complete-Administrator-Handbook.docx");
 
   await page.goto("/admin/help");
   await expect(page.getByRole("heading", { name: "Help and downloadable handbooks" })).toBeVisible();
@@ -77,7 +77,7 @@ test("shows the owner Login ID, online controls, credit guidance and Design Stud
   const guideDownload = page.waitForEvent("download");
   await page.getByRole("link", { name: "Download quick guide", exact: true }).click();
   const guide = await guideDownload;
-  expect(guide.suggestedFilename()).toBe("EJM-Design-Studio-Quick-Guide.docx");
+  expect(guide.suggestedFilename()).toBe("ESM-Design-Studio-Quick-Guide.docx");
 });
 
 test("keeps the new owner guidance usable on a mobile viewport", async ({ page }) => {

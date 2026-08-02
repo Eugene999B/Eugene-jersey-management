@@ -212,7 +212,7 @@ test("keeps the primary owner workspace usable on a mobile viewport", async ({ p
     ["dashboard", "/dashboard", /What needs attention at EJM Browser Test Shop/],
     ["pos", "/dashboard/pos", "Point of Sale"],
     ["orders", "/dashboard/orders", "Production orders"],
-    ["catalog", "/dashboard/catalog", "Catalog"],
+    ["catalog", "/dashboard/catalog", "Items and services"],
     ["customers", "/dashboard/customers", "Customer records"],
     ["staff", "/dashboard/staff", "Staff directory"],
     ["settings", "/dashboard/settings", "Shop settings"],
@@ -270,7 +270,7 @@ test("keeps the remaining owner controls usable on a mobile viewport", async ({ 
 test("keeps public marketplace and storefront browsing mobile-safe", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const routes = [
-    ["marketplace", "/shops", "EJM Marketplace"],
+    ["marketplace", "/shops", "ESM Marketplace"],
     ["storefront", "/shop/ejm-browser-test-shop", "EJM Browser Test Shop"],
   ] as const;
 

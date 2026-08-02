@@ -51,6 +51,7 @@ async function submitShopApplication(page: Page, retry: number) {
   await mockGhanaLocationDirectory(page);
   await page.goto("/apply/shop");
   await page.getByLabel("Business name", { exact: true }).fill(businessName);
+  await page.getByLabel(/Business type/).selectOption("MIXED");
   await page.getByLabel("Legal business name", { exact: true }).fill(`${businessName} Limited`);
   await page.getByLabel("Business registration number").fill(`R26-SHOP-001${idSuffix}`);
   await page.getByLabel("Tax identification number").fill(`R26-TIN-001${idSuffix}`);
