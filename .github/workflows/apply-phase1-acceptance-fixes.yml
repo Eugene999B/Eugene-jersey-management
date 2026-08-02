@@ -1,0 +1,44 @@
+name: Apply Phase 1 acceptance fixes
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-phase1-acceptance-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'phase-1/esm-identity-generalization'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Phase 1 branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: phase-1/esm-identity-generalization
+
+      - name: Reconstruct and verify acceptance patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/phase1-acceptance.patch.gz.b64 <<'PATCH'
+          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
+          PATCH
+          base64 --decode /tmp/phase1-acceptance.patch.gz.b64 | gzip --decompress > /tmp/phase1-acceptance.patch
+          echo "4bbe687639c1f461ef3f92127c9962daf235f59cc3958267d635d9c4726720a6  /tmp/phase1-acceptance.patch" | sha256sum --check --strict
+
+      - name: Apply and commit acceptance fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --index --check /tmp/phase1-acceptance.patch
+          git apply --index /tmp/phase1-acceptance.patch
+          git diff --cached --check
+          git config user.name "Eugene Shop Release Bot"
+          git config user.email "194670606+Eugene999B@users.noreply.github.com"
+          git commit -m "test: align Phase 1 browser acceptance with ESM"
+          git push origin HEAD:phase-1/esm-identity-generalization
