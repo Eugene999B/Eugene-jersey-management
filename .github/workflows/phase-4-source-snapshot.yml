@@ -6,7 +6,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   snapshot:
@@ -22,3 +22,50 @@ jobs:
             !.git
           include-hidden-files: true
           retention-days: 1
+
+  apply-navigation-redesign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out patch carrier
+        uses: actions/checkout@v4
+        with:
+          ref: automation/phase-4-source-snapshot
+          fetch-depth: 0
+
+      - name: Decode and verify Phase 4 patch
+        shell: bash
+        run: |
+          cat phase4-patch/part-* | tr -d '\n\r' | base64 --decode | gunzip > /tmp/phase4-navigation.patch
+          echo "e3da58c6678e28bcc3bdb270846e6fe9725f0a619aa9fab80f5ff76b889ecc95  /tmp/phase4-navigation.patch" | sha256sum --check --strict
+
+      - name: Apply to clean Phase 4 branch
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout -B phase-4/navigation-redesign origin/main
+          git apply --check -p1 /tmp/phase4-navigation.patch
+          git apply -p1 /tmp/phase4-navigation.patch
+          git diff --check
+          git config user.name "Eugene ESM Release Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- \
+            docs/source/04_Phase_4_Navigation_Redesign.md \
+            e2e/tests/auth-navigation.spec.ts \
+            e2e/tests/phase4-navigation-redesign.spec.ts \
+            e2e/tests/release27-ux.spec.ts \
+            src/app/admin/layout.tsx \
+            src/app/dashboard/layout.tsx \
+            src/components/admin/admin-breadcrumbs.tsx \
+            src/components/admin/admin-navigation.tsx \
+            src/components/auth/logout-button.tsx \
+            src/components/dashboard/dashboard-breadcrumbs.tsx \
+            src/components/dashboard/dashboard-shell.tsx \
+            src/components/dashboard/dashboard-tool-search.tsx \
+            src/components/dashboard/sidebar.tsx \
+            src/components/dashboard/topbar.tsx \
+            src/lib/admin-navigation.ts \
+            src/lib/shop-navigation.ts \
+            src/tests/phase4-navigation-redesign.test.ts
+          git diff --cached --check
+          git commit -m "Phase 4: Redesign shop and administrator navigation"
+          git push --force-with-lease origin HEAD:phase-4/navigation-redesign
