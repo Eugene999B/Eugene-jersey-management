@@ -1,5 +1,18 @@
+import { createHmac } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
-import { authenticator } from "otplib";
+
+const accounts = {
+  unrestrictedAdmin: "EJM-E2E-ADMIN",
+  supportWorker: "EJM-E2E-SUPPORT",
+  owner: "EJM-E2E-OWNER",
+  twoFactorOwner: "EJM-E2E-2FA-OWNER",
+  twoFactorOwnerSecret: "JBSWY3DPEHPK3PXP",
+  twoFactorBuyerPhone: "+233200000099",
+  twoFactorBuyerSecret: "KRSXG5DSNFXGOIDB",
+  supplier: "browser-supplier@ejm.test",
+} as const;
+
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 function password() {
   const value = process.env.E2E_PASSWORD;
@@ -7,25 +20,44 @@ function password() {
   return value;
 }
 
-const accounts = {
-  unrestrictedAdmin: "EJM-E2E-ADMIN",
-  supportWorker: "EJM-E2E-SUPPORT",
-  owner: "EJM-E2E-OWNER",
-  supplier: "EJM-E2E-SUPPLIER",
-  twoFactorOwner: "EJM-E2E-2FA-OWNER",
-  twoFactorOwnerSecret: "JBSWY3DPEHPK3PXP",
-  twoFactorBuyerPhone: "+233501111193",
-  twoFactorBuyerSecret: "KRSXG5DSNFXGOIDB",
-} as const;
+function decodeBase32(value: string) {
+  let bits = "";
+  for (const character of value.toUpperCase().replace(/[^A-Z2-7]/g, "")) {
+    const index = BASE32_ALPHABET.indexOf(character);
+    if (index < 0) throw new Error("Invalid disposable TOTP secret.");
+    bits += index.toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let index = 0; index + 8 <= bits.length; index += 8) {
+    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function currentTotp(secret: string) {
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", decodeBase32(secret)).update(counterBuffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
+}
 
 async function revealCredentials(page: Page) {
   await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Enter credentials" })).toBeVisible();
   await expect(page.locator("input")).toHaveCount(0);
   await page.getByRole("button", { name: "Enter credentials" }).click();
-  return {
-    loginId: page.getByPlaceholder("Click, then enter Login ID or email"),
-    passwordField: page.getByPlaceholder("Click, then enter password"),
-  };
+
+  const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
+  const passwordField = page.getByPlaceholder("Click, then enter password");
+  await expect(loginId).toHaveValue("");
+  await expect(passwordField).toHaveValue("");
+  return { loginId, passwordField };
 }
 
 async function signIn(page: Page, loginIdValue: string) {
@@ -39,19 +71,20 @@ async function signIn(page: Page, loginIdValue: string) {
 }
 
 async function finishTwoFactor(page: Page, secret: string) {
-  await expect(page).toHaveURL(/\/two-factor-challenge/);
-  await page.getByPlaceholder("123456").fill(authenticator.generate(secret));
-  await page.getByRole("button", { name: "Verify and continue" }).click();
+  await expect(page).toHaveURL(/\/login\/two-factor(?:\?|$)/);
+  await expect(page.getByRole("heading", { name: "Confirm it is you" })).toBeVisible();
+  await page.getByPlaceholder("123456 or XXXX-XXXX").fill(currentTotp(secret));
+  await page.getByRole("button", { name: "Complete sign in" }).click();
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
-  const widths = await page.evaluate(() => ({
+  const dimensions = await page.evaluate(() => ({
     viewport: window.innerWidth,
     document: document.documentElement.scrollWidth,
     body: document.body.scrollWidth,
   }));
-  expect(widths.document).toBeLessThanOrEqual(widths.viewport + 1);
-  expect(widths.body).toBeLessThanOrEqual(widths.viewport + 1);
+  expect(dimensions.document, `document width ${dimensions.document} exceeds viewport ${dimensions.viewport}`).toBeLessThanOrEqual(dimensions.viewport + 1);
+  expect(dimensions.body, `body width ${dimensions.body} exceeds viewport ${dimensions.viewport}`).toBeLessThanOrEqual(dimensions.viewport + 1);
 }
 
 test("keeps credential inputs absent until the user opens them", async ({ page }) => {
@@ -296,6 +329,7 @@ test("keeps platform administration usable on a mobile viewport", async ({ page 
     await page.goto(path);
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await expect(page.getByRole("navigation", { name: "Quick admin navigation" })).toBeVisible();
+    await expect(page.locator("main h1, main h2").first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`mobile-admin-${name}.png`), fullPage: false });
   }
