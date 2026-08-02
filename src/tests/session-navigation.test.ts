@@ -32,7 +32,7 @@ describe("session navigation safety", () => {
   });
 
   it("uses dedicated admin routes instead of one-page section anchors", () => {
-    const navigation = source("components/admin/admin-navigation.tsx");
+    const navigation = source("lib/admin-navigation.ts");
     const routes = ["/admin", "/admin/shops", "/admin/staff", "/admin/support", "/admin/billing", "/admin/broadcast", "/admin/activity", "/admin/security", "/admin/settings"];
     for (const route of routes) expect(navigation).toContain(`href: "${route}"`);
     expect(navigation).not.toContain("/admin#");
@@ -58,7 +58,7 @@ describe("session navigation safety", () => {
 
   it("keeps global overview data away from scoped platform workers", () => {
     const overview = source("app/admin/page.tsx");
-    const navigation = source("components/admin/admin-navigation.tsx");
+    const navigation = source("lib/admin-navigation.ts");
     expect(overview).toContain("getAllowedPlatformPermissions");
     expect(overview).toContain("redirect(platformAdminHomePath(allowedPermissions))");
     expect(overview).toContain("Unrestricted platform overview");
