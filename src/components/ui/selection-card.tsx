@@ -23,12 +23,16 @@ export function SelectionCard({
   className,
   disabled,
   role,
+  "aria-label": ariaLabel,
   ...props
 }: SelectionCardProps) {
+  const resolvedAriaLabel = ariaLabel ?? (role === "radio" && typeof title === "string" ? title.toUpperCase() : undefined);
+
   return (
     <button
       type="button"
       role={role}
+      aria-label={resolvedAriaLabel}
       aria-pressed={role === "radio" ? undefined : selected}
       disabled={disabled}
       className={clsx("selection-card", selected && "is-selected", className)}
@@ -40,7 +44,7 @@ export function SelectionCard({
         {description ? <span className="selection-description">{description}</span> : null}
         {detail ? <span className="selection-detail">{detail}</span> : null}
       </span>
-      <span className="selection-status" aria-hidden={!selected}>
+      <span className="selection-status" aria-hidden="true">
         {selected ? <><CheckCircle2 size={18} /><span>{selectedLabel}</span></> : null}
       </span>
     </button>
