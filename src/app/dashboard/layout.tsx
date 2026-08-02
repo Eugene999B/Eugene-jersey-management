@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { DashboardSidebar } from "@/components/dashboard/sidebar";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { businessModuleEnabled, businessModuleForDashboardPath } from "@/lib/business-modules";
 import { canAccessDashboardPath } from "@/lib/dashboard-access";
@@ -59,20 +59,23 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     "--shop-secondary": shop.secondaryColor,
   } as CSSProperties;
 
-  return (
-    <div style={style} className="grid min-h-screen min-w-0 bg-slate-100 lg:grid-cols-[260px_1fr]">
-      <div className="hidden lg:block"><DashboardSidebar role={session.role} shop={shop} includedFeatures={includedFeatures} /></div>
-      <div className="min-w-0 overflow-x-clip">
-        <div className="lg:hidden"><DashboardSidebar role={session.role} shop={shop} includedFeatures={includedFeatures} variant="mobile" /></div>
-        <DashboardTopbar session={session} shopId={shop.id} />
-        {subscription.notice && !isSubscriptionPath ? (
-          <div className={`mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold sm:mx-4 lg:mx-6 ${subscription.operational ? "border-amber-200 bg-amber-50 text-amber-900" : "border-red-200 bg-red-50 text-red-800"}`}>
-            <span>{subscription.notice}</span>
-            <Link href="/dashboard/subscription" className="rounded-lg bg-white px-3 py-2 text-xs font-bold shadow-sm">View subscription</Link>
-          </div>
-        ) : null}
-        <main className="min-w-0 overflow-x-clip px-3 pb-24 pt-3 sm:p-4 sm:pb-24 lg:p-6 lg:pb-6">{children}</main>
-      </div>
+  const notice = subscription.notice && !isSubscriptionPath ? (
+    <div className={`mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold sm:mx-4 lg:mx-6 ${subscription.operational ? "border-amber-200 bg-amber-50 text-amber-900" : "border-red-200 bg-red-50 text-red-800"}`}>
+      <span>{subscription.notice}</span>
+      <Link href="/dashboard/subscription" className="rounded-lg bg-white px-3 py-2 text-xs font-bold shadow-sm">View subscription</Link>
     </div>
+  ) : undefined;
+
+  return (
+    <DashboardShell
+      role={session.role}
+      shop={shop}
+      includedFeatures={includedFeatures}
+      style={style}
+      topbar={<DashboardTopbar session={session} shop={shop} includedFeatures={includedFeatures} pathname={pathname} />}
+      notice={notice}
+    >
+      {children}
+    </DashboardShell>
   );
 }

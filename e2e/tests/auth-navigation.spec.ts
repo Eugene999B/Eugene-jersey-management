@@ -198,14 +198,18 @@ test("keeps the login control usable without horizontal overflow on a mobile vie
 test("keeps the primary owner workspace usable on a mobile viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, accounts.owner);
-  await expect(page.getByRole("button", { name: "Open all shop tools" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Quick shop navigation" })).toBeVisible();
+  const quickShopNavigation = page.getByRole("navigation", { name: "Quick shop navigation" });
+  await expect(quickShopNavigation).toBeVisible();
+  await expect(page.getByRole("link", { name: "Home", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sell", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Orders", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Items", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole("button", { name: "Open all shop tools" }).click();
+  await page.getByRole("button", { name: "Show all shop tools" }).click();
   await expect(page.getByRole("dialog", { name: "All shop tools" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Staff & permissions", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Shop settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Business settings", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close all shop tools" }).click();
 
   const routes = [
@@ -295,20 +299,16 @@ test("keeps the supplier portal usable on a mobile viewport", async ({ page }, t
 test("keeps platform administration usable on a mobile viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, accounts.unrestrictedAdmin);
-  const toolsButton = page.getByRole("button", { name: "Open platform tools" });
   const quickNavigation = page.getByRole("navigation", { name: "Quick admin navigation" });
-  await expect(toolsButton).toBeVisible();
   await expect(quickNavigation).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  const toolsBox = await toolsButton.boundingBox();
   const quickNavigationBox = await quickNavigation.boundingBox();
-  expect(toolsBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(120);
   expect(quickNavigationBox?.y ?? Number.NEGATIVE_INFINITY).toBeGreaterThan(700);
 
-  await toolsButton.click();
+  await page.getByRole("button", { name: "Show all platform tools" }).click();
   await expect(page.getByRole("dialog", { name: "All platform tools" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Shops", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Businesses", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Security", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close all platform tools" }).click();
 

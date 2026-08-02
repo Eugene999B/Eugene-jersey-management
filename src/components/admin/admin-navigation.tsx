@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { Activity, BarChart3, BookOpen, ClipboardCheck, Coins, CreditCard, FileText, FolderKanban, HeartPulse, LifeBuoy, Megaphone, Menu, MoreHorizontal, Search, Settings, Shield, Store, UserCog, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MoreHorizontal, Shield, X } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
+import {
+  adminNavigationSections,
+  isAdminNavigationItemActive,
+  mobilePrimaryAdminHrefs,
+  visibleAdminNavigationItems,
+} from "@/lib/admin-navigation";
 import type { PlatformPermission } from "@/lib/platform-admin";
 
 interface AdminNavigationProps {
@@ -12,67 +18,51 @@ interface AdminNavigationProps {
   variant?: "desktop" | "mobile";
 }
 
-const adminNav = [
-  { href: "/admin", label: "Overview", shortLabel: "Home", icon: BarChart3, permission: null },
-  { href: "/admin/shops", label: "Shops", shortLabel: "Shops", icon: Store, permission: "shops" },
-  { href: "/admin/applications", label: "Applications", shortLabel: "Apply", icon: ClipboardCheck, permission: "shops" },
-  { href: "/admin/staff", label: "Admin staff", shortLabel: "Staff", icon: UserCog, permission: "workers" },
-  { href: "/admin/investigate", label: "Investigation", shortLabel: "Search", icon: Search, permission: "support" },
-  { href: "/admin/support/cases", label: "Support cases", shortLabel: "Cases", icon: FolderKanban, permission: "support" },
-  { href: "/admin/support", label: "Support desk", shortLabel: "Queues", icon: LifeBuoy, permission: "support" },
-  { href: "/admin/billing", label: "Billing", shortLabel: "Billing", icon: CreditCard, permission: "billing" },
-  { href: "/admin/billing/invoices", label: "Subscription invoices", shortLabel: "Invoices", icon: FileText, permission: "billing" },
-  { href: "/admin/billing/communications", label: "Communication credits", shortLabel: "Credits", icon: Coins, permission: "billing" },
-  { href: "/admin/broadcast", label: "Broadcast", shortLabel: "Broadcast", icon: Megaphone, permission: "broadcast" },
-  { href: "/admin/activity", label: "Activity logs", shortLabel: "Activity", icon: Activity, permission: "activity" },
-  { href: "/admin/security", label: "Security", shortLabel: "Security", icon: Shield, permission: "security" },
-  { href: "/admin/integrations", label: "Integrations", shortLabel: "Health", icon: HeartPulse, permission: "settings" },
-  { href: "/admin/settings", label: "Settings", shortLabel: "Settings", icon: Settings, permission: "settings" },
-  { href: "/admin/help", label: "Help centre", shortLabel: "Help", icon: BookOpen, permission: null },
-] as const satisfies ReadonlyArray<{ href: string; label: string; shortLabel: string; icon: typeof BarChart3; permission: PlatformPermission | null }>;
-
-function isActive(pathname: string, href: string) {
-  if (href === "/admin") return pathname === "/admin";
-  if (href === "/admin/billing" || href === "/admin/support") return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
 export function AdminNavigation({ allowedPermissions, variant = "desktop" }: AdminNavigationProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const visibleItems = adminNav.filter((item) => {
-    if (item.permission === null) return allowedPermissions === null;
-    return allowedPermissions === null || allowedPermissions.includes(item.permission);
+  const visibleItems = visibleAdminNavigationItems(allowedPermissions);
+  const primaryItems = mobilePrimaryAdminHrefs.flatMap((href) => {
+    const item = visibleItems.find((candidate) => candidate.href === href);
+    return item ? [item] : [];
   });
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [menuOpen]);
+
   if (variant === "mobile") {
-    const primaryItems = visibleItems.slice(0, Math.min(4, visibleItems.length));
     return (
       <>
-        <button type="button" onClick={() => setMenuOpen(true)} aria-label="Open platform tools" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold lg:hidden"><Menu size={18} /> Tools</button>
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-8px_24px_rgb(15_23_42/0.08)] backdrop-blur lg:hidden" aria-label="Quick admin navigation">
           <div className="grid" style={{ gridTemplateColumns: `repeat(${primaryItems.length + 1}, minmax(0, 1fr))` }}>
             {primaryItems.map((item) => {
               const Icon = item.icon;
-              const active = isActive(pathname, item.href);
+              const active = isAdminNavigationItemActive(pathname, item.href);
               return <Link key={item.href} href={item.href} prefetch={false} aria-label={`Quick ${item.shortLabel}`} aria-current={active ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${active ? "bg-[#081528] text-white" : "text-slate-600 active:bg-slate-100"}`}><Icon size={18} /><span className="max-w-full truncate">{item.shortLabel}</span></Link>;
             })}
-            <button type="button" onClick={() => setMenuOpen(true)} aria-label="Show all platform tools" className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold text-slate-600 active:bg-slate-100"><MoreHorizontal size={19} /><span>More</span></button>
+            <button type="button" onClick={() => setMenuOpen(true)} aria-label="Show all platform tools" aria-expanded={menuOpen} className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold text-slate-600 active:bg-slate-100"><MoreHorizontal size={19} /><span>More</span></button>
           </div>
         </nav>
 
         {menuOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="All platform tools">
             <button type="button" aria-label="Close platform tools" className="absolute inset-0 bg-slate-950/60" onClick={() => setMenuOpen(false)} />
-            <aside className="absolute inset-y-0 left-0 flex w-[min(88vw,370px)] flex-col overflow-hidden bg-[#081528] text-white shadow-2xl">
-              <div className="shrink-0 flex items-center justify-between gap-3 border-b border-white/10 p-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300/70">Platform control</p><h2 className="mt-1 text-lg font-semibold">All admin tools</h2></div><button type="button" aria-label="Close all platform tools" onClick={() => setMenuOpen(false)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/10"><X size={20} /></button></div>
+            <aside className="absolute inset-y-0 right-0 flex w-[min(92vw,390px)] flex-col overflow-hidden bg-[#081528] text-white shadow-2xl">
+              <div className="shrink-0 flex items-center justify-between gap-3 border-b border-white/10 p-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300/70">Platform control</p><h2 className="mt-1 text-lg font-semibold">All administrator tools</h2></div><button type="button" aria-label="Close all platform tools" onClick={() => setMenuOpen(false)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/10"><X size={20} /></button></div>
               <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="All admin navigation">
-                <div className="space-y-1">{visibleItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link key={item.href} href={item.href} prefetch={false} onClick={() => setMenuOpen(false)} aria-current={active ? "page" : undefined} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${active ? "bg-cyan-300 text-[#081528]" : "text-white/75 active:bg-white/10"}`}><Icon size={18} />{item.label}</Link>; })}</div>
+                {adminNavigationSections.map((section) => {
+                  const sectionItems = visibleItems.filter((item) => item.section === section && !mobilePrimaryAdminHrefs.includes(item.href as (typeof mobilePrimaryAdminHrefs)[number]));
+                  if (!sectionItems.length) return null;
+                  return <section key={section} className="mb-5 last:mb-0"><p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-200/55">{section}</p><div className="space-y-1">{sectionItems.map((item) => { const Icon = item.icon; const active = isAdminNavigationItemActive(pathname, item.href); return <Link key={item.href} href={item.href} prefetch={false} onClick={() => setMenuOpen(false)} aria-current={active ? "page" : undefined} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${active ? "bg-cyan-300 text-[#081528]" : "text-white/75 active:bg-white/10"}`}><Icon size={18} />{item.label}</Link>; })}</div></section>;
+                })}
               </nav>
-              <div className="shrink-0 border-t border-white/10 p-3">
-                <Link href="/account/security" prefetch={false} onClick={() => setMenuOpen(false)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-white"><Shield size={17} /> Personal security</Link>
-                <LogoutButton className="mt-2 w-full bg-white text-slate-950 hover:bg-slate-100" />
-              </div>
+              <div className="shrink-0 border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"><Link href="/account/security" prefetch={false} onClick={() => setMenuOpen(false)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-3 text-sm font-semibold text-white"><Shield size={17} /> Personal security</Link><LogoutButton className="mt-2 w-full bg-white text-slate-950 hover:bg-slate-100" /></div>
             </aside>
           </div>
         ) : null}
@@ -82,13 +72,11 @@ export function AdminNavigation({ allowedPermissions, variant = "desktop" }: Adm
 
   return (
     <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Admin pages">
-      <div className="grid gap-1">
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(pathname, item.href);
-          return (
-            <Link key={item.href} prefetch={false} aria-current={active ? "page" : undefined} className={`inline-flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-cyan-300/50 ${active ? "bg-cyan-300 text-[#081528]" : "text-white/68 hover:bg-white/10 hover:text-white"}`} href={item.href}><Icon size={17} />{item.label}</Link>
-          );
+      <div className="space-y-5">
+        {adminNavigationSections.map((section) => {
+          const sectionItems = visibleItems.filter((item) => item.section === section);
+          if (!sectionItems.length) return null;
+          return <section key={section}><p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-200/45">{section}</p><div className="space-y-1">{sectionItems.map((item) => { const Icon = item.icon; const active = isAdminNavigationItemActive(pathname, item.href); return <Link key={item.href} prefetch={false} aria-current={active ? "page" : undefined} className={`inline-flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-cyan-300/50 ${active ? "bg-cyan-300 text-[#081528]" : "text-white/68 hover:bg-white/10 hover:text-white"}`} href={item.href}><Icon size={17} />{item.label}</Link>; })}</div></section>;
         })}
       </div>
     </nav>
