@@ -29,9 +29,9 @@ describe("Release 26 investigation and support cases", () => {
   });
 
   it("exposes cases and investigation only through the support permission navigation", () => {
-    const navigation = source("components/admin/admin-navigation.tsx");
-    expect(navigation).toContain('{ href: "/admin/investigate", label: "Investigation"');
-    expect(navigation).toContain('{ href: "/admin/support/cases", label: "Support cases"');
+    const navigation = source("lib/admin-navigation.ts");
+    expect(navigation).toContain('href: "/admin/investigate", label: "Investigation search"');
+    expect(navigation).toContain('href: "/admin/support/cases", label: "Support cases"');
     expect(navigation.match(/permission: "support"/g)?.length).toBeGreaterThanOrEqual(3);
   });
 

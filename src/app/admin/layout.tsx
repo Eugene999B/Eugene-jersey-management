@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { BookOpen, Building2, MessageCircle, ShieldCheck, UsersRound } from "lucide-react";
+import { AdminBreadcrumbs } from "@/components/admin/admin-breadcrumbs";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminPageHelp } from "@/components/admin/admin-page-help";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -39,25 +40,25 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             </div>
           </div>
         </aside>
-        <div className="min-w-0 pb-20 lg:pb-0">
+        <div className="min-w-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4 lg:px-6">
             <div className="flex items-center justify-between gap-3">
-              <Link href={homePath} prefetch={false} className="flex min-w-0 items-center gap-3">
-                <Image className="shrink-0 lg:hidden" src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={38} height={38} />
-                <div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.17em] text-cyan-700">Eugene Shop Management</p><h2 className="truncate text-base font-semibold sm:text-lg">Platform operations centre</h2></div>
-              </Link>
+              <div className="flex min-w-0 items-center gap-3">
+                <Link href={homePath} prefetch={false} className="shrink-0 lg:hidden" aria-label="Administrator home"><Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={38} height={38} /></Link>
+                <div className="min-w-0"><AdminBreadcrumbs pathname={pathname} homePath={homePath} /><h2 className="mt-1 truncate text-base font-semibold sm:text-lg">Platform operations centre</h2></div>
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 <AdminNavigation allowedPermissions={allowedPermissions} variant="mobile" />
                 <Link className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700" href="/admin/help" prefetch={false} title="Open administrator help" aria-label="Open administrator help"><BookOpen size={17} /></Link>
                 <Link className="hidden min-h-10 min-w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 sm:inline-flex" href="/account/security" prefetch={false} title="Personal account security" aria-label="Open personal account security"><ShieldCheck size={17} /></Link>
                 <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold sm:inline-flex" href="/shops" prefetch={false}><UsersRound size={16} /> Marketplace</Link>
-                {canManageShops ? <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold md:inline-flex" href="/admin/shops/new" prefetch={false}><Building2 size={16} /> New shop</Link> : null}
+                {canManageShops ? <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold md:inline-flex" href="/admin/shops/new" prefetch={false}><Building2 size={16} /> New business</Link> : null}
                 {canSupport ? <Link className="hidden min-h-10 items-center justify-center gap-2 rounded-xl bg-[#081528] px-3 text-sm font-semibold text-white md:inline-flex" href="/admin/support" prefetch={false}><MessageCircle size={16} /> Issues</Link> : null}
                 <LogoutButton className="hidden border border-slate-200 bg-white text-slate-800 sm:inline-flex lg:hidden" />
               </div>
             </div>
           </header>
-          <main className="p-3 sm:p-4 lg:p-6">{allowedPermissions === null ? <AdminPageHelp pathname={pathname} /> : null}{children}</main>
+          <main className="min-w-0 overflow-x-clip p-3 sm:p-4 lg:p-6">{allowedPermissions === null ? <AdminPageHelp pathname={pathname} /> : null}{children}</main>
         </div>
       </div>
     </div>

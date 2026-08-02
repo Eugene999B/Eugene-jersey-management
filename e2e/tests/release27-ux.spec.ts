@@ -58,7 +58,7 @@ test("keeps administrator help, security and sign out visible on a short desktop
 test("puts personal security and sign out inside the mobile administrator tools drawer", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsAdmin(page);
-  await page.getByRole("button", { name: "Open platform tools" }).click();
+  await page.getByRole("button", { name: "Show all platform tools" }).click();
   const dialog = page.getByRole("dialog", { name: "All platform tools" });
   await expect(dialog.getByRole("link", { name: "Personal security", exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
