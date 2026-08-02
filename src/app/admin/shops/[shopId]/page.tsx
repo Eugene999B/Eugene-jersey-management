@@ -119,16 +119,16 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
               const available = module.status === "AVAILABLE";
               const enabled = businessModuleEnabled(shop.enabledModules, module.key);
               return (
-                <label key={module.key} className={`rounded-xl border p-4 ${available ? enabled ? "border-cyan-300 bg-cyan-50" : "border-slate-200 bg-white" : "border-dashed border-slate-300 bg-slate-50 text-slate-500"}`}>
+                <div key={module.key} className={`rounded-xl border p-4 ${available ? enabled ? "border-cyan-300 bg-cyan-50" : "border-slate-200 bg-white" : "border-dashed border-slate-300 bg-slate-50 text-slate-500"}`}>
                   <div className="flex items-start gap-3">
-                    {available ? <input type="checkbox" name="enabledModules" value={module.key} defaultChecked={enabled} className="mt-1 h-5 w-5 rounded border-slate-300" /> : <span className="mt-1 grid h-5 w-5 place-items-center rounded border border-slate-300 text-[9px] font-bold">—</span>}
+                    {available ? <input type="checkbox" name="enabledModules" value={module.key} defaultChecked={enabled} aria-label={`Enable ${module.label}`} className="mt-1 h-5 w-5 rounded border-slate-300" /> : <span className="mt-1 grid h-5 w-5 place-items-center rounded border border-slate-300 text-[9px] font-bold">—</span>}
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-slate-950">{module.label}</span><Badge tone={available ? enabled ? "blue" : "neutral" : "orange"}>{available ? enabled ? "Enabled" : "Optional" : "Planned"}</Badge></span>
                       <span className="mt-2 block text-sm leading-5 text-slate-600">{module.description}</span>
                       <span className="mt-2 block text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{module.requiredFeature ? `Plan feature: ${module.requiredFeature.replaceAll("_", " ")}` : "Future phase"}</span>
                     </span>
                   </div>
-                </label>
+                </div>
               );
             })}
           </div>
