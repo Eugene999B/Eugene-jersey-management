@@ -6,18 +6,25 @@ on:
       - phase-1/esm-identity-generalization
     paths:
       - .github/workflows/apply-phase-1-patch.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-phase-1-patch.yml
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.head_ref == 'phase-1/esm-identity-generalization' || github.ref_name == 'phase-1/esm-identity-generalization'
     runs-on: ubuntu-latest
     steps:
       - name: Check out Phase 1 branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: phase-1/esm-identity-generalization
 
       - name: Reconstruct and verify release patch
         shell: bash
