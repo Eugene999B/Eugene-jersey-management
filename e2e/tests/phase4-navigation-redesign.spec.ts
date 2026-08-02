@@ -1,4 +1,9 @@
+import { createHmac } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
+
+const PHASE4_OWNER_LOGIN_ID = "EJM-E2E-2FA-OWNER";
+const PHASE4_OWNER_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 function password() {
   const value = process.env.E2E_PASSWORD;
@@ -6,7 +11,34 @@ function password() {
   return value;
 }
 
-async function signIn(page: Page, loginIdValue: string) {
+function decodeBase32(value: string) {
+  let bits = "";
+  for (const character of value.toUpperCase().replace(/[^A-Z2-7]/g, "")) {
+    const index = BASE32_ALPHABET.indexOf(character);
+    if (index < 0) throw new Error("Invalid disposable TOTP secret.");
+    bits += index.toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let index = 0; index + 8 <= bits.length; index += 8) {
+    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function currentTotp(secret: string) {
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", decodeBase32(secret)).update(counterBuffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
+}
+
+async function signIn(page: Page, loginIdValue: string, twoFactorSecret?: string) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
   const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
@@ -16,12 +48,19 @@ async function signIn(page: Page, loginIdValue: string) {
   await passwordField.click();
   await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
-  await page.waitForURL((url) => url.pathname !== "/login", { timeout: 30_000 });
+
+  if (twoFactorSecret) {
+    await expect(page).toHaveURL(/\/login\/two-factor(?:\?|$)/);
+    await page.getByPlaceholder("123456 or XXXX-XXXX").fill(currentTotp(twoFactorSecret));
+    await page.getByRole("button", { name: "Complete sign in" }).click();
+  }
+
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
 }
 
 test("provides desktop breadcrumbs, tool search and a collapsible shop sidebar", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await signIn(page, "EJM-E2E-OWNER");
+  await signIn(page, PHASE4_OWNER_LOGIN_ID, PHASE4_OWNER_TOTP_SECRET);
   await page.goto("/dashboard/customers");
 
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Customers");
@@ -39,7 +78,7 @@ test("provides desktop breadcrumbs, tool search and a collapsible shop sidebar",
 
 test("shows the exact mobile shop bar and grouped More menu without covering content", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page, "EJM-E2E-OWNER");
+  await signIn(page, PHASE4_OWNER_LOGIN_ID, PHASE4_OWNER_TOTP_SECRET);
   const quickNavigation = page.getByRole("navigation", { name: "Quick shop navigation" });
   await expect(quickNavigation).toBeVisible();
   for (const label of ["Home", "Sell", "Orders", "Items"]) {
