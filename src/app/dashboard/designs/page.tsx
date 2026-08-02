@@ -1,5 +1,7 @@
 import { Download, Palette, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { FeedbackState } from "@/components/ui/feedback-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { DesignStudioAdvanced } from "@/components/design/production-studio-advanced";
 import { ensureShopMachineProfiles } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
@@ -25,18 +27,18 @@ export default async function DesignsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Design Studio</h1>
-          <p className="mt-2 max-w-4xl text-sm text-slate-500">Create layered production artwork in exact millimetres, preserve immutable shop versions, and route each machine honestly through system printing, RIP/vendor file export, or direct serial HPGL cutting.</p>
-        </div>
-        <div className="flex flex-wrap gap-2"><a href="/api/guides/design-studio" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Download size={16} /> Download quick guide</a><Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge></div>
-      </div>
+      <PageHeader
+        eyebrow="Printing and production"
+        title="Design Studio"
+        description="Create layered production artwork in exact millimetres, preserve immutable shop versions, and route each machine honestly through system printing, RIP/vendor file export, or direct serial HPGL cutting."
+        actions={<><a href="/api/guides/design-studio" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Download size={16} /> Download quick guide</a><Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge></>}
+      />
 
-      <section className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950">
-        <p className="font-semibold">Universal workflow coverage without unsafe protocol claims</p>
-        <p className="mt-1">Installed printers are selected through the computer&apos;s print dialog; RIP-managed printers receive the full-colour SVG; SVG, DXF and PLT files open in vendor software; compatible HPGL cutters can also receive validated paths through a user-approved serial port.</p>
-      </section>
+      <FeedbackState
+        state="info"
+        title="Universal workflow coverage without unsafe protocol claims"
+        description="Installed printers use the computer print dialog; RIP-managed printers receive full-colour SVG; SVG, DXF and PLT files open in vendor software; compatible HPGL cutters receive only validated paths through a user-approved serial port."
+      />
 
       <div className="mobile-design-studio">
         <DesignStudioAdvanced
@@ -74,7 +76,7 @@ export default async function DesignsPage() {
               </div>
             </div>
           ))}
-          {!recentJobs.length ? <p className="p-5 text-sm text-slate-500">No saved design jobs yet. Use the studio above to prepare production artwork.</p> : null}
+          {!recentJobs.length ? <div className="p-4 sm:p-5"><FeedbackState state="empty" title="No saved design jobs yet" description="Use the studio above to prepare and save production artwork." /></div> : null}
         </div>
       </section>
     </div>

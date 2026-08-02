@@ -69,7 +69,7 @@ test("shows the owner Login ID, online controls, credit guidance and Design Stud
   await expect(page.getByText("ONLINE", { exact: true })).toBeVisible();
 
   await page.goto("/dashboard/pos");
-  await page.getByRole("button", { name: "CREDIT", exact: true }).click();
+  await page.getByRole("radio", { name: "CREDIT", exact: true }).click();
   await expect(page.getByText(/Choose an existing customer above or enter a new customer name/)).toBeVisible();
   await expect(page.getByText(/Each credit sale is saved separately under Debts/)).toBeVisible();
 

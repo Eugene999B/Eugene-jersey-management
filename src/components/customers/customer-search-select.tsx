@@ -2,6 +2,8 @@
 
 import { Search, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
+import { FeedbackState } from "@/components/ui/feedback-state";
+import { SelectionCard } from "@/components/ui/selection-card";
 
 type CustomerOption = {
   id: string;
@@ -25,45 +27,50 @@ export function CustomerSearchSelect({ customers }: { customers: CustomerOption[
   return (
     <div className="space-y-2">
       <input type="hidden" name="customerId" value={selectedId} />
-      <label className="flex items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3">
-        <Search size={16} className="text-slate-400" />
+      <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 focus-within:border-[var(--shop-primary)] focus-within:ring-4 focus-within:ring-[color-mix(in_srgb,var(--shop-primary),white_78%)]">
+        <Search size={16} className="shrink-0 text-slate-400" />
         <input
-          className="min-h-11 flex-1 bg-transparent text-sm outline-none"
+          className="min-h-11 min-w-0 flex-1 bg-transparent text-sm outline-none"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (selectedId) setSelectedId("");
+          }}
           placeholder="Search customer by name, phone, or email"
           aria-label="Search customers"
         />
       </label>
       {selected ? (
-        <button
-          type="button"
-          className="flex w-full items-center justify-between rounded-[8px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-sm"
-          onClick={() => setSelectedId("")}
-        >
-          <span><strong>{selected.name}</strong><span className="ml-2 text-slate-500">{selected.phone ?? selected.email ?? "Customer selected"}</span></span>
-          <span className="text-xs font-semibold text-emerald-700">Change</span>
-        </button>
+        <SelectionCard
+          selected
+          selectedLabel="Selected"
+          leading={<UserRound size={17} />}
+          title={selected.name}
+          description={selected.phone ?? selected.email ?? "Customer selected"}
+          detail="Tap to change customer"
+          onClick={() => {
+            setSelectedId("");
+            setQuery("");
+          }}
+        />
       ) : (
-        <div className="max-h-52 overflow-y-auto rounded-[8px] border border-[#ded8cd] bg-white p-1">
+        <div className="max-h-60 space-y-1 overflow-y-auto rounded-xl border border-[var(--line)] bg-white p-1.5 scrollbar-thin">
           {matches.map((customer) => (
-            <button
+            <SelectionCard
               key={customer.id}
-              type="button"
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-[#f6f4ef]"
+              leading={<UserRound size={16} />}
+              title={customer.name}
+              description={customer.phone ?? customer.email ?? "No contact saved"}
               onClick={() => {
                 setSelectedId(customer.id);
                 setQuery(customer.name);
               }}
-            >
-              <UserRound size={16} className="text-slate-400" />
-              <span><strong className="block">{customer.name}</strong><span className="text-xs text-slate-500">{customer.phone ?? customer.email ?? "No contact saved"}</span></span>
-            </button>
+            />
           ))}
-          {!matches.length ? <p className="px-3 py-4 text-sm text-slate-500">No matching customer. Add them in Customers first.</p> : null}
+          {!matches.length ? <FeedbackState compact state="empty" title="No matching customer" description="Add the customer in Customer records first." /> : null}
         </div>
       )}
-      {!selectedId ? <p className="text-xs text-slate-500">Choose a customer from the search results before saving.</p> : null}
+      {!selectedId ? <p className="text-xs leading-5 text-slate-500">Choose a customer from the search results before saving.</p> : null}
     </div>
   );
 }

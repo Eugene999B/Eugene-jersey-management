@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CheckCircle2, CreditCard, Landmark, Puzzle, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CreditCard, Landmark, Puzzle, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmActionButton } from "@/components/ui/confirm-action-button";
 import { StatCard } from "@/components/ui/stat-card";
 import { rejectShopCredentialsAction, toggleShopAction, updateShopModulesAction, verifyShopCredentialsAction } from "@/app/admin/actions";
 import { updateShopPaymentRoutingAction } from "@/app/admin/shops/[shopId]/payment-actions";
@@ -70,7 +71,7 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
           <h1 className="mt-2 text-3xl font-semibold">{shop.name}</h1>
           <p className="mt-1 text-sm text-slate-600">/{shop.slug} - network {shop.networkCode ?? "not assigned"} - owner Login ID {shop.staffLoginId ?? "not assigned"} - created {shortDate(shop.createdAt)}</p>
         </div>
-        <form action={toggleShopAction}><input type="hidden" name="shopId" value={shop.id} /><Button variant={shop.isActive ? "outline" : "primary"}>{shop.isActive ? "Suspend shop" : "Reactivate shop"}</Button></form>
+        <form action={toggleShopAction}><input type="hidden" name="shopId" value={shop.id} /><ConfirmActionButton confirmation={shop.isActive ? `Suspend ${shop.name}? Staff will lose operational access until the business is reactivated.` : `Reactivate ${shop.name}? Staff will regain access subject to subscription controls.`} variant={shop.isActive ? "danger" : "primary"}>{shop.isActive ? "Suspend shop" : "Reactivate shop"}</ConfirmActionButton></form>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Clock3, CreditCard, Minus, Plus, Printer, Search, ShoppingCart, Smartphone, Trash2, Wallet } from "lucide-react";
+import { CheckCircle2, Clock3, CreditCard, Minus, Plus, Printer, Search, ShoppingCart, Smartphone, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SelectionCard } from "@/components/ui/selection-card";
 import { currency } from "@/lib/format";
 
 type PosVariant = {
@@ -249,7 +250,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
             <input className="field mt-1" aria-label="Find existing customer" placeholder="Search name, phone or email" value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} />
           </label>
           {!selectedCustomerId && customerQuery ? <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-[#ded8cd] bg-white p-1">{customerMatches.map((customer) => <button key={customer.id} type="button" className="block min-h-11 w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#f6f4ef]" onClick={() => { setSelectedCustomerId(customer.id); setCustomerName(customer.name); setCustomerPhone(customer.phone ?? ""); setCustomerEmail(customer.email ?? ""); setCustomerQuery(customer.name); }}><strong className="block">{customer.name}</strong><span className="text-xs text-slate-500">{customer.phone ?? customer.email ?? "No contact"} · owes {currency(customer.outstandingBalance, currencyCode)}</span></button>)}{!customerMatches.length ? <p className="p-3 text-xs text-slate-500">No match. Enter a new customer below.</p> : null}</div> : null}
-          {selectedCustomer ? <button type="button" className="mt-2 min-h-11 w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={() => { setSelectedCustomerId(""); setCustomerQuery(""); setCustomerName(""); setCustomerPhone(""); setCustomerEmail(""); }}><span className="block">Existing customer selected: {selectedCustomer.name}</span><span className="mt-1 block font-normal">Current outstanding debt: {currency(selectedCustomer.outstandingBalance, currencyCode)} · click to change</span></button> : null}
+          {selectedCustomer ? <div className="mt-2"><SelectionCard selected selectedLabel="Selected" leading={<CheckCircle2 size={17} />} title={selectedCustomer.name} description={`Current outstanding debt: ${currency(selectedCustomer.outstandingBalance, currencyCode)}`} detail="Tap to change customer" onClick={() => { setSelectedCustomerId(""); setCustomerQuery(""); setCustomerName(""); setCustomerPhone(""); setCustomerEmail(""); }} /></div> : null}
           <label className="mt-3 block text-xs font-semibold text-slate-600">Customer name
             <input className="field mt-1" placeholder={paymentMethod === "STORE_CREDIT" ? "New credit customer name" : "Walk-in or new customer (optional)"} value={customerName} onChange={(event) => { setCustomerName(event.target.value); if (selectedCustomerId) setSelectedCustomerId(""); }} />
           </label>
@@ -285,13 +286,24 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
         <div className="space-y-3 border-t border-[#ded8cd] p-3 sm:p-4">
           <label className="block text-xs font-semibold text-slate-600">Discount amount<input className="field mt-1" type="number" min="0" step="0.01" placeholder="0.00" value={discountAmount || ""} onChange={(event) => setDiscountAmount(Number(event.target.value || 0))} /></label>
           {discountAmount > 0 ? <label className="block text-xs font-semibold text-slate-600">Discount reason<input className="field mt-1" maxLength={180} placeholder="Promotion, manager approval, damaged item..." value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} required /></label> : null}
-          <div className="grid grid-cols-4 gap-2">
-            {[["CASH", Wallet], ["CARD", CreditCard], ["MOMO", Smartphone], ["STORE_CREDIT", Clock3]].map(([method, Icon]) => (
-              <button type="button" key={String(method)} onClick={() => { setPaymentMethod(method as "CASH" | "CARD" | "MOMO" | "STORE_CREDIT"); setPaymentReference(""); setPaymentConfirmed(false); }} className={`min-h-14 rounded-lg border px-2 py-2 text-xs font-semibold sm:py-3 sm:text-sm ${paymentMethod === method ? "border-[var(--shop-primary)] bg-[var(--shop-primary)] text-white" : "border-[#ded8cd] bg-white text-slate-700"}`}>
-                <Icon className="mx-auto mb-1" size={18} />
-                {method === "STORE_CREDIT" ? "CREDIT" : String(method)}
-              </button>
-            ))}
+          <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Payment method">
+            {[["CASH", Wallet], ["CARD", CreditCard], ["MOMO", Smartphone], ["STORE_CREDIT", Clock3]].map(([method, Icon]) => {
+              const selected = paymentMethod === method;
+              return (
+                <SelectionCard
+                  key={String(method)}
+                  role="radio"
+                  aria-checked={selected}
+                  selected={selected}
+                  selectedLabel="Selected"
+                  leading={<Icon size={18} />}
+                  title={method === "STORE_CREDIT" ? "Credit" : String(method)}
+                  description={selected ? "Payment method selected" : "Choose this method"}
+                  className="min-h-20 flex-col items-stretch gap-2 px-2 text-center sm:flex-row sm:items-start sm:text-left"
+                  onClick={() => { setPaymentMethod(method as "CASH" | "CARD" | "MOMO" | "STORE_CREDIT"); setPaymentReference(""); setPaymentConfirmed(false); }}
+                />
+              );
+            })}
           </div>
           {paymentMethod === "CARD" || paymentMethod === "MOMO" ? <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3"><label className="block text-xs font-semibold text-sky-900">Terminal / network reference<input className="field mt-1" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Required reference" /></label><label className="flex items-start gap-2 text-xs font-semibold text-sky-900"><input className="mt-0.5 h-5 w-5 shrink-0" type="checkbox" checked={paymentConfirmed} onChange={(event) => setPaymentConfirmed(event.target.checked)} /><span>I confirmed that this payment was received on the card terminal or mobile-money network.</span></label></div> : null}
           {paymentMethod === "STORE_CREDIT" ? <div className="grid grid-cols-2 gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3"><label className="block"><span className="mb-1 block text-xs font-semibold text-orange-800">Credit due date</span><input className="field" type="date" value={creditDueDate} onChange={(event) => setCreditDueDate(event.target.value)} /></label><label className="block"><span className="mb-1 block text-xs font-semibold text-orange-800">Installments</span><input className="field" type="number" min="1" max="12" value={creditInstallments} onChange={(event) => setCreditInstallments(Number(event.target.value || 1))} /></label><div className="col-span-2 rounded-lg bg-white/70 p-3 text-xs leading-5 text-orange-900">{selectedCustomer ? <><strong>{selectedCustomer.name}</strong> currently owes {currency(selectedCustomer.outstandingBalance, currencyCode)}. This sale adds {currency(total, currencyCode)}, making the projected total {currency(projectedOutstanding, currencyCode)}.</> : customerName.trim() ? <>A new customer named <strong>{customerName.trim()}</strong> will be created and this {currency(total, currencyCode)} sale will become their first debt entry.</> : <>Choose an existing customer above or enter a new customer name. Each credit sale is saved separately under Debts, while the customer&apos;s total is the sum of all unpaid entries.</>}</div></div> : null}
