@@ -35,7 +35,7 @@ jobs:
       - name: Decode and verify Phase 3 patch
         shell: bash
         run: |
-          base64 --decode phase3-interface.patch | gunzip > /tmp/phase3-interface.patch
+          cat phase3-patch/part-* | tr -d '\n\r' | base64 --decode | gunzip > /tmp/phase3-interface.patch
           echo "afbfb8d38b59701adc817ff7953bf31159ecbc2e6a6e56ab1e2c4c81e6e29420  /tmp/phase3-interface.patch" | sha256sum --check --strict
 
       - name: Apply to clean Phase 3 branch
