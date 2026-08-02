@@ -85,8 +85,8 @@ export async function createNetworkOrderAction(formData: FormData) {
 export async function fulfillNetworkOrderAction(formData: FormData) {
   const session = await requireRole(permissions.network);
   const shopId = session.shopId;
-  await requireBusinessModuleAccess(shopId, "MARKETPLACE");
   if (!shopId) redirect("/login");
+  await requireBusinessModuleAccess(shopId, "MARKETPLACE");
   const orderId = String(formData.get("orderId") ?? "");
   if (!orderId) redirect("/dashboard/network?error=fulfill");
 
