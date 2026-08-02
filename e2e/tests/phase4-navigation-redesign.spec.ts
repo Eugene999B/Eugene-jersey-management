@@ -66,9 +66,10 @@ test("provides desktop breadcrumbs, tool search and a collapsible shop sidebar",
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Customers");
   await expect(page.getByRole("link", { name: "Quick sale" })).toBeVisible();
   await page.getByRole("button", { name: "Search ESM tools" }).click();
-  await page.getByRole("textbox", { name: "Search pages and tools" }).fill("supplier");
-  await expect(page.getByRole("link", { name: /Suppliers & purchasing/ })).toBeVisible();
-  await page.getByRole("button", { name: "Close search" }).click();
+  const searchDialog = page.getByRole("dialog", { name: "Search ESM tools" });
+  await searchDialog.getByRole("textbox", { name: "Search pages and tools" }).fill("supplier");
+  await expect(searchDialog.getByRole("link", { name: /Suppliers & purchasing/ })).toBeVisible();
+  await searchDialog.getByRole("button", { name: "Close search" }).click();
 
   await page.getByRole("button", { name: "Collapse shop sidebar" }).click();
   await expect(page.getByRole("button", { name: "Expand shop sidebar" })).toBeVisible();
