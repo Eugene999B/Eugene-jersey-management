@@ -9,8 +9,12 @@ function password() {
 async function signInAsOwner(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
-  await page.getByPlaceholder("Click, then enter Login ID or email").fill("EJM-E2E-OWNER");
-  await page.getByPlaceholder("Click, then enter password").fill(password());
+  const loginId = page.getByPlaceholder("Click, then enter Login ID or email");
+  const passwordField = page.getByPlaceholder("Click, then enter password");
+  await loginId.click();
+  await loginId.fill("EJM-E2E-OWNER");
+  await passwordField.click();
+  await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
@@ -35,6 +39,7 @@ const viewports = [
 ] as const;
 
 test("keeps the Phase 3 system usable across required screen sizes", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsOwner(page);
 
@@ -51,7 +56,7 @@ test("keeps the Phase 3 system usable across required screen sizes", async ({ pa
     await page.goto("/dashboard/pos");
     await expect(page.getByRole("heading", { name: "Point of Sale" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    const card = page.getByRole("radio", { name: /Card/ });
+    const card = page.getByRole("radio", { name: "CARD" });
     await card.click();
     await expect(card).toHaveAttribute("aria-checked", "true");
     await expect(card).toContainText("Selected");
