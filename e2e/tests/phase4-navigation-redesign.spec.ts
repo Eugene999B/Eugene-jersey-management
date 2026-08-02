@@ -62,7 +62,7 @@ test("groups desktop administrator tools and keeps a five-place mobile bar", asy
   await signIn(page, "EJM-E2E-ADMIN");
   const adminNavigation = page.getByRole("navigation", { name: "Admin pages" });
   for (const section of ["Businesses", "Plans & access", "Billing", "Support", "Communications", "Security", "Platform settings"]) {
-    await expect(adminNavigation.locator("p").filter({ hasText: new RegExp(`^${section.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`) })).toBeVisible();
+    await expect(adminNavigation.locator("p", { hasText: section })).toBeVisible();
   }
   await expect(page.getByRole("navigation", { name: "Administrator breadcrumb" })).toBeVisible();
 
