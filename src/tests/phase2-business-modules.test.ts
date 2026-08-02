@@ -54,7 +54,7 @@ describe("Phase 2 business modules", () => {
 
   it("hides disabled modules, protects direct URLs and exposes administrator controls", () => {
     const layout = source("../app/dashboard/layout.tsx");
-    const sidebar = source("../components/dashboard/sidebar.tsx");
+    const navigation = source("../lib/shop-navigation.ts");
     const adminActions = source("../app/admin/actions.ts");
     const adminShop = source("../app/admin/shops/[shopId]/page.tsx");
     const subscription = source("../app/dashboard/subscription/page.tsx");
@@ -65,8 +65,8 @@ describe("Phase 2 business modules", () => {
 
     expect(layout).toContain("businessModuleForDashboardPath");
     expect(layout).toContain("error=module&module=");
-    expect(sidebar).toContain("requiredModule");
-    expect(sidebar).toContain("businessModuleEnabled(shop.enabledModules");
+    expect(navigation).toContain("requiredModule?: BusinessModuleKey");
+    expect(navigation).toContain("businessModuleEnabled(enabledModules, item.requiredModule)");
     expect(adminActions).toContain("updateShopModulesAction");
     expect(adminActions).toContain("admin.shop_modules_updated");
     expect(adminShop).toContain("Save enabled modules");
