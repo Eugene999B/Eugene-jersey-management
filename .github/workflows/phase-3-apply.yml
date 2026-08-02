@@ -1,0 +1,61 @@
+name: Apply Phase 3 interface design system
+
+on:
+  push:
+    branches:
+      - automation/phase-3-source-snapshot
+    paths:
+      - phase3-interface.patch
+      - .github/workflows/phase-3-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out patch carrier
+        uses: actions/checkout@v4
+        with:
+          ref: automation/phase-3-source-snapshot
+          fetch-depth: 0
+
+      - name: Decode and verify Phase 3 patch
+        shell: bash
+        run: |
+          base64 --decode phase3-interface.patch | gunzip > /tmp/phase3-interface.patch
+          echo "afbfb8d38b59701adc817ff7953bf31159ecbc2e6a6e56ab1e2c4c81e6e29420  /tmp/phase3-interface.patch" | sha256sum --check --strict
+
+      - name: Apply to clean Phase 3 branch
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout -B phase-3/interface-design-system origin/main
+          git apply --check -p1 /tmp/phase3-interface.patch
+          git apply -p1 /tmp/phase3-interface.patch
+          git diff --check
+          git config user.name "Eugene ESM Release Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- \
+            docs/source/03_Phase_3_Interface_Design_System.md \
+            e2e/tests/phase3-interface-design-system.spec.ts \
+            src/app/admin/shops/[shopId]/page.tsx \
+            src/app/admin/shops/page.tsx \
+            src/app/dashboard/customers/page.tsx \
+            src/app/dashboard/designs/page.tsx \
+            src/app/globals.css \
+            src/components/customers/customer-search-select.tsx \
+            src/components/pos/pos-terminal.tsx \
+            src/components/ui/badge.tsx \
+            src/components/ui/button.tsx \
+            src/components/ui/confirm-action-button.tsx \
+            src/components/ui/data-table-shell.tsx \
+            src/components/ui/feedback-state.tsx \
+            src/components/ui/page-header.tsx \
+            src/components/ui/selection-card.tsx \
+            src/components/ui/stat-card.tsx \
+            src/tests/phase3-interface-design-system.test.ts
+          git diff --cached --check
+          git commit -m "Phase 3: Complete interface design system"
+          git push --force-with-lease origin HEAD:phase-3/interface-design-system
