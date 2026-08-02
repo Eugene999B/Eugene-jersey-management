@@ -1,6 +1,6 @@
 "use server";
 
-import { BusinessApplicationStatus, BusinessApplicationType, Prisma, ShopVerificationStatus } from "@prisma/client";
+import { BusinessApplicationStatus, BusinessApplicationType, BusinessType, Prisma, ShopVerificationStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import {
@@ -52,6 +52,7 @@ async function createApplicationWithUniqueReference(input: {
   statusTokenHash: string;
   duplicateFingerprint: string;
   businessName: string;
+  businessType: BusinessType | null;
   legalBusinessName: string | null;
   businessRegistrationNumber: string | null;
   taxIdentificationNumber: string | null;
@@ -99,6 +100,7 @@ export async function submitBusinessApplicationAction(formData: FormData) {
   const parsed = publicBusinessApplicationSchema.safeParse({
     type: formData.get("type"),
     businessName: formData.get("businessName"),
+    businessType: formData.get("businessType"),
     legalBusinessName: formData.get("legalBusinessName"),
     businessRegistrationNumber: formData.get("businessRegistrationNumber"),
     taxIdentificationNumber: formData.get("taxIdentificationNumber"),
@@ -160,6 +162,7 @@ export async function submitBusinessApplicationAction(formData: FormData) {
     statusTokenHash: hashApplicationStatusToken(statusToken),
     duplicateFingerprint: input.duplicateFingerprint,
     businessName: input.businessName,
+    businessType: input.businessType ?? null,
     legalBusinessName: input.legalBusinessName,
     businessRegistrationNumber: input.businessRegistrationNumber,
     taxIdentificationNumber: input.taxIdentificationNumber,

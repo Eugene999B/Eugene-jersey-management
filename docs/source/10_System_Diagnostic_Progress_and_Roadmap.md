@@ -1,4 +1,4 @@
-# Eugene Jersey Management - System Diagnostic, Progress, and Roadmap
+# Eugene Shop Management - System Diagnostic, Progress, and Roadmap
 
 Updated: 2026-07-28
 
@@ -38,7 +38,7 @@ Production account activation is repository-controlled: Railway migrations are f
 18. **Complete mobile hardening** — shop-owner, public marketplace/storefront, supplier and platform-admin surfaces have 390 × 844 Chromium overflow and navigation coverage.
 19. **Optional personal 2FA** — buyers, shop workers, owners, suppliers and platform administrators may individually enable or disable authenticator-based 2FA. It is off by default, uses encrypted secrets and one-time recovery codes, and never allows one administrator to toggle another person's preference.
 20. **Production Integration Health control centre** — `/admin/integrations` performs read-only checks for PostgreSQL, the EJM Paystack account, Arkesel, WhatsApp health, S3/R2 storage and the reservation-release scheduler.
-21. **Store-owned payment settlement** — every card-enabled store must use its own Paystack subaccount and settlement destination. EJM platform charges remain with the administrator main account.
+21. **Store-owned payment settlement** — every card-enabled store must use its own Paystack subaccount and settlement destination. ESM platform charges remain with the administrator main account.
 22. **Administrator-controlled payment routing** — stores may update their settlement details and accepted methods, but only a platform administrator with Billing permission can assign the subaccount, EJM flat charge or Paystack fee bearer.
 23. **Scheduled-job monitoring** — reservation-release runs are bearer-token protected and record started, successful and failed heartbeats in the platform audit log.
 24. **GitHub validation** — pull requests run dependency audit, Prisma generation and migrations, guarded lifecycle checks, lint, TypeScript, the complete unit suite, tenant-isolation attacks, production build and Chromium journeys.
@@ -47,7 +47,7 @@ Production account activation is repository-controlled: Railway migrations are f
 27. **Tenant contract snapshots** — existing tenant prices are preserved during migration, catalogue changes never silently reprice shops, and explicit assignment stores an immutable plan-version snapshot.
 28. **Included staff enforcement** — active non-owner staff and open invites reserve assigned plan slots; direct creation, invitations and acceptance fail closed through serializable platform transactions when the limit is reached.
 29. **Communication package catalogue** — SMS and WhatsApp package prices, paid units, bonuses and availability save immediately for the authenticated sole administrator and create immutable package versions.
-30. **Administrator-owned credit checkout** — communication packages use the EJM main Paystack account without a shop subaccount, while ordinary shop sales retain store-owned settlement.
+30. **Administrator-owned credit checkout** — communication packages use the ESM main Paystack account without a shop subaccount, while ordinary shop sales retain store-owned settlement.
 31. **Isolated shop wallets and ledger** — every shop has separate SMS and WhatsApp balances; verified purchases, message usage and provider-failure refunds are recorded through idempotent serializable ledger entries.
 32. **Fail-closed message charging** — real provider sends reserve one credit, insufficient balances block dispatch, failed sends refund automatically, and email or console queues remain free.
 33. **Sole-administrator commercial control** — subscription and communication-package changes apply immediately after the authenticated administrator saves them, while retaining reasons, stale-version protection and immutable history.
@@ -70,7 +70,7 @@ Production account activation is repository-controlled: Railway migrations are f
 
 ## Payment ownership and settlement rules
 
-1. The EJM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
+1. The ESM administrator owns the main Paystack integration configured by `PAYSTACK_SECRET_KEY`.
 2. Each store owns its own Paystack subaccount and settlement bank account.
 3. Customer payments for a store are initialized with that store's subaccount code.
 4. The store receives its settlement through its own Paystack subaccount.
@@ -102,7 +102,7 @@ Production account activation is repository-controlled: Railway migrations are f
 1. SMS and WhatsApp packages are channel-specific platform-commercial records.
 2. Migration placeholders contain no invented price or credit quantity and existing shops start with zero balances.
 3. Package edits save immediately for the authenticated sole administrator with a written reason, version checking and an immutable snapshot.
-4. Credit purchases use the EJM administrator Paystack account without a shop subaccount; store customer payments remain unchanged.
+4. Credit purchases use the ESM administrator Paystack account without a shop subaccount; store customer payments remain unchanged.
 5. Callback and webhook settlement verify amount and currency and can credit a purchase only once.
 6. Every shop owns separate SMS and WhatsApp wallets and cannot access another tenant's balance, purchase or ledger.
 7. One configured-provider message reserves one channel credit atomically before dispatch.
@@ -211,7 +211,7 @@ npm.cmd run build
 5. Access control changes must check `rbac.ts`, `dashboard-access.ts`, `proxy.ts`, server assertions, inactive-shop handling, tenant isolation and optional 2FA challenge/session boundaries.
 6. Never make 2FA mandatory without a new explicit product decision; the approved rule is personal opt-in/opt-out for every account type.
 7. Never replace store-owned settlement with a shared tenant balance. Customer store payments must retain their store subaccount assignment.
-8. Never let a store user change the EJM platform fee or Paystack fee bearer.
+8. Never let a store user change the ESM platform fee or Paystack fee bearer.
 9. Provider health checks must remain read-only and must not create transactions, send messages, upload files or release stock.
 10. Browser design recovery must remain scoped to the current shop and worker and must never silently overwrite the database copy.
 11. Design version history must remain immutable, shop-filtered and inaccessible through the generic tenant client.
@@ -222,5 +222,5 @@ npm.cmd run build
 16. Existing tenant prices must never change merely because a plan catalogue entry changes.
 17. Subscription catalogue, proposal, version and tenant-contract models must remain inaccessible through shop tenant clients.
 18. Communication package, history, wallet, purchase and ledger models must remain inaccessible through shop tenant clients and interactive tenant transactions.
-19. Communication purchases must settle to the EJM administrator account; normal shop customer payments must retain store-owned subaccount settlement.
+19. Communication purchases must settle to the ESM administrator account; normal shop customer payments must retain store-owned subaccount settlement.
 20. Use GitHub branches, pull requests, checks and Railway deployment as the production source of truth.

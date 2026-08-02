@@ -129,7 +129,7 @@ async function checkResendHealth(started: number): Promise<ProductionIntegration
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
         Accept: "application/json",
-        "User-Agent": "Eugene-Jersey-Management/1.0",
+        "User-Agent": "Eugene-Shop-Management/1.0",
       },
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs()),

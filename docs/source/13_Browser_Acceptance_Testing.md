@@ -1,6 +1,6 @@
 # Browser Acceptance Testing
 
-Eugene Jersey Management uses Playwright and Chromium to verify real browser behaviour after the normal lint, TypeScript, Vitest and production-build gates.
+Eugene Shop Management uses Playwright and Chromium to verify real browser behaviour after the normal lint, TypeScript, Vitest and production-build gates.
 
 ## Current acceptance coverage
 

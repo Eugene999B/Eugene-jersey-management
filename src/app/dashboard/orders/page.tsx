@@ -46,7 +46,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         <div>
           <h1 className="text-2xl font-semibold">Production orders</h1>
           <p className="mt-2 text-sm text-slate-500">
-            Button-driven Kanban for custom jerseys, services, and production handoff.
+            Button-driven Kanban for retail orders, services, custom production and fulfilment handoff.
           </p>
         </div>
         <form className="flex w-full max-w-md gap-2 sm:w-auto">

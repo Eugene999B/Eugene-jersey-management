@@ -13,6 +13,17 @@ import { activeProductVariants, productVariantLabel, productVariantSize } from "
 import { requireRole } from "@/lib/auth";
 
 const productTypes = [
+  "Stocked product",
+  "Service",
+  "Custom production item",
+  "Rental asset",
+  "Bundle",
+  "Non-stock item",
+  "Garment",
+  "Equipment",
+];
+
+const sportsShopProductTypes = [
   "Plain jersey",
   "Team jersey",
   "Custom print jersey",
@@ -24,7 +35,6 @@ const productTypes = [
   "Racket",
   "Gloves",
   "Bottle",
-  "Service",
 ];
 
 const sportTypes = ["Football", "Basketball", "Volleyball", "Tennis", "Running", "Gym", "Boxing", "Swimming", "Cycling", "General"];
@@ -73,7 +83,7 @@ function AdvancedProductFields({
 }) {
   return (
     <details className="rounded-xl border border-[#ded8cd] bg-white p-3">
-      <summary className="cursor-pointer text-sm font-semibold">Optional product details</summary>
+      <summary className="cursor-pointer text-sm font-semibold">Optional item details</summary>
       <div className="mt-3 space-y-3">
         <textarea className="field min-h-20" name="description" defaultValue={product?.description ?? ""} placeholder="Description" disabled={disabled} />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -88,23 +98,28 @@ function AdvancedProductFields({
           </label>
           <label className="block text-xs font-semibold text-slate-600">
             Brand <span className="font-normal text-slate-400">(optional)</span>
-            <input className="field mt-1" name="brand" defaultValue={product?.brand ?? ""} placeholder="Nike, Adidas..." disabled={disabled} />
+            <input className="field mt-1" name="brand" defaultValue={product?.brand ?? ""} placeholder="Brand or manufacturer" disabled={disabled} />
           </label>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <select className="field" name="productType" defaultValue={product?.productType ?? ""} disabled={disabled}>
-            <option value="">Product type (optional)</option>
-            {productTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+            <option value="">Item type (optional)</option>
+            <optgroup label="General business">{productTypes.map((type) => <option key={type} value={type}>{type}</option>)}</optgroup>
+            <optgroup label="Sports-shop template (optional)">{sportsShopProductTypes.map((type) => <option key={type} value={type}>{type}</option>)}</optgroup>
           </select>
-          <select className="field" name="sportType" defaultValue={product?.sportType ?? ""} disabled={disabled}>
-            <option value="">Sport (optional)</option>
-            {sportTypes.map((sport) => <option key={sport} value={sport}>{sport}</option>)}
-          </select>
+          <input className="field" name="color" placeholder="Colour (optional)" disabled={disabled} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input className="field" name="teamName" defaultValue={product?.teamName ?? ""} placeholder="Team name (optional)" disabled={disabled} />
-          <input className="field" name="color" placeholder="Main colour (optional)" disabled={disabled} />
-        </div>
+        <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Sports-shop attributes (optional)</summary>
+          <p className="mt-2 text-xs leading-5 text-slate-500">Use these only for sports merchandise. Other businesses can leave them empty.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <select className="field" name="sportType" defaultValue={product?.sportType ?? ""} disabled={disabled}>
+              <option value="">Sport (optional)</option>
+              {sportTypes.map((sport) => <option key={sport} value={sport}>{sport}</option>)}
+            </select>
+            <input className="field" name="teamName" defaultValue={product?.teamName ?? ""} placeholder="Team name (optional)" disabled={disabled} />
+          </div>
+        </details>
         <div className="grid gap-3 sm:grid-cols-2">
           <select className="field" name="condition" defaultValue={product?.condition ?? ProductCondition.NEW} disabled={disabled}>
             {Object.values(ProductCondition).map((condition) => <option key={condition} value={condition}>{titleCase(condition)}</option>)}
@@ -113,7 +128,7 @@ function AdvancedProductFields({
         </div>
         <input className="field" name="imageUrl" type="url" placeholder="Optional photo URL when no file is uploaded" disabled={disabled} />
         <div className="grid gap-2 text-sm text-slate-700">
-          <label className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><input name="isPersonalizable" type="checkbox" defaultChecked={product?.isPersonalizable ?? false} disabled={disabled} />Name/number personalization</label>
+          <label className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><input name="isPersonalizable" type="checkbox" defaultChecked={product?.isPersonalizable ?? false} disabled={disabled} />Customization or personalization</label>
           <label className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><input name="isService" type="checkbox" defaultChecked={product?.isService ?? false} disabled={disabled} />Service item — stock is not limited</label>
           <label className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><input name="isRentable" type="checkbox" defaultChecked={product?.isRentable ?? false} disabled={disabled} />Available for rental</label>
         </div>
@@ -160,19 +175,19 @@ export default async function CatalogPage({ searchParams }: Props) {
           <div className="panel p-5">
             <div className="mb-4 flex items-center gap-2">
               <Plus size={18} className="text-[var(--shop-primary)]" />
-              <div><h1 className="text-lg font-semibold">Add product</h1><p className="mt-1 text-xs text-slate-500">Only the name and base price are essential. Category and all other details are optional.</p></div>
+              <div><h1 className="text-lg font-semibold">Add item or service</h1><p className="mt-1 text-xs text-slate-500">Only the item name and base price are essential. Category, stock and specialist details are optional.</p></div>
             </div>
             <form action={createProductAction} encType="multipart/form-data" className="space-y-4">
-              <label className="block text-sm font-semibold text-slate-700">Product name<input className="field mt-1" name="name" placeholder="Manchester United away jersey 2012" disabled={!canWrite} required /></label>
+              <label className="block text-sm font-semibold text-slate-700">Item or service name<input className="field mt-1" name="name" placeholder="Blue cotton T-shirt, phone repair or generator hire" disabled={!canWrite} required /></label>
               <label className="block text-sm font-semibold text-slate-700">Base price<input className="field mt-1" name="basePrice" type="number" min="0.01" step="0.01" placeholder="0.00" disabled={!canWrite} required /></label>
               <label className="block rounded-xl border border-[#ded8cd] bg-white p-3 text-sm">
-                <span className="mb-2 block font-semibold text-slate-700">Product photo <span className="font-normal text-slate-400">(optional)</span></span>
+                <span className="mb-2 block font-semibold text-slate-700">Item photo <span className="font-normal text-slate-400">(optional)</span></span>
                 <input className="block w-full text-sm" name="photo" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" disabled={!canWrite} />
                 <span className="mt-2 block text-xs text-slate-500">The image is compressed and stored automatically.</span>
               </label>
               <ProductVariantFields disabled={!canWrite} />
               <AdvancedProductFields categories={categories} disabled={!canWrite} />
-              <Button className="w-full" disabled={!canWrite}>Create product</Button>
+              <Button className="w-full" disabled={!canWrite}>Create item</Button>
             </form>
           </div>
 
@@ -209,11 +224,11 @@ export default async function CatalogPage({ searchParams }: Props) {
         <section className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><h1 className="text-xl font-semibold">Catalog</h1><p className="text-sm text-slate-500">One product can hold many sizes, with independent stock and optional size prices.</p></div>
+              <div><h1 className="text-xl font-semibold">Items and services</h1><p className="text-sm text-slate-500">Each item can hold exact options, independent stock and optional option prices.</p></div>
               <Badge tone="green">{filteredProducts.length} live</Badge>
             </div>
             <form className="mt-4 grid gap-3 md:grid-cols-[1fr_180px_160px_auto]">
-              <label className="flex items-center gap-2 rounded-lg border border-[#ded8cd] bg-white px-3"><Search size={16} className="text-slate-400" /><input className="min-h-10 flex-1 bg-transparent text-sm outline-none" name="q" placeholder="Search product name" defaultValue={params.q ?? ""} /></label>
+              <label className="flex items-center gap-2 rounded-lg border border-[#ded8cd] bg-white px-3"><Search size={16} className="text-slate-400" /><input className="min-h-10 flex-1 bg-transparent text-sm outline-none" name="q" placeholder="Search item or service" defaultValue={params.q ?? ""} /></label>
               <select className="field" name="category" defaultValue={params.category ?? ""}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
               <select className="field" name="stock" defaultValue={params.stock ?? ""}><option value="">Any stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
               <Button variant="outline"><SlidersHorizontal size={16} />Filter</Button>
@@ -245,22 +260,22 @@ export default async function CatalogPage({ searchParams }: Props) {
 
                   {canWrite ? (
                     <details className="mt-4 rounded-lg border border-[#ded8cd] bg-[#f9f8f5] p-3">
-                      <summary className="cursor-pointer text-sm font-semibold">Edit product and size stock</summary>
+                      <summary className="cursor-pointer text-sm font-semibold">Edit item and option stock</summary>
                       <form action={updateProductAction} encType="multipart/form-data" className="mt-3 space-y-4">
                         <input type="hidden" name="productId" value={product.id} />
-                        <label className="block text-xs font-semibold text-slate-600">Product name<input className="field mt-1" name="name" defaultValue={product.name} required /></label>
+                        <label className="block text-xs font-semibold text-slate-600">Item name<input className="field mt-1" name="name" defaultValue={product.name} required /></label>
                         <label className="block text-xs font-semibold text-slate-600">Base price<input className="field mt-1" name="basePrice" type="number" min="0.01" step="0.01" defaultValue={product.basePrice.toString()} required /></label>
                         <ProductVariantFields initialVariants={variants.map((variant) => ({ id: variant.id, size: productVariantSize(variant.attributes), stockQty: product.isService ? 0 : variant.stockQty, sku: variant.sku, priceOverride: variant.priceOverride?.toString() ?? "" }))} />
                         <label className="block rounded-lg border border-[#ded8cd] bg-white p-2 text-xs"><span className="mb-1 block font-semibold">Replace photo (optional)</span><input name="photo" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /></label>
                         <AdvancedProductFields categories={categories} product={product} disabled={false} />
-                        <Button className="w-full">Save product changes</Button>
+                        <Button className="w-full">Save item changes</Button>
                       </form>
                     </details>
                   ) : null}
                 </article>
               );
             })}
-            {!filteredProducts.length ? <p className="rounded-xl bg-white p-6 text-sm text-slate-500 md:col-span-2 2xl:col-span-3">No products match this filter.</p> : null}
+            {!filteredProducts.length ? <p className="rounded-xl bg-white p-6 text-sm text-slate-500 md:col-span-2 2xl:col-span-3">No items or services match this filter.</p> : null}
           </div>
         </section>
       </div>

@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 border-b border-white/10 p-5">
               <Link href={homePath} prefetch={false} className="flex items-center gap-3">
-                <Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={48} height={48} priority />
+                <Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={48} height={48} priority />
                 <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300/75">Platform control</p><h1 className="mt-1 text-lg font-semibold">Super Admin</h1></div>
               </Link>
             </div>
@@ -43,8 +43,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4 lg:px-6">
             <div className="flex items-center justify-between gap-3">
               <Link href={homePath} prefetch={false} className="flex min-w-0 items-center gap-3">
-                <Image className="shrink-0 lg:hidden" src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={38} height={38} />
-                <div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.17em] text-cyan-700">Eugene Jersey Management</p><h2 className="truncate text-base font-semibold sm:text-lg">Platform operations centre</h2></div>
+                <Image className="shrink-0 lg:hidden" src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={38} height={38} />
+                <div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.17em] text-cyan-700">Eugene Shop Management</p><h2 className="truncate text-base font-semibold sm:text-lg">Platform operations centre</h2></div>
               </Link>
               <div className="flex shrink-0 items-center gap-2">
                 <AdminNavigation allowedPermissions={allowedPermissions} variant="mobile" />

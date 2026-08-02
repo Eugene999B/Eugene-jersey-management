@@ -42,7 +42,7 @@ export default async function SuppliersPage() {
               <input className="field" name="name" placeholder="Supplier company" required />
               <input className="field" name="contactName" placeholder="Contact person" />
               <div className="grid gap-2 sm:grid-cols-2"><input className="field" name="email" type="email" placeholder="Email" /><input className="field" name="phone" placeholder="Phone" /></div>
-              <input className="field" name="categories" placeholder="Jerseys, vinyl, boots..." />
+              <input className="field" name="categories" placeholder="Garments, food, electronics, materials..." />
               <input className="field" name="paymentTerms" placeholder="Payment terms" />
               <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2"><input className="field" name="leadTimeDays" type="number" min="0" defaultValue="7" placeholder="Lead days" /><input className="field" name="rating" type="number" min="1" max="5" defaultValue="5" placeholder="Rating" /></div>
               <div className="rounded-xl bg-white p-3"><p className="mb-2 text-sm font-semibold">Supplier portal login</p><input className="field" name="portalEmail" type="email" placeholder="supplier-login@example.com" /><input className="field mt-2" name="portalPassword" type="password" minLength={8} autoComplete="new-password" placeholder="Temporary password (8+ characters)" /></div>

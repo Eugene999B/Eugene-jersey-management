@@ -82,7 +82,7 @@ export async function initializePaystackTransaction(input: PaystackInitInput): P
     ? undefined
     : Math.round(input.transactionCharge);
   if (transactionCharge !== undefined && (transactionCharge < 0 || transactionCharge >= amount)) {
-    throw new Error("The EJM platform charge must be smaller than the customer payment amount.");
+    throw new Error("The ESM platform charge must be smaller than the customer payment amount.");
   }
 
   return requestPaystackInitialization({

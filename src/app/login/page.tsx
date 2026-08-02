@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Boxes, CircleCheck, Palette, ShieldCheck, ShoppingBag, Store, Workflow } from "lucide-react";
 import { StaffLoginForm } from "@/components/auth/staff-login-form";
 
-export const metadata: Metadata = { title: "EJM Control Room" };
+export const metadata: Metadata = { title: "ESM Control Room" };
 export const dynamic = "force-dynamic";
 
 const errorCopy: Record<string, string> = {
@@ -30,12 +30,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] [background-size:42px_42px]" />
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/[0.08] blur-[120px]" />
       <div className="pointer-events-none absolute bottom-[-10%] right-[-5%] h-[480px] w-[480px] rounded-full bg-violet-500/[0.1] blur-[120px]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-[-3vw] text-center text-[28vw] font-black leading-none tracking-[-0.09em] text-white/[0.018]">EJM</div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-[-3vw] text-center text-[28vw] font-black leading-none tracking-[-0.09em] text-white/[0.018]">ESM</div>
 
       <header className="absolute inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.07] px-4 sm:h-20 sm:px-7 lg:px-10">
-        <Link href="/" className="inline-flex items-center gap-3" aria-label="Back to Eugene Jersey Management home">
-          <Image src="/brand/ejm-mark.svg" alt="" width={40} height={40} priority />
-          <div className="hidden sm:block"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">Eugene Jersey Management</p><p className="mt-0.5 text-sm font-semibold text-white/72">Operations access</p></div>
+        <Link href="/" className="inline-flex items-center gap-3" aria-label="Back to Eugene Shop Management home">
+          <Image src="/brand/esm-mark.svg" alt="" width={40} height={40} priority />
+          <div className="hidden sm:block"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">Eugene Shop Management</p><p className="mt-0.5 text-sm font-semibold text-white/72">Operations access</p></div>
         </Link>
         <div className="flex items-center gap-2">
           <Link href="/shops" className="hidden min-h-10 items-center gap-2 rounded-full border border-white/10 px-4 text-xs font-bold text-white/65 transition hover:border-white/25 hover:text-white sm:inline-flex"><Store size={15} /> Marketplace</Link>
@@ -57,7 +57,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="w-full max-w-[520px] origin-center [@media(max-height:700px)]:scale-[0.91] [@media(max-height:610px)]:scale-[0.82]">
           <div className="mb-4 text-center sm:mb-5">
             <Link href="/" className="mb-3 inline-flex items-center gap-2 text-xs font-bold text-white/45 transition hover:text-white sm:hidden"><ArrowLeft size={15} /> Return home</Link>
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">EJM · Control room</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">ESM · Control room</p>
             <h1 className="mt-3 text-4xl font-black tracking-[-0.055em] sm:text-5xl">Access your operation.</h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/48 [@media(max-height:690px)]:hidden">A focused entry point for platform administrators, shop owners, managers and authorised staff.</p>
           </div>

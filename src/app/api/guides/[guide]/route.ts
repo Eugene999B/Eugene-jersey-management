@@ -26,14 +26,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Design Studio access is required." }, { status: 403 });
     }
     content = designGuide();
-    outputName = "EJM-Design-Studio-Quick-Guide.docx";
+    outputName = "ESM-Design-Studio-Quick-Guide.docx";
   } else if (guide === "admin-handbook" || guide === "admin-page") {
     const session = await requirePlatformPermission();
     const allowedPermissions = await getAllowedPlatformPermissions(session.id);
     if (allowedPermissions !== null) return NextResponse.json({ error: "This guide is restricted to the main administrator." }, { status: 403 });
     if (guide === "admin-handbook") {
       content = adminHandbook;
-      outputName = "EJM-Complete-Administrator-Handbook.docx";
+      outputName = "ESM-Complete-Administrator-Handbook.docx";
     } else {
       const pathname = request.nextUrl.searchParams.get("page") || "/admin";
       content = adminPageGuide(pathname);

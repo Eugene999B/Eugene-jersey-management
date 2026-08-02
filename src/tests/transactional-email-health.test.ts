@@ -40,7 +40,7 @@ describe("transactional email health", () => {
 
   it("marks the authenticated company Gmail mailbox healthy", async () => {
     process.env.EMAIL_PROVIDER = "gmail";
-    process.env.EMAIL_FROM = "Eugene Jersey Management <eugenejerseymanagement@gmail.com>";
+    process.env.EMAIL_FROM = "Eugene Shop Management <eugenejerseymanagement@gmail.com>";
     process.env.GMAIL_CLIENT_ID = "gmail-client-id";
     process.env.GMAIL_CLIENT_SECRET = "gmail-client-secret";
     process.env.GMAIL_REFRESH_TOKEN = "gmail-refresh-token";
@@ -69,7 +69,7 @@ describe("transactional email health", () => {
 
   it("reports attention when Gmail authenticates a different mailbox", async () => {
     process.env.EMAIL_PROVIDER = "gmail";
-    process.env.EMAIL_FROM = "Eugene Jersey Management <eugenejerseymanagement@gmail.com>";
+    process.env.EMAIL_FROM = "Eugene Shop Management <eugenejerseymanagement@gmail.com>";
     process.env.GMAIL_CLIENT_ID = "gmail-client-id";
     process.env.GMAIL_CLIENT_SECRET = "gmail-client-secret";
     process.env.GMAIL_REFRESH_TOKEN = "gmail-refresh-token";
@@ -93,7 +93,7 @@ describe("transactional email health", () => {
   it("marks a verified Resend sending domain healthy", async () => {
     process.env.EMAIL_PROVIDER = "resend";
     process.env.RESEND_API_KEY = "re_release28_test";
-    process.env.EMAIL_FROM = "Eugene Jersey Management <verify@mail.ejm.test>";
+    process.env.EMAIL_FROM = "Eugene Shop Management <verify@mail.ejm.test>";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       object: "list",
       has_more: false,
@@ -115,7 +115,7 @@ describe("transactional email health", () => {
   it("reports attention when Resend credentials work but the sender domain is not verified", async () => {
     process.env.EMAIL_PROVIDER = "resend";
     process.env.RESEND_API_KEY = "re_release28_test";
-    process.env.EMAIL_FROM = "Eugene Jersey Management <verify@pending.ejm.test>";
+    process.env.EMAIL_FROM = "Eugene Shop Management <verify@pending.ejm.test>";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       data: [{
         name: "pending.ejm.test",

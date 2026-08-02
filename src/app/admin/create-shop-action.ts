@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { BillingCycle, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, BusinessType, Role, ShopVerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
@@ -15,6 +15,7 @@ import { resolvePlanPrice, snapshotAsJson, subscriptionDates, subscriptionPlanSn
 const schema = z.object({
   name: z.string().trim().min(2).max(120),
   slug: z.string().trim().min(3).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  businessType: z.nativeEnum(BusinessType),
   ownerName: z.string().trim().min(2).max(120),
   ownerEmail: z.string().email().transform((value) => value.toLowerCase()),
   ownerPhone: z.string().trim().max(30).optional(),
@@ -48,7 +49,7 @@ function shopStaffLoginId(slug: string, provided?: string) {
 export async function createSecureShopAction(formData: FormData) {
   const session = await requirePlatformPermission("shops");
   const parsed = schema.safeParse({
-    name: formData.get("name"), slug: formData.get("slug"), ownerName: formData.get("ownerName"), ownerEmail: formData.get("ownerEmail"), ownerPhone: formData.get("ownerPhone") || undefined,
+    name: formData.get("name"), slug: formData.get("slug"), businessType: formData.get("businessType"), ownerName: formData.get("ownerName"), ownerEmail: formData.get("ownerEmail"), ownerPhone: formData.get("ownerPhone") || undefined,
     ownerPassword: formData.get("ownerPassword"), staffLoginId: formData.get("staffLoginId") || undefined, planId: formData.get("planId"), billingCycle: formData.get("billingCycle") || BillingCycle.MONTHLY,
     legalBusinessName: formData.get("legalBusinessName") || undefined, businessRegistrationNumber: formData.get("businessRegistrationNumber") || undefined, taxIdentificationNumber: formData.get("taxIdentificationNumber") || undefined,
     ownerGovernmentId: formData.get("ownerGovernmentId") || undefined, credentialContactName: formData.get("credentialContactName") || undefined, credentialPhone: formData.get("credentialPhone") || undefined,
@@ -78,7 +79,7 @@ export async function createSecureShopAction(formData: FormData) {
   const shop = await prisma.$transaction(async (tx) => {
     const createdShop = await tx.shop.create({
       data: {
-        name: parsed.data.name, slug: parsed.data.slug, networkCode: shopNetworkCode(parsed.data.slug), staffLoginId: proposedStaffLoginId,
+        name: parsed.data.name, slug: parsed.data.slug, businessType: parsed.data.businessType, networkCode: shopNetworkCode(parsed.data.slug), staffLoginId: proposedStaffLoginId,
         verificationStatus: ShopVerificationStatus.PENDING, storefrontEnabled: false, publicOrderingEnabled: false, planTier: plan.tier,
         billingCycle: parsed.data.billingCycle, monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, subscriptionStatus: SubscriptionStatus.TRIAL,
         subscriptionRenewalAt: dates.renewalAt, legalBusinessName: parsed.data.legalBusinessName,
@@ -108,7 +109,7 @@ export async function createSecureShopAction(formData: FormData) {
     return createdShop;
   });
 
-  await audit({ shopId: shop.id, userId: session.id, action: "admin.shop_created", entityType: "Shop", entityId: shop.id, metadata: { ownerEmail: parsed.data.ownerEmail, planId: plan.id, planTier: plan.tier, planVersion: plan.version, billingCycle: parsed.data.billingCycle, selectedPrice, credentialDelivery: "out-of-band" } });
+  await audit({ shopId: shop.id, userId: session.id, action: "admin.shop_created", entityType: "Shop", entityId: shop.id, metadata: { ownerEmail: parsed.data.ownerEmail, businessType: parsed.data.businessType, planId: plan.id, planTier: plan.tier, planVersion: plan.version, billingCycle: parsed.data.billingCycle, selectedPrice, credentialDelivery: "out-of-band" } });
   revalidatePath("/admin");
   revalidatePath("/admin/shops");
   revalidatePath("/admin/billing");

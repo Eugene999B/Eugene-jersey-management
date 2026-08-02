@@ -33,7 +33,7 @@ export default async function ForgotPasswordPage({ searchParams }: Props) {
         {params.error ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{errors[params.error] ?? errors.invalid}</div> : null}
 
         <form action={requestPasswordResetAction} className="mt-5 space-y-4">
-          <label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.1em] text-slate-500">Login ID, email or phone</span><input className="field" name="identifier" placeholder="EJM-OWNER-001, owner@example.com or 024..." autoComplete="username" required /></label>
+          <label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.1em] text-slate-500">Login ID, email or phone</span><input className="field" name="identifier" placeholder="ESM-OWNER-001, owner@example.com or 024..." autoComplete="username" required /></label>
           <fieldset>
             <legend className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-slate-500">Send code by</legend>
             <div className="grid gap-3 sm:grid-cols-2">

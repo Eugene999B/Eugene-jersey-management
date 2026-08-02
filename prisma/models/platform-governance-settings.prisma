@@ -1,6 +1,6 @@
 model PlatformGovernanceSettings {
   id                           String   @id @default("platform")
-  platformName                 String   @default("Eugene Jersey Management")
+  platformName                 String   @default("Eugene Shop Management")
   legalCompanyName             String?
   supportEmail                 String?
   supportPhone                 String?

@@ -26,7 +26,7 @@ export default async function BuyerLoginPage({ searchParams }: Props) {
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(0,212,255,0.18),transparent_28%),radial-gradient(circle_at_92%_82%,rgba(139,92,246,0.2),transparent_34%)]" />
       <header className="relative z-10 border-b border-white/10 bg-[#07111f]/75 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link href="/" className="flex min-w-0 items-center gap-3"><Image src="/brand/ejm-mark.svg" alt="Eugene Jersey Management" width={42} height={42} priority /><div className="min-w-0"><p className="truncate text-sm font-bold">Eugene Jersey Management</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Buyer access</p></div></Link>
+          <Link href="/" className="flex min-w-0 items-center gap-3"><Image src="/brand/esm-mark.svg" alt="Eugene Shop Management" width={42} height={42} priority /><div className="min-w-0"><p className="truncate text-sm font-bold">Eugene Shop Management</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Buyer access</p></div></Link>
           <div className="flex gap-2"><Link href="/shops" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 px-3 text-sm font-semibold text-white/70 hover:bg-white/10"><ArrowLeft size={15} /> Shops</Link><Link href="/login" className="hidden min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-[#07111f] sm:inline-flex"><Store size={15} /> Staff</Link></div>
         </div>
       </header>

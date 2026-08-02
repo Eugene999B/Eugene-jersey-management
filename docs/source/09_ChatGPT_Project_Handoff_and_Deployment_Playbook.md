@@ -1,10 +1,10 @@
-# Eugene Jersey Management - Project Handoff and Deployment Playbook
+# Eugene Shop Management - Project Handoff and Deployment Playbook
 
 A repository-first handoff for developers and coding agents joining the project.
 
 ## Executive Summary
 
-Eugene Jersey Management is a full-stack, multi-tenant sports retail and jersey-production platform. It combines tenant administration, staff access, role-based permissions, catalogue and stock, POS, debts, custom production, design tools, customer messaging, supplier purchasing, shop networking, daily closing, exports, public ordering, buyer accounts, audit logging, and deployment automation.
+Eugene Shop Management is a full-stack, multi-tenant sports retail and jersey-production platform. It combines tenant administration, staff access, role-based permissions, catalogue and stock, POS, debts, custom production, design tools, customer messaging, supplier purchasing, shop networking, daily closing, exports, public ordering, buyer accounts, audit logging, and deployment automation.
 
 The application is a single Next.js App Router service. UI, route handlers, server actions, authentication, Prisma access, background-job endpoints, and public pages deploy together. Do not treat it as a static frontend with a separate backend unless the architecture is deliberately refactored.
 

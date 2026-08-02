@@ -172,7 +172,7 @@ export default async function ShopsPage({ searchParams }: Props) {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link href="/shops" className="flex min-w-0 items-center gap-3">
             <div className="rounded-2xl bg-slate-950 p-3 text-white shadow-lg shadow-slate-950/15"><Store size={22} /></div>
-            <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700">Verified sports commerce</p><h1 className="truncate text-xl font-bold">EJM Marketplace</h1></div>
+            <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700">Verified business marketplace</p><h1 className="truncate text-xl font-bold">ESM Marketplace</h1></div>
           </Link>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link className="hidden rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-cyan-800 md:inline-flex" href="/apply/shop">List your shop</Link>
@@ -249,7 +249,7 @@ export default async function ShopsPage({ searchParams }: Props) {
             const firstProduct = shop.products[0];
             const automaticProductPhoto = firstProduct ? firstProductImage(firstProduct.images) : null;
             const hero = profile?.heroImageUrl ?? (!shop.logoUrl ? automaticProductPhoto : null);
-            const logo = shop.logoUrl || "/brand/ejm-mark.svg";
+            const logo = shop.logoUrl || "/brand/esm-mark.svg";
             const brands = uniqueText(shop.products.map((product) => product.brand), 4);
             const locationLabel = location
               ? formatGhanaLocation({ region: location.region, district: location.district, town: location.town, area: location.area })
@@ -275,7 +275,7 @@ export default async function ShopsPage({ searchParams }: Props) {
 
                 <div className="p-5">
                   <div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-xl font-black tracking-tight">{shop.name}</h3><p className="mt-1 flex items-start gap-1.5 text-sm leading-5 text-slate-500"><MapPin size={14} className="mt-0.5 shrink-0" /> <span>{locationLabel}</span></p></div><div className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800"><Star size={13} /> {shop._count.productReviews}</div></div>
-                  <p className="mt-3 min-h-11 text-sm leading-6 text-slate-600">{profile?.tagline || `Explore ${shop.name}'s latest jerseys, sportswear and equipment.`}</p>
+                  <p className="mt-3 min-h-11 text-sm leading-6 text-slate-600">{profile?.tagline || `Explore ${shop.name}'s latest products, services and offers.`}</p>
 
                   <div className="mt-4">
                     <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Brands available</p>
@@ -287,7 +287,7 @@ export default async function ShopsPage({ searchParams }: Props) {
                       const image = firstProductImage(product.images);
                       return <Link href={`/shop/${shop.slug}`} key={product.id} className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-2.5 transition hover:border-cyan-200 hover:bg-cyan-50/50">
                         <div className="h-12 w-12 shrink-0 rounded-xl bg-white bg-cover bg-center" role="img" aria-label={product.name} style={image ? { backgroundImage: `url(${image})` } : undefined}>{!image ? <PackageSearch size={18} className="m-auto mt-3 text-slate-300" /> : null}</div>
-                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{product.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{product.brand || product.teamName || "Sports product"}</p></div>
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{product.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{product.brand || product.teamName || "Item"}</p></div>
                         <span className="shrink-0 text-xs font-bold text-slate-700">{currency(product.variants[0]?.priceOverride?.toString() ?? product.basePrice.toString(), shop.currency)}</span>
                       </Link>;
                     })}
@@ -307,7 +307,7 @@ export default async function ShopsPage({ searchParams }: Props) {
         {!shops.length ? <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center"><PackageSearch size={36} className="mx-auto text-slate-300" /><h3 className="mt-4 text-lg font-bold">No verified shop matched these filters</h3><p className="mt-2 text-sm text-slate-500">Clear one or more product or location filters and try another item, brand, district, town or area.</p><Link href="/shops" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white"><RotateCcw size={15} /> Reset marketplace</Link></div> : null}
 
         <section className="mt-10 overflow-hidden rounded-3xl bg-gradient-to-r from-cyan-700 to-slate-950 p-6 text-white sm:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">For sports businesses</p><h2 className="mt-2 text-2xl font-black sm:text-3xl">Give your shop a stronger digital storefront.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Create your brand profile, register the exact business location, publish products and connect with nearby buyers.</p></div><Link href="/apply/shop" className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950">Apply to join <ArrowRight size={16} /></Link></div>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">For growing businesses</p><h2 className="mt-2 text-2xl font-black sm:text-3xl">Give your shop a stronger digital storefront.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">Create your brand profile, register the exact business location, publish products and connect with nearby buyers.</p></div><Link href="/apply/shop" className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950">Apply to join <ArrowRight size={16} /></Link></div>
         </section>
       </section>
     </main>

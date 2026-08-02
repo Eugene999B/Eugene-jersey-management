@@ -749,7 +749,7 @@ export function DesignStudio({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#f4b942]"><Scissors size={15} /> Professional production workspace</div>
-            <h2 className="mt-2 text-xl font-semibold sm:text-2xl">Design on the transfer material—not on a jersey mockup.</h2>
+            <h2 className="mt-2 text-xl font-semibold sm:text-2xl">Design on the transfer material—not on a garment mockup.</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-300">Every coordinate is stored in millimetres. Prepare artwork, validate the output, then print, export SVG, or send a supported HPGL vector job.</p>
             <p className={`mt-2 text-xs font-semibold ${saveStatus === "error" ? "text-red-300" : saveStatus === "saved" ? "text-emerald-300" : "text-slate-400"}`}>{saveMessage}</p>
             <p className="mt-1 text-xs font-medium text-cyan-200">{recoveryMessage}</p>

@@ -52,7 +52,7 @@ canvas {
 /*
  * Product photographs are currently rendered as background images in the
  * marketplace, public storefront, catalogue, POS and cart. `cover` crops tall
- * jersey photos, so this shared rule scales every uploaded item photograph to
+ * item photos, so this shared rule scales every uploaded item photograph to
  * fit its available frame while preserving the original proportions.
  */
 .bg-cover[style*="background-image"] {

@@ -52,7 +52,7 @@ function metadataRows(check: ProductionIntegrationHealthCheck) {
       ? check.metadata.balances as Array<{ currency?: string; amount?: number }>
       : [];
     return [
-      ["Account", String(check.metadata.accountLabel ?? "EJM administrator main account")],
+      ["Account", String(check.metadata.accountLabel ?? "ESM administrator main account")],
       ["Environment", String(check.metadata.mode ?? "unknown")],
       ["Available balances", balances.length
         ? balances.map((item) => currency(item.amount ?? 0, item.currency ?? "GHS")).join(" · ")
@@ -155,10 +155,10 @@ export default async function AdminIntegrationsPage() {
           <div className="flex items-center gap-2"><CreditCard size={19} /><h2 className="text-xl font-semibold">Payment ownership model</h2></div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><Store className="text-emerald-700" size={20} /><p className="mt-3 text-sm font-bold uppercase tracking-[0.12em] text-emerald-800">Each store owns its settlement</p><p className="mt-2 text-sm leading-6 text-emerald-900">Customer payments for a store are assigned to that store’s verified Paystack subaccount and bank destination.</p></div>
-            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4"><CreditCard className="text-cyan-700" size={20} /><p className="mt-3 text-sm font-bold uppercase tracking-[0.12em] text-cyan-800">Administrator owns platform income</p><p className="mt-2 text-sm leading-6 text-cyan-900">EJM charges, subscriptions and communication-credit purchases belong to the administrator main Paystack account.</p></div>
+            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4"><CreditCard className="text-cyan-700" size={20} /><p className="mt-3 text-sm font-bold uppercase tracking-[0.12em] text-cyan-800">Administrator owns platform income</p><p className="mt-2 text-sm leading-6 text-cyan-900">ESM charges, subscriptions and communication-credit purchases belong to the administrator main Paystack account.</p></div>
           </div>
           <dl className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-white p-4"><dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Active shops</dt><dd className="mt-2 text-2xl font-semibold">{compactNumber(shops)}</dd></div><div className="rounded-xl bg-white p-4"><dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Subaccounts assigned</dt><dd className="mt-2 text-2xl font-semibold">{compactNumber(configuredShopAccounts)}</dd></div><div className="rounded-xl bg-white p-4"><dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Card enabled</dt><dd className="mt-2 text-2xl font-semibold">{compactNumber(cardEnabledShops)}</dd></div></dl>
-          <p className="mt-4 text-sm leading-6 text-slate-600">A store can update its settlement details and accepted methods, but only a platform administrator with Billing permission can assign the Paystack subaccount, EJM charge and transaction-fee bearer.</p>
+          <p className="mt-4 text-sm leading-6 text-slate-600">A store can update its settlement details and accepted methods, but only a platform administrator with Billing permission can assign the Paystack subaccount, ESM charge and transaction-fee bearer.</p>
         </div>
 
         <div className="panel p-5">

@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { shortDate, titleCase } from "@/lib/format";
+import { businessTypeLabel } from "@/lib/brand";
 
 type Props = {
   params: Promise<{ shopId: string }>;
@@ -24,8 +25,8 @@ export default async function ShopLegalDocumentPage({ params }: Props) {
       <section className="mx-auto max-w-4xl rounded-[8px] border border-[#ded8cd] bg-white p-8 print:border-slate-300">
         <div className="flex items-start justify-between gap-4 border-b border-[#ded8cd] pb-6">
           <div>
-            <p className="text-sm font-semibold uppercase text-[#0f766e]">Seller authorization document</p>
-            <h1 className="mt-2 text-3xl font-semibold">Certificate of Verified Sports Shop</h1>
+            <p className="text-sm font-semibold uppercase text-[#0f766e]">Business authorization document</p>
+            <h1 className="mt-2 text-3xl font-semibold">Certificate of Verified Business</h1>
           </div>
           <div className="rounded-[8px] bg-[#111827] p-4 text-white">
             <ShieldCheck size={32} />
@@ -34,7 +35,8 @@ export default async function ShopLegalDocumentPage({ params }: Props) {
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {[
-            ["Shop name", shop.name],
+            ["Business name", shop.name],
+            ["Business type", businessTypeLabel(shop.businessType)],
             ["Legal business name", shop.legalBusinessName],
             ["Public shop link", `/shop/${shop.slug}`],
             ["Network code", shop.networkCode],
@@ -55,8 +57,8 @@ export default async function ShopLegalDocumentPage({ params }: Props) {
         </div>
 
         <div className="mt-8 rounded-[8px] bg-[#f6f4ef] p-5 text-sm leading-6 text-slate-700">
-          This document records that the shop above has been captured in Eugene Jersey Management with business credential information.
-          Public marketplace visibility is valid only when the verification status is Verified and the shop remains active.
+          This document records that the shop above has been captured in Eugene Shop Management with business credential information.
+          Public marketplace visibility is valid only when the verification status is Verified and the business remains active.
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">

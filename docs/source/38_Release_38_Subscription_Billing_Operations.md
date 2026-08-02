@@ -51,7 +51,7 @@ A recent pending checkout URL is reused for 30 minutes so double-clicks and repe
 
 ## Paystack settlement
 
-Subscription payments use the platform-owned Paystack transaction path. They do not require a shop subaccount because the payment belongs to Eugene Jersey Management rather than to a customer order.
+Subscription payments use the platform-owned Paystack transaction path. They do not require a shop subaccount because the payment belongs to Eugene Shop Management rather than to a customer order.
 
 Paystack metadata identifies the purchase as `subscription_invoice` and includes the invoice, attempt, shop and invoice number.
 

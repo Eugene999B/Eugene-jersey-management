@@ -13,7 +13,7 @@ export type OperatorGuide = {
 };
 
 const designStudioGuide: OperatorGuide = {
-  title: "EJM Design Studio Quick Operating Guide",
+  title: "ESM Design Studio Quick Operating Guide",
   subtitle: "A practical guide for shop owners, managers and designers preparing production artwork.",
   sections: [
     { heading: "Before starting", steps: [
@@ -74,7 +74,7 @@ const adminSections: Record<string, GuideSection> = {
   applications: { heading: "Business applications", paragraphs: ["Public shop and supplier submissions remain private until reviewed. Submission alone never creates a tenant, Login ID, supplier portal or payment route."], steps: ["Search the application queue by reference, business or contact.", "Start the review to record the assigned administrator.", "Request changes or reject with an applicant-facing reason when information is incomplete or unsuitable.", "Approve a shop only with a configured active plan, unique Login ID and temporary credential delivered through a separate secure channel.", "Approve a supplier only under the exact reviewed active shop relationship.", "After shop approval, complete business verification and Paystack routing separately before public launch."] },
   investigation: { heading: "Investigation search and support profiles", paragraphs: ["Investigation pages collect read-only operational evidence without impersonating a tenant or displaying provider secrets, passwords, sessions, two-factor secrets or full settlement account numbers."], steps: ["Search by shop, Login ID, email, phone, receipt, provider reference or audit action.", "Open the exact-shop profile and review workspace, verification, subscription, users, failed messages, failed payments, delayed orders and audit events.", "Open a durable support case when the issue needs assignment, evidence and a recorded resolution.", "Use existing audited shop controls for suspension, verification or payment-routing changes."] },
   billing: { heading: "Subscriptions and billing", paragraphs: ["The sole authenticated platform administrator saves plan changes immediately. Every save keeps a reason, before/after history record and immutable version."], steps: ["Edit the plan terms and explain the reason.", "Select Save changes now.", "Reassign a plan to a tenant only when that tenant should receive the new version and price.", "Catalogue edits never silently reprice existing tenant contracts."] },
-  communications: { heading: "Communication credits", paragraphs: ["SMS and WhatsApp packages are paid to the EJM administrator Paystack account. Each shop has isolated channel balances."], steps: ["Create an inactive package shell when a new package is needed.", "Enter the price, paid units, bonus units and availability, then save immediately.", "Confirm a controlled Paystack purchase credits the wallet exactly once.", "Review wallet usage, refunds and provider failures through the ledger."] },
+  communications: { heading: "Communication credits", paragraphs: ["SMS and WhatsApp packages are paid to the ESM administrator Paystack account. Each shop has isolated channel balances."], steps: ["Create an inactive package shell when a new package is needed.", "Enter the price, paid units, bonus units and availability, then save immediately.", "Confirm a controlled Paystack purchase credits the wallet exactly once.", "Review wallet usage, refunds and provider failures through the ledger."] },
   staff: { heading: "Administrator staff", paragraphs: ["Platform administrator staff accounts receive only the responsibilities assigned to them. An unrestricted administrator can access every main-admin page."], steps: ["Create only the access needed for the person’s job.", "Disable access immediately when a worker leaves.", "Never share the unrestricted administrator password."] },
   support: { heading: "Support desk and durable cases", steps: ["Review open returns, customer conversations, failed messages and delayed orders.", "Use Investigation to find the exact shop, user, order, payment, message or audit evidence.", "Open a support case for issues requiring assignment, priority, append-only notes and a resolution.", "Corrections are added as new notes; existing case notes are not edited or deleted.", "Use existing audited actions for business changes; a case does not itself impersonate a tenant, refund a payment or alter stock."] },
   broadcast: { heading: "Broadcast", steps: ["Use global announcements only for messages every tenant should see.", "Keep messages short and operational.", "Avoid placing passwords, API keys or private customer data in announcements."] },
@@ -102,15 +102,15 @@ export function adminPageGuide(pathname: string): OperatorGuide {
                           : "overview";
   const section = adminSections[key];
   return {
-    title: `EJM Administrator Page Guide - ${section.heading}`,
+    title: `ESM Administrator Page Guide - ${section.heading}`,
     subtitle: `Help for ${pathname}. This guide is restricted to the unrestricted platform administrator.`,
     sections: [section, { heading: "Safe operating rule", paragraphs: ["Confirm the affected shop, amount, status and business reason before saving. Sensitive actions remain audited and versioned immediately after you save."] }],
   };
 }
 
 export const adminHandbook: OperatorGuide = {
-  title: "EJM Complete Administrator and Operations Handbook",
-  subtitle: "How the main administrator, shops, staff and suppliers use Eugene Jersey Management.",
+  title: "ESM Complete Administrator and Operations Handbook",
+  subtitle: "How the main administrator, shops, staff and suppliers use Eugene Shop Management.",
   sections: [
     adminSections.overview,
     adminSections.shops,
@@ -128,7 +128,7 @@ export const adminHandbook: OperatorGuide = {
     adminSections.shopOperations,
     adminSections.suppliers,
     { heading: "Daily administrator checklist", steps: ["Review support cases and live operational queues.", "Review new business applications and past-due or suspended shops.", "Confirm integrations are healthy before controlled provider tests.", "Review recent high-impact audit events.", "Back up or export important records before structural changes."] },
-    { heading: "Important boundaries", steps: ["Shop customer payments settle to the shop’s Paystack subaccount; communication-credit purchases settle to the EJM administrator account.", "A shop being offline is a voluntary marketplace choice and does not mean the registered workspace is suspended.", "Public application approval does not configure Paystack, verify business credentials or activate public ordering automatically.", "Never ask a user to send passwords, secret keys or full settlement account numbers through ordinary chat or notes.", "Use GitHub validation and Railway deployment status as the production source of truth."] },
+    { heading: "Important boundaries", steps: ["Shop customer payments settle to the shop’s Paystack subaccount; communication-credit purchases settle to the ESM administrator account.", "A shop being offline is a voluntary marketplace choice and does not mean the registered workspace is suspended.", "Public application approval does not configure Paystack, verify business credentials or activate public ordering automatically.", "Never ask a user to send passwords, secret keys or full settlement account numbers through ordinary chat or notes.", "Use GitHub validation and Railway deployment status as the production source of truth."] },
   ],
 };
 
@@ -144,7 +144,7 @@ export async function buildGuideDocx(guide: OperatorGuide) {
   const children: Paragraph[] = [
     new Paragraph({ text: guide.title, heading: HeadingLevel.TITLE }),
     textParagraph(guide.subtitle),
-    textParagraph(`Generated by Eugene Jersey Management on ${new Date().toLocaleDateString("en-GB", { timeZone: "Africa/Accra" })}.`),
+    textParagraph(`Generated by Eugene Shop Management on ${new Date().toLocaleDateString("en-GB", { timeZone: "Africa/Accra" })}.`),
   ];
   for (const section of guide.sections) {
     children.push(new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }));
@@ -152,7 +152,7 @@ export async function buildGuideDocx(guide: OperatorGuide) {
     for (const step of section.steps ?? []) children.push(new Paragraph({ text: step, bullet: { level: 0 }, spacing: { after: 80 } }));
   }
   const document = new Document({
-    creator: "Eugene Jersey Management",
+    creator: "Eugene Shop Management",
     title: guide.title,
     sections: [{ children }],
   });

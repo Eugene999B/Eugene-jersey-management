@@ -1,4 +1,5 @@
 import { BillingCycle } from "@prisma/client";
+import { BUSINESS_TYPE_OPTIONS } from "@/lib/brand";
 import { createSecureShopAction } from "@/app/admin/create-shop-action";
 import { Button } from "@/components/ui/button";
 import { currency } from "@/lib/format";
@@ -32,7 +33,8 @@ export default async function NewShopPage({ searchParams }: Props) {
       {!plans.length ? <div className="mt-4 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">No configured active plan is available. Save and activate plan terms from Billing before creating a tenant.</div> : null}
       <form action={createSecureShopAction} className="mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <input className="field" name="name" placeholder="Shop name" required />
+          <input className="field" name="name" placeholder="Business or shop name" required />
+          <select className="field" name="businessType" required defaultValue=""><option value="" disabled>Business type</option>{BUSINESS_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
           <input className="field" name="slug" placeholder="shop-slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required />
         </div>
         <div className="grid gap-4 md:grid-cols-2">

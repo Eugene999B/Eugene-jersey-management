@@ -1,4 +1,5 @@
 import { BusinessApplicationType } from "@prisma/client";
+import { BUSINESS_TYPE_OPTIONS, PLATFORM_NAME } from "@/lib/brand";
 import { submitBusinessApplicationAction } from "@/app/apply/actions";
 import { GhanaLocationFields } from "@/components/locations/ghana-location-fields";
 
@@ -17,7 +18,8 @@ export function BusinessApplicationForm({ type, shops = [] }: Props) {
       <label className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden"><span>Website</span><input name="website" tabIndex={-1} autoComplete="off" /></label>
 
       <div className="grid gap-5 md:grid-cols-2">
-        <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Business name</span><input className="field" name="businessName" required minLength={2} maxLength={160} placeholder={isSupplier ? "Supplier or distribution business" : "Public shop name"} /></label>
+        <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Business name</span><input className="field" name="businessName" required minLength={2} maxLength={160} placeholder={isSupplier ? "Supplier or distribution business" : "Public business name"} /></label>
+        {!isSupplier ? <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Business type</span><select className="field" name="businessType" required defaultValue=""><option value="" disabled>Choose the main way this business operates</option>{BUSINESS_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><span className="mt-2 block text-xs leading-5 text-slate-500">This sets the initial terminology and recommended modules. It does not remove any existing data.</span></label> : null}
         <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Legal business name</span><input className="field" name="legalBusinessName" maxLength={180} placeholder="As shown on registration documents" /></label>
         <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Business registration number</span><input className="field" name="businessRegistrationNumber" maxLength={100} /></label>
         <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Tax identification number</span><input className="field" name="taxIdentificationNumber" maxLength={100} /></label>
@@ -30,12 +32,12 @@ export function BusinessApplicationForm({ type, shops = [] }: Props) {
 
         <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-5"><h2 className="text-xl font-bold">Business location</h2><p className="mt-1 text-sm leading-6 text-slate-500">Choose the region first, then the district and town. Add the sub-town, digital address and landmark so customers can find the business accurately.</p></div>
         <div className="md:col-span-2"><GhanaLocationFields required={!isSupplier} /></div>
-        <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Categories</span><input className="field" name="categories" maxLength={700} placeholder={isSupplier ? "Jerseys, footwear, printing materials..." : "Football kits, printing, equipment..."} /></label>
-        <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Requested services</span><textarea className="field min-h-28 resize-y" name="requestedServices" maxLength={1000} placeholder={isSupplier ? "What you want to supply and how you operate" : "POS, stock, Design Studio, online marketplace, messaging..."} /></label>
+        <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Categories</span><input className="field" name="categories" maxLength={700} placeholder={isSupplier ? "Food, garments, electronics, printing materials..." : "Products, services, production, rentals..."} /></label>
+        <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Requested services</span><textarea className="field min-h-28 resize-y" name="requestedServices" maxLength={1000} placeholder={isSupplier ? "What you want to supply and how you operate" : "Sales, stock, services, production, rentals, online marketplace..."} /></label>
         <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Additional notes</span><textarea className="field min-h-28 resize-y" name="applicantNotes" maxLength={3000} placeholder="Anything the administrator should know during review" /></label>
       </div>
 
-      <label className="mt-6 flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700"><input className="mt-1 h-4 w-4" type="checkbox" name="consentGiven" value="true" required /><span>I confirm that the information is accurate and consent to Eugene Jersey Management storing it for application review, verification and onboarding communication.</span></label>
+      <label className="mt-6 flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700"><input className="mt-1 h-4 w-4" type="checkbox" name="consentGiven" value="true" required /><span>I confirm that the information is accurate and consent to {PLATFORM_NAME} storing it for application review, verification and onboarding communication.</span></label>
       <button type="submit" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#07111f] px-5 text-sm font-semibold text-white shadow-lg shadow-slate-950/15 sm:w-auto">Submit {isSupplier ? "supplier" : "shop"} application</button>
     </form>
   );

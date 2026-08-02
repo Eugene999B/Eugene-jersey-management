@@ -9,6 +9,7 @@ import { updateShopPaymentRoutingAction } from "@/app/admin/shops/[shopId]/payme
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { checkShopPaystackSubaccount } from "@/lib/integration-health";
+import { businessTypeLabel } from "@/lib/brand";
 
 const paymentMessages: Record<string, string> = {
   updated: "Payment routing was verified and updated.",
@@ -72,6 +73,7 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Business type" value={businessTypeLabel(shop.businessType)} />
         <StatCard label="Plan" value={shop.planTier} />
         <StatCard label="Status" value={shop.isActive ? "Active" : "Suspended"} />
         <StatCard label="Verification" value={titleCase(shop.verificationStatus)} />
@@ -92,13 +94,13 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
 
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="panel p-5">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold uppercase text-slate-500">Payment ownership and routing</p><h2 className="mt-2 text-xl font-semibold">Store settlement + EJM platform account</h2><p className="mt-2 text-sm leading-6 text-slate-500">Customer sales are initialized on EJM’s administrator Paystack integration and assigned to this shop’s subaccount. The shop receives its settlement; the configured EJM charge stays with the administrator main account.</p></div><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${routingHealthy ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{routingHealthy ? <ShieldCheck size={20} /> : <AlertTriangle size={20} />}</span></div>
+          <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold uppercase text-slate-500">Payment ownership and routing</p><h2 className="mt-2 text-xl font-semibold">Store settlement + ESM platform account</h2><p className="mt-2 text-sm leading-6 text-slate-500">Customer sales are initialized on ESM’s administrator Paystack integration and assigned to this business’s subaccount. The business receives its settlement; the configured ESM charge stays with the administrator main account.</p></div><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${routingHealthy ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{routingHealthy ? <ShieldCheck size={20} /> : <AlertTriangle size={20} />}</span></div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl bg-white p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Paystack business</p><p className="mt-2 font-semibold">{paystackHealth.metadata.businessName ?? "Not verified"}</p></div>
             <div className="rounded-xl bg-white p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Provider environment</p><p className="mt-2 font-semibold">{paystackHealth.metadata.domain ? titleCase(paystackHealth.metadata.domain) : "Unknown"}</p></div>
             <div className="rounded-xl bg-white p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Settlement destination</p><p className="mt-2 font-semibold">{paystackHealth.metadata.settlementBank ?? shop.paymentConfig?.settlementBank ?? "Not provided"}</p><p className="mt-1 text-sm text-slate-500">{paystackHealth.metadata.settlementAccountName ?? shop.paymentConfig?.settlementAccountName ?? "Account name missing"} · {paystackHealth.metadata.settlementAccountMasked ?? maskAccount(shop.paymentConfig?.settlementAccount)}</p></div>
-            <div className="rounded-xl bg-white p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">EJM administrator share</p><p className="mt-2 font-semibold">{platformCharge}</p><p className="mt-1 text-sm text-slate-500">Paystack fee borne by {shop.paymentConfig?.paystackChargeBearer === "account" ? "EJM main account" : "shop subaccount"}.</p></div>
+            <div className="rounded-xl bg-white p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">ESM administrator share</p><p className="mt-2 font-semibold">{platformCharge}</p><p className="mt-1 text-sm text-slate-500">Paystack fee borne by {shop.paymentConfig?.paystackChargeBearer === "account" ? "ESM main account" : "shop subaccount"}.</p></div>
           </div>
 
           <form action={updateShopPaymentRoutingAction} className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
@@ -106,8 +108,8 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
             <div className="flex items-center gap-2"><CreditCard size={18} /><h3 className="font-semibold">Administrator-controlled route</h3></div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Shop Paystack subaccount</span><input className="field" name="paystackSubaccountCode" placeholder="ACCT_xxxxxxxxx" defaultValue={shop.paymentConfig?.paystackSubaccountCode ?? ""} /></label>
-              <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">EJM flat charge in pesewas</span><input className="field" name="paystackTransactionCharge" type="number" min="0" max="100000000" placeholder="0" defaultValue={shop.paymentConfig?.paystackTransactionCharge ?? ""} /></label>
-              <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Who bears Paystack transaction fees?</span><select className="field" name="paystackChargeBearer" defaultValue={shop.paymentConfig?.paystackChargeBearer === "account" ? "account" : "subaccount"}><option value="subaccount">Shop subaccount</option><option value="account">EJM administrator main account</option></select></label>
+              <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">ESM flat charge in pesewas</span><input className="field" name="paystackTransactionCharge" type="number" min="0" max="100000000" placeholder="0" defaultValue={shop.paymentConfig?.paystackTransactionCharge ?? ""} /></label>
+              <label className="block md:col-span-2"><span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Who bears Paystack transaction fees?</span><select className="field" name="paystackChargeBearer" defaultValue={shop.paymentConfig?.paystackChargeBearer === "account" ? "account" : "subaccount"}><option value="subaccount">Shop subaccount</option><option value="account">ESM administrator main account</option></select></label>
             </div>
             <p className="mt-3 text-xs leading-5 text-slate-500">Saving a non-empty subaccount first performs a read-only Paystack verification. Failed verification does not replace the current route.</p>
             <Button className="mt-4">Verify and save payment route</Button>
@@ -118,7 +120,7 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
           <div className="flex items-center gap-2"><Landmark size={19} /><h2 className="text-xl font-semibold">Settlement responsibility</h2></div>
           <div className="mt-5 space-y-3 text-sm leading-6 text-slate-600">
             <p className="rounded-xl bg-white p-4"><strong className="text-slate-900">Shop money:</strong> paid to the verified bank account attached to this shop’s Paystack subaccount.</p>
-            <p className="rounded-xl bg-white p-4"><strong className="text-slate-900">EJM money:</strong> platform charges, subscription payments and communication-credit purchases belong to the administrator main account.</p>
+            <p className="rounded-xl bg-white p-4"><strong className="text-slate-900">ESM money:</strong> platform charges, subscription payments and communication-credit purchases belong to the administrator main account.</p>
             <p className="rounded-xl bg-white p-4"><strong className="text-slate-900">No shared balances:</strong> one shop’s sales must never be represented as another shop’s balance or manually transferred through another tenant.</p>
             <p className="rounded-xl bg-white p-4"><strong className="text-slate-900">Disputes:</strong> use the Paystack reference, order, webhook event and shop ID together before any reconciliation or refund decision.</p>
           </div>

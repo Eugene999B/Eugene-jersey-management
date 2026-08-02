@@ -104,7 +104,7 @@ export function StaffLoginForm({ nextPath = "" }: StaffLoginFormProps) {
         cache: "no-store",
         headers: {
           Accept: "application/json",
-          "X-EJM-Login": "fetch",
+          "X-ESM-Login": "fetch",
         },
       });
       const result = await response.json().catch(() => null) as LoginResult | null;
