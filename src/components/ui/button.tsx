@@ -3,27 +3,41 @@ import { clsx } from "clsx";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
 const variants = {
-  primary: "bg-[var(--shop-primary)] text-white hover:brightness-95",
-  secondary: "bg-slate-900 text-white hover:bg-slate-800",
-  outline: "border border-[#ded8cd] bg-white text-slate-800 hover:bg-[#f6f4ef]",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+  primary: "bg-[var(--shop-primary)] text-white shadow-sm hover:brightness-95 active:brightness-90",
+  secondary: "bg-slate-900 text-white shadow-sm hover:bg-slate-800 active:bg-slate-950",
+  outline: "border border-[var(--line)] bg-white text-slate-800 hover:border-slate-400 hover:bg-[var(--surface-muted)]",
+  ghost: "bg-transparent text-slate-700 hover:bg-slate-100",
+  danger: "bg-red-600 text-white shadow-sm hover:bg-red-700 active:bg-red-800",
+};
+
+const sizes = {
+  sm: "min-h-10 rounded-lg px-3 py-2 text-xs",
+  md: "min-h-11 rounded-xl px-4 py-2.5 text-sm",
+  lg: "min-h-12 rounded-xl px-5 py-3 text-base",
+  icon: "min-h-11 min-w-11 rounded-xl p-2.5 text-sm",
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: keyof typeof variants;
+  size?: keyof typeof sizes;
   children: ReactNode;
+  loading?: boolean;
 };
 
-export function Button({ variant = "primary", className, children, ...props }: ButtonProps) {
+export function Button({ variant = "primary", size = "md", className, children, loading = false, disabled, ...props }: ButtonProps) {
   return (
     <button
       className={clsx(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex shrink-0 items-center justify-center gap-2 font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[color-mix(in_srgb,var(--shop-primary),white_72%)] disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
+        sizes[size],
         className,
       )}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
     >
+      {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" /> : null}
       {children}
     </button>
   );
@@ -32,16 +46,18 @@ export function Button({ variant = "primary", className, children, ...props }: B
 type LinkButtonProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   href: string;
   variant?: keyof typeof variants;
+  size?: keyof typeof sizes;
   children: ReactNode;
 };
 
-export function LinkButton({ variant = "primary", className, children, href, ...props }: LinkButtonProps) {
+export function LinkButton({ variant = "primary", size = "md", className, children, href, ...props }: LinkButtonProps) {
   return (
     <Link
       href={href}
       className={clsx(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] px-4 py-2 text-sm font-semibold transition",
+        "inline-flex shrink-0 items-center justify-center gap-2 font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[color-mix(in_srgb,var(--shop-primary),white_72%)]",
         variants[variant],
+        sizes[size],
         className,
       )}
       {...props}
