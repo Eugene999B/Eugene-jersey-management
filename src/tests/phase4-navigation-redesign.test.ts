@@ -31,6 +31,8 @@ describe("Phase 4 navigation redesign", () => {
     expect(shell).toContain("esm.dashboard.sidebar-collapsed");
     expect(shell).toContain("lg:grid-cols-[84px_minmax(0,1fr)]");
     expect(sidebar).toContain("Recently used");
+    expect(sidebar).toContain("item !== undefined");
+    expect(sidebar).toContain("!isShopNavigationItemActive(pathname, item.href)");
     expect(topbar).toContain("<DashboardBreadcrumbs");
     expect(topbar).toContain("<DashboardToolSearch");
     expect(topbar).toContain("Quick sale");
