@@ -40,6 +40,7 @@ jobs:
           set -euo pipefail
           git apply --index --check /tmp/phase-1.patch
           git apply --index /tmp/phase-1.patch
+          git restore --source=HEAD --staged --worktree .github/workflows/ci.yml
           git rm -r .github/phase-patches/phase-1
           git diff --cached --check
 
