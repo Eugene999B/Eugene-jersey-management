@@ -32,7 +32,8 @@ const recentStorageKey = "esm.dashboard.recent-tools";
 function recentNavigationItems(items: readonly ShopNavItem[], hrefs: readonly string[], pathname: string) {
   return hrefs
     .map((href) => items.find((item) => item.href === href))
-    .filter((item): item is ShopNavItem => Boolean(item) && !isShopNavigationItemActive(pathname, item.href))
+    .filter((item): item is ShopNavItem => item !== undefined)
+    .filter((item) => !isShopNavigationItemActive(pathname, item.href))
     .slice(0, 3);
 }
 
