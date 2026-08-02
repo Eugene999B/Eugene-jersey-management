@@ -8,6 +8,8 @@ import {
 } from "@/lib/subscription-plans";
 
 export type SubscriptionFeature = (typeof SUPPORTED_PLAN_FEATURES)[number];
+
+const CORE_SUBSCRIPTION_FEATURES: readonly SubscriptionFeature[] = ["POS", "INVENTORY"];
 export type SubscriptionBlockCode =
   | "SUBSCRIPTION_SUSPENDED"
   | "SUBSCRIPTION_CANCELLED"
@@ -263,6 +265,7 @@ export async function assertCommercialOperationAvailable(shopId: string, now = n
 }
 
 export function subscriptionFeatureIncluded(state: CommercialSubscriptionState, feature: SubscriptionFeature) {
+  if (CORE_SUBSCRIPTION_FEATURES.includes(feature)) return true;
   if (!state.enforcementEnabled) return true;
   const features = state.snapshot?.features ?? [];
   if (!features.length) return true;
@@ -357,13 +360,10 @@ export async function subscriptionUsage(shopId: string, now = new Date()): Promi
 }
 
 const featureByDashboardPrefix: Array<{ prefix: string; feature: SubscriptionFeature }> = [
-  { prefix: "/dashboard/catalog", feature: "INVENTORY" },
-  { prefix: "/dashboard/pos", feature: "POS" },
   { prefix: "/dashboard/designs", feature: "DESIGN_STUDIO" },
   { prefix: "/dashboard/suppliers", feature: "SUPPLIERS" },
   { prefix: "/dashboard/network", feature: "SHOP_NETWORK" },
   { prefix: "/dashboard/messages", feature: "CUSTOMER_MESSAGING" },
-  { prefix: "/dashboard/reports", feature: "ADVANCED_REPORTS" },
   { prefix: "/dashboard/exports", feature: "ADVANCED_REPORTS" },
   { prefix: "/dashboard/commerce", feature: "STOREFRONT" },
 ];

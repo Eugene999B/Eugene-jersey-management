@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { MessageCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { startCustomerChatAction } from "@/app/shop/[slug]/chat/actions";
+import { businessModuleEnabled } from "@/lib/business-modules";
 import { prisma } from "@/lib/db";
 import { getBuyerSession } from "@/lib/buyer-session";
 
@@ -17,7 +18,7 @@ export default async function PublicChatPage({ params, searchParams }: Props) {
   const query = await searchParams;
   const shop = await prisma.shop.findUnique({ where: { slug } });
   const buyer = await getBuyerSession();
-  if (!shop || !shop.isActive || !shop.storefrontEnabled) notFound();
+  if (!shop || !shop.isActive || !shop.storefrontEnabled || !businessModuleEnabled(shop.enabledModules, "ONLINE_SELLING")) notFound();
 
   const style = {
     "--shop-primary": shop.primaryColor,

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { SubscriptionInvoiceStatus } from "@prisma/client";
-import { AlertTriangle, Boxes, CalendarClock, CheckCircle2, CreditCard, Download, ReceiptText, RefreshCw, Users } from "lucide-react";
+import { AlertTriangle, Boxes, CalendarClock, CheckCircle2, CreditCard, Download, Puzzle, ReceiptText, RefreshCw, Users } from "lucide-react";
 import { generateSubscriptionInvoiceAction, startSubscriptionPaymentAction } from "@/app/dashboard/subscription/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
+import { CORE_BUSINESS_MODULES, OPTIONAL_BUSINESS_MODULES, businessModuleEnabled } from "@/lib/business-modules";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { permissions } from "@/lib/rbac";
 import { requireRole } from "@/lib/auth";
@@ -15,7 +16,7 @@ import { subscriptionFeatureIncluded, subscriptionUsage } from "@/lib/subscripti
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams?: Promise<{ error?: string; feature?: string; payment?: string; invoice?: string; generated?: string }>;
+  searchParams?: Promise<{ error?: string; feature?: string; module?: string; payment?: string; invoice?: string; generated?: string }>;
 };
 
 const errorCopy: Record<string, string> = {
@@ -85,6 +86,8 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   const isOwner = session.role === "OWNER";
   const isOwnerOrManager = isOwner || session.role === "MANAGER";
   const featureBlocked = params.error === "feature";
+  const moduleBlocked = params.error === "module";
+  const blockedModule = OPTIONAL_BUSINESS_MODULES.find((module) => module.key === params.module);
 
   return (
     <div className="space-y-6">
@@ -106,7 +109,12 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           {params.feature?.replaceAll("_", " ") || "That feature"} is not included in the assigned plan. Review the entitlements below and contact the platform administrator before relying on it.
         </div>
       ) : null}
-      {params.error && !featureBlocked ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{errorCopy[params.error] ?? "The subscription operation could not be completed."}</div> : null}
+      {moduleBlocked ? (
+        <div role="alert" className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-950">
+          {blockedModule?.label ?? "That business module"} is disabled for this business. Disabled modules are removed from navigation; the platform administrator can enable the module when the business needs it.
+        </div>
+      ) : null}
+      {params.error && !featureBlocked && !moduleBlocked ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{errorCopy[params.error] ?? "The subscription operation could not be completed."}</div> : null}
       {params.payment === "success" ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Payment verified. The invoice is paid and the next subscription term is active.</div> : null}
       {params.payment === "failed" || params.payment === "invalid" ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">The payment could not be verified. No subscription term was extended; review the payment attempt or try again.</div> : null}
       {params.generated ? <div role="status" className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900">Renewal invoice generated from the immutable assigned contract.</div> : null}
@@ -163,6 +171,42 @@ export default async function SubscriptionPage({ searchParams }: Props) {
         </div>
       </section>
 
+      <section className="panel p-5">
+        <div className="flex items-center gap-2"><Puzzle size={20} /><h2 className="text-xl font-semibold">Business modules</h2></div>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Core tools are available to every business. Optional modules are activated by the platform administrator and may also depend on a feature in the assigned plan. Disabled modules disappear from navigation instead of opening unusable pages.</p>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {CORE_BUSINESS_MODULES.map((module) => (
+            <div key={module.key} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center justify-between gap-2"><h3 className="font-semibold text-emerald-950">{module.label}</h3><Badge tone="green">Core</Badge></div>
+              <p className="mt-2 text-sm leading-5 text-emerald-900/80">{module.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {OPTIONAL_BUSINESS_MODULES.map((module) => {
+            const enabled = businessModuleEnabled(shop.enabledModules, module.key);
+            const inPlan = !module.requiredFeature || subscriptionFeatureIncluded(usage, module.requiredFeature);
+            const status = module.status === "PLANNED"
+              ? "Planned"
+              : !inPlan
+                ? "Not in plan"
+                : enabled
+                  ? "Active"
+                  : "Disabled by administrator";
+            const tone: "green" | "orange" | "neutral" = status === "Active" ? "green" : status === "Not in plan" || status === "Planned" ? "orange" : "neutral";
+            return (
+              <div key={module.key} className={`rounded-xl border p-4 ${status === "Active" ? "border-cyan-300 bg-cyan-50" : "border-slate-200 bg-white"}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-slate-950">{module.label}</h3><Badge tone={tone}>{status}</Badge></div>
+                <p className="mt-2 text-sm leading-5 text-slate-600">{module.description}</p>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{module.requiredFeature ? `Plan feature: ${module.requiredFeature.replaceAll("_", " ")}` : "Scheduled for a later phase"}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="panel overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded8cd] p-5">
           <div>
@@ -204,12 +248,13 @@ export default async function SubscriptionPage({ searchParams }: Props) {
       </section>
 
       <section className="panel p-5">
-        <h2 className="text-xl font-semibold">Included features</h2>
-        <p className="mt-1 text-sm text-slate-600">An empty legacy feature list remains unrestricted until the contract is deliberately reconfigured. Once features are assigned, access is enforced from this saved contract version.</p>
+        <h2 className="text-xl font-semibold">Plan feature entitlements</h2>
+        <p className="mt-1 text-sm text-slate-600">Sales/POS and inventory are ESM core capabilities and remain available under every plan. Other feature entitlements control optional capabilities after the corresponding business module has been enabled.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(["STOREFRONT", "POS", "INVENTORY", "DESIGN_STUDIO", "SUPPLIERS", "SHOP_NETWORK", "CUSTOMER_MESSAGING", "ADVANCED_REPORTS"] as const).map((feature) => {
             const included = subscriptionFeatureIncluded(usage, feature);
-            return <div key={feature} className={`rounded-xl border p-3 text-sm font-semibold ${included ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-500"}`}>{included ? "Included" : "Not included"} · {feature.replaceAll("_", " ")}</div>;
+            const core = feature === "POS" || feature === "INVENTORY";
+            return <div key={feature} className={`rounded-xl border p-3 text-sm font-semibold ${included ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-500"}`}>{core ? "Core" : included ? "Included" : "Not included"} · {feature.replaceAll("_", " ")}</div>;
           })}
         </div>
       </section>

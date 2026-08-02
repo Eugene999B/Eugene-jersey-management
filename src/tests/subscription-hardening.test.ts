@@ -125,6 +125,11 @@ describe("commercial subscription lifecycle", () => {
     expect(subscriptionFeatureIncluded(configured, "POS")).toBe(true);
     expect(subscriptionFeatureIncluded(configured, "DESIGN_STUDIO")).toBe(false);
 
+    const coreOnly = { ...configured, snapshot: snapshot({ features: ["STOREFRONT"] }) };
+    expect(subscriptionFeatureIncluded(coreOnly, "POS")).toBe(true);
+    expect(subscriptionFeatureIncluded(coreOnly, "INVENTORY")).toBe(true);
+    expect(subscriptionFeatureIncluded(coreOnly, "SUPPLIERS")).toBe(false);
+
     const legacyFeatures = { ...configured, snapshot: snapshot({ features: [] }) };
     expect(subscriptionFeatureIncluded(legacyFeatures, "DESIGN_STUDIO")).toBe(true);
   });
@@ -165,6 +170,7 @@ describe("subscription enforcement architecture", () => {
 
     expect(layout).toContain("subscriptionAccessForDashboardPath");
     expect(layout).toContain("featureIncluded");
+    expect(layout).toContain("businessModuleForDashboardPath");
     expect(tenantPage).toContain("Subscription &amp; usage");
     expect(tenantPage).toContain("Orders created this calendar month");
     expect(adminBilling).toContain("usageLabel");

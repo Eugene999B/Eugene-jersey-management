@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CheckCircle2, CreditCard, Landmark, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CreditCard, Landmark, Puzzle, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
-import { rejectShopCredentialsAction, toggleShopAction, verifyShopCredentialsAction } from "@/app/admin/actions";
+import { rejectShopCredentialsAction, toggleShopAction, updateShopModulesAction, verifyShopCredentialsAction } from "@/app/admin/actions";
 import { updateShopPaymentRoutingAction } from "@/app/admin/shops/[shopId]/payment-actions";
+import { CORE_BUSINESS_MODULES, OPTIONAL_BUSINESS_MODULES, businessModuleEnabled } from "@/lib/business-modules";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { checkShopPaystackSubaccount } from "@/lib/integration-health";
@@ -90,6 +91,49 @@ export default async function AdminShopDetailPage({ params, searchParams }: Prop
         <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Store payment account</p><h2 className="mt-2 text-xl font-semibold">{routingHealthy ? "Verified subaccount" : titleCase(paystackHealth.state)}</h2><p className="mt-2 text-sm text-slate-500">{paystackHealth.detail}</p></div>
         <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Mobile money</p><h2 className="mt-2 text-xl font-semibold">{shop.paymentConfig?.shopMomoNumber ?? "Not set"}</h2><p className="mt-2 text-sm text-slate-500">{shop.paymentConfig?.shopMomoNetwork ?? "Shop can add its own settlement line."}</p></div>
         <div className="panel p-5"><p className="text-sm font-semibold uppercase text-slate-500">Billing</p><h2 className="mt-2 text-xl font-semibold">{shop.billingCycle}</h2><p className="mt-2 text-sm text-slate-500">{shop.subscriptionStatus} - {shop.billingCycle === "YEARLY" ? currency(shop.yearlyPrice?.toString() ?? "0") : currency(shop.monthlyPrice?.toString() ?? "0")}</p></div>
+      </section>
+
+      <section className="panel p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2"><Puzzle size={19} /><p className="text-sm font-semibold uppercase text-slate-500">Business modules</p></div>
+            <h2 className="mt-2 text-xl font-semibold">Choose only the tools this business needs</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Core sales, orders, items, customers, payments, reports and settings always remain available. Optional tools disappear from the business navigation when disabled and still require an assigned plan feature when one is listed.</p>
+          </div>
+          <Badge tone="blue">{shop.enabledModules.length} enabled</Badge>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {CORE_BUSINESS_MODULES.map((module) => (
+            <div key={module.key} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center justify-between gap-2"><h3 className="font-semibold text-emerald-950">{module.label}</h3><Badge tone="green">Always on</Badge></div>
+              <p className="mt-2 text-sm leading-5 text-emerald-900/80">{module.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <form action={updateShopModulesAction} className="mt-5">
+          <input type="hidden" name="shopId" value={shop.id} />
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {OPTIONAL_BUSINESS_MODULES.map((module) => {
+              const available = module.status === "AVAILABLE";
+              const enabled = businessModuleEnabled(shop.enabledModules, module.key);
+              return (
+                <div key={module.key} className={`rounded-xl border p-4 ${available ? enabled ? "border-cyan-300 bg-cyan-50" : "border-slate-200 bg-white" : "border-dashed border-slate-300 bg-slate-50 text-slate-500"}`}>
+                  <div className="flex items-start gap-3">
+                    {available ? <input type="checkbox" name="enabledModules" value={module.key} defaultChecked={enabled} aria-label={`Enable ${module.label}`} className="mt-1 h-5 w-5 rounded border-slate-300" /> : <span className="mt-1 grid h-5 w-5 place-items-center rounded border border-slate-300 text-[9px] font-bold">—</span>}
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-slate-950">{module.label}</span><Badge tone={available ? enabled ? "blue" : "neutral" : "orange"}>{available ? enabled ? "Enabled" : "Optional" : "Planned"}</Badge></span>
+                      <span className="mt-2 block text-sm leading-5 text-slate-600">{module.description}</span>
+                      <span className="mt-2 block text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{module.requiredFeature ? `Plan feature: ${module.requiredFeature.replaceAll("_", " ")}` : "Future phase"}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Button className="mt-4">Save enabled modules</Button>
+        </form>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">

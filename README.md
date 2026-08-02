@@ -10,6 +10,8 @@ GitHub repository: https://github.com/Eugene999B/Eugene-jersey-management
 
 Every tenant is classified as Retail, Wholesale, Services, Production / printing, Rental or Mixed business. Existing tenants are preserved as Mixed business until an administrator deliberately changes their classification. Sports-specific catalogue fields are optional and appear only inside the sports-shop template. Legacy cookie names, payment reference prefixes and the default `EJM-ADMIN-ROOT` Login ID remain technically unchanged in Phase 1 to avoid invalidating sessions, payment reconciliation or production administrator access.
 
+Phase 2 introduces per-business modules. Home, Sales, Orders, Items, Customers, Payments, Reports and Settings are universal. Optional production, purchasing, online-selling and marketplace tools appear only when the platform administrator enables them and the assigned plan includes the necessary capability. Services, rentals, multi-location stock and advanced accounting are registered for later phases without exposing empty navigation.
+
 ## Core Stack
 
 - Next.js 16 App Router and React 19

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { requireBusinessModuleAccess } from "@/lib/business-module-access";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
 import { readShopProfileState, saveShopProfileBundle } from "@/lib/shop-profile-store";
 import {
@@ -229,6 +230,7 @@ export async function updateStorefrontVisibilityAction(formData: FormData) {
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const mode = storefrontModeSchema.safeParse(formData.get("mode"));
   if (!mode.success) redirect("/dashboard/settings?error=storefront-mode");
+  if (mode.data !== "OFFLINE") await requireBusinessModuleAccess(session.shopId, "ONLINE_SELLING");
 
   const shop = await prisma.shop.findUnique({
     where: { id: session.shopId },

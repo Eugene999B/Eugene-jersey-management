@@ -30,6 +30,7 @@ import { currency, titleCase } from "@/lib/format";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { firstProductImage } from "@/lib/product-images";
 import { isPaystackCheckoutReady } from "@/lib/payments";
+import { businessModuleEnabled } from "@/lib/business-modules";
 import { commercialSubscriptionState, subscriptionFeatureIncluded } from "@/lib/subscription-hardening";
 
 type Props = {
@@ -102,7 +103,7 @@ export default async function PublicShopPage({ params, searchParams }: Props) {
     },
   });
 
-  if (!shop || !shop.isActive || !shop.storefrontEnabled || shop.verificationStatus !== ShopVerificationStatus.VERIFIED) notFound();
+  if (!shop || !shop.isActive || !shop.storefrontEnabled || shop.verificationStatus !== ShopVerificationStatus.VERIFIED || !businessModuleEnabled(shop.enabledModules, "ONLINE_SELLING")) notFound();
   const subscription = await commercialSubscriptionState(shop.id);
   const subscriptionOrderingReady = subscription.operational && subscriptionFeatureIncluded(subscription, "STOREFRONT");
   const onlinePaymentReady = isPaystackCheckoutReady(shop.paymentConfig);

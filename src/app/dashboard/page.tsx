@@ -3,10 +3,12 @@ import { AlertTriangle, ArrowRight, BarChart3, Boxes, ClipboardList, CreditCard,
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { SalesChart } from "@/components/reports/sales-chart";
+import { businessModuleEnabled } from "@/lib/business-modules";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getDashboardMetrics, getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/db";
 import { canSeeNav } from "@/lib/rbac";
+import { commercialSubscriptionState, subscriptionFeatureIncluded } from "@/lib/subscription-hardening";
 
 function lastSevenDays() {
   return Array.from({ length: 7 }).map((_, index) => {
@@ -24,12 +26,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const { session, shop } = await getTenantContext();
   if (!shop) return null;
 
-  const metrics = await getDashboardMetrics(shop.id);
+  const [metrics, subscription] = await Promise.all([
+    getDashboardMetrics(shop.id),
+    commercialSubscriptionState(shop.id),
+  ]);
   const visibleNavigation = canSeeNav(session.role);
+  const productionVisible = businessModuleEnabled(shop.enabledModules, "PRINTING_PRODUCTION")
+    && subscriptionFeatureIncluded(subscription, "DESIGN_STUDIO");
   const quickActions = [
     { visible: visibleNavigation.pos, href: "/dashboard/pos", label: "Start a sale", note: "Open POS", icon: ShoppingBag },
     { visible: visibleNavigation.orders, href: "/dashboard/orders", label: "Manage production", note: `${metrics.pendingOrders} pending`, icon: ClipboardList },
-    { visible: visibleNavigation.designs, href: "/dashboard/designs", label: "Prepare transfer", note: "Artwork and output", icon: Palette },
+    { visible: visibleNavigation.designs && productionVisible, href: "/dashboard/designs", label: "Prepare transfer", note: "Artwork and output", icon: Palette },
     { visible: visibleNavigation.reports, href: "/dashboard/reports", label: "Review performance", note: "Sales and stock", icon: BarChart3 },
   ].filter((action) => action.visible);
   const days = lastSevenDays();

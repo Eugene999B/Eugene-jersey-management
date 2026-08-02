@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { businessModuleAccessForShop } from "@/lib/business-module-access";
 import { prisma } from "@/lib/db";
 import {
   DESIGN_VERSION_HISTORY_LIMIT,
@@ -14,6 +15,10 @@ export async function GET(
 ) {
   const session = await requireRole(permissions.designs);
   if (!session.shopId) return NextResponse.json({ error: "A shop workspace is required." }, { status: 403 });
+  const moduleAccess = await businessModuleAccessForShop(session.shopId, "PRINTING_PRODUCTION");
+  if (!moduleAccess.operational || !moduleAccess.enabled || !moduleAccess.featureIncluded) {
+    return NextResponse.json({ error: "Printing and production is not available for this business." }, { status: 403 });
+  }
 
   const { id } = await context.params;
   const design = await prisma.designJob.findFirst({

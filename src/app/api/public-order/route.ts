@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
   }
 
   const shop = await prisma.shop.findUnique({ where: { slug: parsed.data.shopSlug }, include: { paymentConfig: true } });
-  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=closed`);
+  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING")) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=closed`);
   if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && parsed.data.paymentChoice === "CASH") return redirectTo(request, `/shop/${shopSlug}?error=delivery-payment`);
   if (parsed.data.paymentChoice === "PAYSTACK" && !isPaystackCheckoutReady(shop.paymentConfig)) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=payment`);
   if (parsed.data.paymentChoice === "CASH" && !shop.paymentConfig?.allowCash) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=payment`);

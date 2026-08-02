@@ -29,7 +29,7 @@ test("shop owner can review subscription state, live usage and plan features", a
   await expect(page.getByText("Assigned commercial terms")).toBeVisible();
   await expect(page.getByText("Live plan usage")).toBeVisible();
   await expect(page.getByText("Orders created this calendar month")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Included features" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plan feature entitlements" })).toBeVisible();
 });
 
 test("subscription centre remains usable on a narrow phone screen", async ({ page }) => {

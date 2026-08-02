@@ -238,6 +238,7 @@ model Shop {
   secondaryColor             String                 @default("#f97316")
   planTier                   PlanTier               @default(BASIC)
   businessType               BusinessType           @default(MIXED)
+  enabledModules             String[]               @default(["PRINTING_PRODUCTION", "SUPPLIERS_PURCHASING", "ONLINE_SELLING", "MARKETPLACE"])
   isActive                   Boolean                @default(true)
   city                       String?
   country                    String?                @default("Ghana")

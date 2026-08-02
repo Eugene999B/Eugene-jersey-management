@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { businessModuleEnabled } from "@/lib/business-modules";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { getBuyerSession } from "@/lib/buyer-session";
@@ -31,7 +32,7 @@ export async function startCustomerChatAction(formData: FormData) {
   }
 
   const shop = await prisma.shop.findUnique({ where: { slug: parsed.data.shopSlug } });
-  if (!shop || !shop.isActive || !shop.storefrontEnabled) redirect(`/shop/${parsed.data.shopSlug}/chat?error=closed`);
+  if (!shop || !shop.isActive || !shop.storefrontEnabled || !businessModuleEnabled(shop.enabledModules, "ONLINE_SELLING")) redirect(`/shop/${parsed.data.shopSlug}/chat?error=closed`);
 
   const existingCustomer = await prisma.customer.findFirst({
     where: { shopId: shop.id, OR: [{ phone: buyer.phone }, ...(buyer.email ? [{ email: buyer.email }] : [])] },

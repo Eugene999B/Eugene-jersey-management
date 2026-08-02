@@ -10,6 +10,7 @@ import { hashPassword, requireRole } from "@/lib/auth";
 import { strongPasswordSchema } from "@/lib/password-policy";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { requireBusinessModuleAccess } from "@/lib/business-module-access";
 
 const supplierSchema = z.object({
   name: z.string().trim().min(2).max(140),
@@ -34,6 +35,7 @@ export async function createSupplierAction(formData: FormData) {
   const session = await requireRole(permissions.suppliers);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "SUPPLIERS_PURCHASING");
   const parsed = supplierSchema.safeParse({
     name: formData.get("name"), contactName: formData.get("contactName") || undefined,
     email: formData.get("email") || undefined, phone: formData.get("phone") || undefined,
@@ -75,6 +77,7 @@ export async function createSupplierOrderAction(formData: FormData) {
   const session = await requireRole(permissions.suppliers);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "SUPPLIERS_PURCHASING");
   const parsed = supplierOrderSchema.safeParse({
     supplierId: formData.get("supplierId"), productVariantId: formData.get("productVariantId") || undefined,
     description: formData.get("description"), quantity: formData.get("quantity"), unitCost: formData.get("unitCost"),
@@ -107,6 +110,7 @@ export async function receiveSupplierOrderAction(formData: FormData) {
   const session = await requireRole(permissions.suppliers);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "SUPPLIERS_PURCHASING");
   const orderId = String(formData.get("orderId") ?? "");
   if (!orderId) redirect("/dashboard/suppliers?error=receive");
 

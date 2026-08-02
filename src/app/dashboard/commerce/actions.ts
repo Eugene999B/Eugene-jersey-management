@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { requireBusinessModuleAccess } from "@/lib/business-module-access";
 
 const zoneSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -56,6 +57,7 @@ export async function createDeliveryZoneAction(formData: FormData) {
   const session = await requireRole(permissions.commerce);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "ONLINE_SELLING");
 
   const parsed = zoneSchema.safeParse({
     name: formData.get("name"),
@@ -92,6 +94,7 @@ export async function createCouponAction(formData: FormData) {
   const session = await requireRole(permissions.commerce);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "ONLINE_SELLING");
 
   const parsed = couponSchema.safeParse({
     code: String(formData.get("code") ?? "").trim().toUpperCase(),
@@ -147,6 +150,7 @@ export async function updateReturnRequestAction(formData: FormData) {
   const session = await requireRole(permissions.commerce);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const shopId = session.shopId;
+  await requireBusinessModuleAccess(shopId, "ONLINE_SELLING");
 
   const parsed = returnSchema.safeParse({
     requestId: formData.get("requestId"),
