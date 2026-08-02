@@ -9,8 +9,8 @@ type DataTableShellProps = {
 
 export function DataTableShell({ children, label, className }: DataTableShellProps) {
   return (
-    <div className={clsx("table-shell", className)} role="region" aria-label={label} tabIndex={0}>
+    <section className={clsx("table-shell", className)} aria-label={label}>
       {children}
-    </div>
+    </section>
   );
 }
