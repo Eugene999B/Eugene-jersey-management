@@ -1,0 +1,32 @@
+name: Phase 5 apply onboarding patches
+
+on:
+  push:
+    branches:
+      - phase-5/business-onboarding-configuration
+    paths:
+      - scripts/apply-phase5-existing-file-patches.py
+      - .github/workflows/phase5-apply-patches.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-5/business-onboarding-configuration
+          fetch-depth: 0
+      - name: Apply exact Phase 5 patches
+        run: python3 scripts/apply-phase5-existing-file-patches.py
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/schema.prisma src/lib/shop-navigation.ts src/app/dashboard/page.tsx 'src/app/api/receipts/[orderId]/route.ts' README.md
+          git diff --cached --check
+          git commit -m "Phase 5: apply generated onboarding integration patches"
+          git push origin HEAD:phase-5/business-onboarding-configuration
