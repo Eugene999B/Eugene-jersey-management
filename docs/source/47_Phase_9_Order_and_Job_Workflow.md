@@ -16,6 +16,34 @@ The same workflow supports:
 
 Existing POS sales, online orders, payments, debts, exact product options, design jobs, fulfilment verification, returns and customer tracking remain connected to the original order.
 
+## Creating an immediate sale or an order/job
+
+POS now asks staff to choose the checkout purpose.
+
+### Immediate sale
+
+Immediate sale remains the default and preserves the Phase 8 behavior:
+
+- The payment must balance exactly.
+- Stock is deducted atomically.
+- The receipt is created and printed.
+- The order is recorded as Completed.
+- A walk-in customer remains allowed unless credit is used.
+
+### Order or job
+
+Order or job creates follow-up work:
+
+- A customer is required.
+- The payment must still balance exactly.
+- Cash, card, mobile money, mixed payments and partial credit remain supported.
+- Stock is reserved by the same atomic decrement used for other accepted orders.
+- The receipt is created and printed.
+- The order begins as Pending.
+- Staff can then assign responsibility, record approval, add instructions and advance production.
+
+This separation prevents completed counter sales from being incorrectly reopened as production jobs.
+
 ## Additive data model
 
 Phase 9 adds one optional workflow record beside each order and an immutable event timeline.
@@ -216,11 +244,12 @@ The migration:
 Permanent verification includes:
 
 - Migration safety checks
+- Immediate-sale and order/job creation-mode checks
 - Workflow constants and event-type checks
 - Tenant-scope source guards
 - Approval-gate checks
 - Pickup and delivery event checks
 - Role-permission checks
 - Customer privacy checks
-- A mobile Chromium journey that creates a real paid POS order, assigns responsibility, sets priority and deadlines, proves the approval block, records approval, advances production, verifies the board summary and confirms that private notes do not appear in customer tracking
+- A mobile Chromium journey that creates a real paid Pending order/job, assigns responsibility, sets priority and deadlines, proves the approval block, records approval, advances production, verifies the desktop board summary and confirms that private notes do not appear in mobile customer tracking
 - Full migration, lint, TypeScript, unit, tenant-isolation, documentation, production-build and Chromium validation before merge
