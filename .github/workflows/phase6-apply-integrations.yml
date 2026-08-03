@@ -1,0 +1,32 @@
+name: Phase 6 apply access integrations
+
+on:
+  push:
+    branches:
+      - phase-6/admin-controlled-free-access
+    paths:
+      - scripts/apply-phase6-access-integrations.py
+      - .github/workflows/phase6-apply-integrations.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-6/admin-controlled-free-access
+          fetch-depth: 0
+      - name: Apply exact Phase 6 integrations
+        run: python3 scripts/apply-phase6-access-integrations.py
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/schema.prisma src/lib/admin-navigation.ts src/lib/subscription-hardening.ts src/lib/subscription-billing.ts src/app/dashboard/subscription/page.tsx README.md
+          git diff --cached --check
+          git commit -m "Phase 6: integrate access grants with subscriptions and billing"
+          git push origin HEAD:phase-6/admin-controlled-free-access
