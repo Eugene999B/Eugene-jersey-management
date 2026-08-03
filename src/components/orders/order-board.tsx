@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, CircleDollarSign, UserRound } from "lucide-react";
 import { OrderStatus, Role } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import type { OrderApprovalStatus, OrderWorkflowPriority } from "@/lib/order-workflow";
 
@@ -159,9 +159,7 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
                           <Link href={`/dashboard/orders/${order.id}`} className="truncate font-semibold text-cyan-800 underline-offset-4 hover:underline">{order.receiptNumber}</Link>
                           <p className="truncate text-sm text-slate-500">{order.customerName}</p>
                         </div>
-                        {order.priority === "URGENT" || order.rush ? (
-                          <span title="Urgent order" className="shrink-0 rounded-lg bg-red-50 p-2 text-red-600"><AlertTriangle size={16} /></span>
-                        ) : null}
+                        {order.priority === "URGENT" || order.rush ? <span title="Urgent order" className="shrink-0 rounded-lg bg-red-50 p-2 text-red-600"><AlertTriangle size={16} /></span> : null}
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -189,7 +187,7 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
 
                       <p className="mt-3 text-sm font-semibold">{currency(order.totalAmount, currencyCode)}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <Button asChild variant="outline" className="min-h-10 flex-1 px-2 py-1 text-xs"><Link href={`/dashboard/orders/${order.id}`}>Open workflow</Link></Button>
+                        <LinkButton href={`/dashboard/orders/${order.id}`} variant="outline" className="min-h-10 flex-1 px-2 py-1 text-xs">Open workflow</LinkButton>
                         {nextStatuses(order.status, role).map((status) => (
                           <Button key={status} variant={status === "CANCELLED" ? "danger" : "outline"} className="min-h-10 flex-1 px-2 py-1 text-xs sm:flex-none" disabled={isPending} onClick={() => updateOrder(order.id, status)}>
                             {status === "COMPLETED" ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
