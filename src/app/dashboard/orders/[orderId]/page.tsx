@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, History, PackageCheck, Printer, UserRound } from "lucide-react";
 import { PaymentMethod, PaymentStatus, Role } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { OrderWorkflowPanel } from "@/components/orders/order-workflow-panel";
 import { requireRole } from "@/lib/auth";
@@ -105,9 +104,9 @@ export default async function OrderDetailPage({ params }: Props) {
         aside={<div className="flex flex-wrap gap-2"><Badge tone={order.status === "COMPLETED" ? "green" : order.status === "CANCELLED" ? "red" : "blue"}>{titleCase(order.status)}</Badge><Badge tone={workflow.priority === "URGENT" ? "red" : workflow.priority === "HIGH" ? "orange" : "slate"}>{titleCase(workflow.priority)}</Badge>{overdue ? <Badge tone="red">Overdue</Badge> : null}</div>}
         actions={(
           <>
-            <Button asChild variant="outline"><Link href="/dashboard/orders"><ArrowLeft size={16} /> Orders</Link></Button>
-            <Button asChild variant="outline"><a href={`/api/receipts/${order.id}`} target="_blank" rel="noreferrer"><Printer size={16} /> Receipt</a></Button>
-            <Button asChild><Link href={`/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}`} target="_blank"><ExternalLink size={16} /> Customer view</Link></Button>
+            <LinkButton href="/dashboard/orders" variant="outline"><ArrowLeft size={16} /> Orders</LinkButton>
+            <LinkButton href={`/api/receipts/${order.id}`} variant="outline" target="_blank" rel="noreferrer"><Printer size={16} /> Receipt</LinkButton>
+            <LinkButton href={`/track/${order.receiptNumber}?access=${encodeURIComponent(order.publicAccessToken)}`} target="_blank"><ExternalLink size={16} /> Customer view</LinkButton>
           </>
         )}
       />
