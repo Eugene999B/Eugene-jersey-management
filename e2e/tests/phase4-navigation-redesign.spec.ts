@@ -61,6 +61,8 @@ async function signIn(page: Page, loginIdValue: string, twoFactorSecret?: string
 test("provides desktop breadcrumbs, tool search and a collapsible shop sidebar", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await signIn(page, PHASE4_OWNER_LOGIN_ID, PHASE4_OWNER_TOTP_SECRET);
+  await page.goto("/dashboard/orders");
+  await expect(page.getByRole("heading", { name: "Production orders" })).toBeVisible();
   await page.goto("/dashboard/customers");
 
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Customers");

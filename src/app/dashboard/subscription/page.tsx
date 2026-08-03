@@ -27,6 +27,7 @@ const errorCopy: Record<string, string> = {
   "invoice-paid": "That invoice has already been paid.",
   "invoice-void": "That invoice has been voided by the platform administrator.",
   "invoice-zero": "This invoice does not require an online payment.",
+  "invoice-disabled-by-access-grant": "Subscription payment is disabled while administrator-granted access is active.",
   "paystack-unavailable": "Paystack subscription collection is not configured yet. Contact the platform administrator.",
   "checkout-failed": "The secure subscription checkout could not be started. Review the payment attempt below or try again.",
 };
@@ -80,9 +81,9 @@ export default async function SubscriptionPage({ searchParams }: Props) {
     listSubscriptionInvoicesForShop(shop.id),
   ]);
   const snapshot = usage.snapshot;
-  const selectedPrice = snapshot
+  const selectedPrice = usage.accessGrant?.priceOverride ?? (snapshot
     ? shop.billingCycle === "YEARLY" ? snapshot.yearlyPrice : snapshot.monthlyPrice
-    : null;
+    : null);
   const isOwner = session.role === "OWNER";
   const isOwnerOrManager = isOwner || session.role === "MANAGER";
   const featureBlocked = params.error === "feature";
@@ -124,6 +125,8 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           {usage.notice}
         </div>
       ) : null}
+
+      {usage.accessGrant ? <section className="rounded-2xl border border-violet-200 bg-violet-50 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-violet-700">Administrator access grant</p><h2 className="mt-2 text-xl font-semibold text-violet-950">{usage.accessGrant.accessType.replaceAll("_", " ")}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-violet-900/80">{usage.accessGrant.reason}</p></div><Badge tone={usage.accessGrant.invoicesDisabled ? "green" : "blue"}>{usage.accessGrant.invoicesDisabled ? "Invoices disabled" : "Billing enabled"}</Badge></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3"><div className="rounded-xl bg-white p-3"><dt className="text-xs font-bold uppercase text-slate-500">Starts</dt><dd className="mt-1 font-semibold">{shortDate(usage.accessGrant.startsAt)}</dd></div><div className="rounded-xl bg-white p-3"><dt className="text-xs font-bold uppercase text-slate-500">Ends</dt><dd className="mt-1 font-semibold">{usage.accessGrant.endsAt ? shortDate(usage.accessGrant.endsAt) : "No expiry"}</dd></div><div className="rounded-xl bg-white p-3"><dt className="text-xs font-bold uppercase text-slate-500">After expiry</dt><dd className="mt-1 font-semibold">{usage.accessGrant.expiryAction.replaceAll("_", " ")}</dd></div></dl></section> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Assigned plan" value={snapshot?.name ?? shop.planTier} icon={<CreditCard size={20} />} />
@@ -213,11 +216,11 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             <h2 className="text-xl font-semibold">Invoices &amp; payment history</h2>
             <p className="mt-1 text-sm text-slate-600">Every invoice is tied to the exact plan version, price, cycle and period assigned to this shop.</p>
           </div>
-          {isOwner ? <form action={generateSubscriptionInvoiceAction}><Button variant="outline"><RefreshCw size={16} />Generate renewal invoice</Button></form> : null}
+          {isOwner && !usage.accessGrant?.invoicesDisabled ? <form action={generateSubscriptionInvoiceAction}><Button variant="outline"><RefreshCw size={16} />Generate renewal invoice</Button></form> : null}
         </div>
         <div className="grid gap-4 bg-white p-5 lg:grid-cols-2">
           {invoices.map((invoice) => {
-            const payable = isOwner && (invoice.status === SubscriptionInvoiceStatus.OPEN || invoice.status === SubscriptionInvoiceStatus.OVERDUE);
+            const payable = isOwner && !usage.accessGrant?.invoicesDisabled && (invoice.status === SubscriptionInvoiceStatus.OPEN || invoice.status === SubscriptionInvoiceStatus.OVERDUE);
             return (
               <article key={invoice.id} className={`rounded-xl border p-4 ${params.invoice === invoice.id ? "border-cyan-400 ring-4 ring-cyan-100" : "border-slate-200"}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -243,7 +246,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
               </article>
             );
           })}
-          {!invoices.length ? <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-600 lg:col-span-2">No subscription invoice has been issued. The owner can generate one once a configured paid contract and renewal date exist.</div> : null}
+          {!invoices.length ? <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-600 lg:col-span-2">{usage.accessGrant?.invoicesDisabled ? "No subscription invoice is required while this administrator access grant is active." : "No subscription invoice has been issued. The owner can generate one once a configured paid contract and renewal date exist."}</div> : null}
         </div>
       </section>
 

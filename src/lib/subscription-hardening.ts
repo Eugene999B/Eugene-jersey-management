@@ -1,5 +1,6 @@
-import { OrderChannel, Prisma, SubscriptionStatus } from "@prisma/client";
+import { OrderChannel, Prisma, SubscriptionAccessExpiryAction, SubscriptionAccessType, SubscriptionStatus } from "@prisma/client";
 import { platformDb } from "@/lib/platform-db";
+import { activeShopAccessGrant, accessGrantCommercialStatus, accessTypeLabel } from "@/lib/subscription-access";
 import {
   SUPPORTED_PLAN_FEATURES,
   parseSubscriptionPlanSnapshot,
@@ -44,6 +45,16 @@ export type CommercialSubscriptionState = {
   deadline: Date | null;
   notice: string | null;
   blockCode: SubscriptionBlockCode | null;
+  accessGrant: {
+    id: string;
+    accessType: SubscriptionAccessType;
+    startsAt: Date;
+    endsAt: Date | null;
+    invoicesDisabled: boolean;
+    priceOverride: string | null;
+    expiryAction: SubscriptionAccessExpiryAction;
+    reason: string;
+  } | null;
 };
 
 export type SubscriptionUsageState = CommercialSubscriptionState & {
@@ -107,6 +118,7 @@ export function deriveCommercialSubscriptionState(input: {
     trialEndsAt: input.dates.trialEndsAt,
     renewalAt: input.dates.renewalAt,
     graceEndsAt,
+    accessGrant: null,
   };
 
   if (!enforcementEnabled) {
@@ -204,7 +216,8 @@ export function deriveCommercialSubscriptionState(input: {
   };
 }
 
-async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = new Date()) {
+async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = new Date()): Promise<CommercialSubscriptionState> {
+  const accessGrant = await activeShopAccessGrant(shopId, now);
   const [contract, shop] = await Promise.all([
     db.shopSubscriptionContract.findUnique({
       where: { shopId },
@@ -223,6 +236,41 @@ async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = n
   ]);
 
   if (!shop) throw new CommercialSubscriptionError("SUBSCRIPTION_SUSPENDED", "This shop no longer exists.");
+
+  if (accessGrant) {
+    const status = accessGrantCommercialStatus(accessGrant);
+    const suspended = accessGrant.accessType === SubscriptionAccessType.SUSPENDED;
+    const label = accessTypeLabel(accessGrant.accessType);
+    const blockCode: SubscriptionBlockCode | null = suspended ? "SUBSCRIPTION_SUSPENDED" : null;
+    const state: CommercialSubscriptionState = {
+      shopId,
+      hasContract: Boolean(contract),
+      enforcementEnabled: true,
+      recordedStatus: status,
+      effectiveStatus: status,
+      operational: !suspended,
+      snapshot: accessGrant.snapshot,
+      trialEndsAt: accessGrant.accessType === SubscriptionAccessType.FREE_TRIAL ? accessGrant.endsAt : null,
+      renewalAt: accessGrant.endsAt,
+      graceEndsAt: null,
+      deadline: accessGrant.endsAt,
+      notice: suspended
+        ? "Commercial actions are suspended by the platform administrator."
+        : `${label} is active${accessGrant.endsAt ? ` until ${accessGrant.endsAt.toLocaleDateString("en-GB")}` : " without an expiry date"}.${accessGrant.invoicesDisabled ? " Subscription invoices are disabled during this grant." : ""}`,
+      blockCode,
+      accessGrant: {
+        id: accessGrant.id,
+        accessType: accessGrant.accessType,
+        startsAt: accessGrant.startsAt,
+        endsAt: accessGrant.endsAt,
+        invoicesDisabled: accessGrant.invoicesDisabled,
+        priceOverride: accessGrant.priceOverride?.toFixed(2) ?? null,
+        expiryAction: accessGrant.expiryAction,
+        reason: accessGrant.reason,
+      },
+    };
+    return state;
+  }
 
   let snapshot: SubscriptionPlanSnapshot | null = null;
   if (contract) {
