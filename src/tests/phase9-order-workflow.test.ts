@@ -31,6 +31,20 @@ describe("Phase 9 order and job workflow", () => {
     expect(migration).not.toContain('UPDATE "Payment"');
   });
 
+  it("creates pending orders and jobs without changing immediate-sale behavior", () => {
+    const checkout = source("../app/api/pos/checkout/route.ts");
+    const terminal = source("../components/pos/pos-terminal.tsx");
+
+    expect(checkout).toContain('checkoutMode: z.enum(["SALE", "ORDER_JOB"]).default("SALE")');
+    expect(checkout).toContain('parsed.data.checkoutMode === "ORDER_JOB" ? OrderStatus.PENDING : OrderStatus.COMPLETED');
+    expect(checkout).toContain("Choose or enter a customer before creating an order or job.");
+    expect(checkout).toContain('action: parsed.data.checkoutMode === "ORDER_JOB" ? "pos.order_job_created" : "pos.checkout_completed"');
+    expect(terminal).toContain('title="Immediate sale"');
+    expect(terminal).toContain('title="Order or job"');
+    expect(terminal).toContain("Create order/job & print");
+    expect(terminal).toContain("Complete sale & print");
+  });
+
   it("scopes every unrestricted workflow query by shop and order", () => {
     const service = source("../lib/order-workflow.ts");
     expect(service).toContain('WHERE "id" = ');
