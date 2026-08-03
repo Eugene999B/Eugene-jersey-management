@@ -40,6 +40,7 @@ const checkoutSchema = z.object({
   customerId: z.string().optional(),
   customerPhone: z.string().trim().max(24).optional(),
   customerEmail: z.string().email().optional(),
+  checkoutMode: z.enum(["SALE", "ORDER_JOB"]).default("SALE"),
   payments: z.array(tenderSchema).max(4).optional(),
   paymentMethod: z.nativeEnum(PaymentMethod).optional(),
   cashReceived: z.coerce.number().positive().max(100_000_000).optional(),
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
 
   const previousOrder = await prisma.order.findUnique({
     where: { idempotencyKey: parsed.data.idempotencyKey },
-    select: { id: true, shopId: true, receiptNumber: true, totalAmount: true },
+    select: { id: true, shopId: true, receiptNumber: true, totalAmount: true, status: true },
   });
   if (previousOrder) {
     if (previousOrder.shopId !== session.shopId) return NextResponse.json({ error: "Checkout key conflict." }, { status: 409 });
@@ -138,6 +139,8 @@ export async function POST(request: NextRequest) {
       receiptNumber: previousOrder.receiptNumber,
       totalAmount: Number(previousOrder.totalAmount),
       receiptUrl: `/api/receipts/${previousOrder.id}`,
+      orderStatus: previousOrder.status,
+      checkoutMode: previousOrder.status === OrderStatus.PENDING ? "ORDER_JOB" : "SALE",
       duplicate: true,
     });
   }
@@ -156,6 +159,9 @@ export async function POST(request: NextRequest) {
     : null;
   if (parsed.data.customerId && !selectedCustomer) {
     return NextResponse.json({ error: "The selected customer is not available in this shop." }, { status: 400 });
+  }
+  if (parsed.data.checkoutMode === "ORDER_JOB" && !selectedCustomer && !parsed.data.customerName) {
+    return NextResponse.json({ error: "Choose or enter a customer before creating an order or job." }, { status: 400 });
   }
 
   const itemQuantities = parsed.data.items.reduce(
@@ -247,6 +253,7 @@ export async function POST(request: NextRequest) {
   }
 
   const publicAccessToken = nanoid(32);
+  const initialStatus = parsed.data.checkoutMode === "ORDER_JOB" ? OrderStatus.PENDING : OrderStatus.COMPLETED;
   let checkoutResult: CheckoutTransactionResult;
   try {
     checkoutResult = await prisma.$transaction(async (tx) => {
@@ -295,11 +302,15 @@ export async function POST(request: NextRequest) {
           receiptNumber: receiptNumber(shop.slug),
           publicAccessToken,
           idempotencyKey: parsed.data.idempotencyKey,
-          status: OrderStatus.COMPLETED,
+          status: initialStatus,
           channel: OrderChannel.POS,
           totalAmount,
           discountAmount,
-          notes: [parsed.data.notes, discountAmount > 0 ? `Discount: ${parsed.data.discountReason}` : null].filter(Boolean).join("\n") || null,
+          notes: [
+            parsed.data.notes,
+            parsed.data.checkoutMode === "ORDER_JOB" ? "Created as an order/job from POS." : null,
+            discountAmount > 0 ? `Discount: ${parsed.data.discountReason}` : null,
+          ].filter(Boolean).join("\n") || null,
           items: {
             create: parsed.data.items.map((item) => {
               const variant = variantById.get(item.variantId)!;
@@ -323,6 +334,7 @@ export async function POST(request: NextRequest) {
                 changeAmount: tender.changeAmount,
                 metadata: {
                   source: "POS",
+                  checkoutMode: parsed.data.checkoutMode,
                   paymentMode,
                   allocatedAmount: tender.amount,
                   tenderedAmount: tender.tenderedAmount,
@@ -395,11 +407,13 @@ export async function POST(request: NextRequest) {
   await audit({
     shopId: session.shopId,
     userId: session.id,
-    action: "pos.checkout_completed",
+    action: parsed.data.checkoutMode === "ORDER_JOB" ? "pos.order_job_created" : "pos.checkout_completed",
     entityType: "Order",
     entityId: order.id,
     metadata: {
       receiptNumber: order.receiptNumber,
+      checkoutMode: parsed.data.checkoutMode,
+      orderStatus: order.status,
       paymentMethods: tenderPlan.methods,
       paidAmount: tenderPlan.paidAmount,
       creditAmount: tenderPlan.creditAmount,
@@ -453,6 +467,8 @@ export async function POST(request: NextRequest) {
     receiptNumber: order.receiptNumber,
     totalAmount,
     receiptUrl: `/api/receipts/${order.id}`,
+    checkoutMode: parsed.data.checkoutMode,
+    orderStatus: order.status,
     creditSummary,
     paymentSummary: {
       methods: tenderPlan.methods,
