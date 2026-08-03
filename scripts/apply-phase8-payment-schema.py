@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Temporary branch-only generator. Remove after the schema commit is produced.
 path = Path("prisma/schema.prisma")
 text = path.read_text()
 
