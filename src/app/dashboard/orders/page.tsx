@@ -49,7 +49,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Orders and jobs</h1>
+          <h1 className="text-2xl font-semibold">Production orders and jobs</h1>
           <p className="mt-2 text-sm text-slate-500">
             Priorities, customer approval, assigned staff, payment balance, production, service work and fulfilment in one controlled board.
           </p>
