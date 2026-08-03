@@ -89,6 +89,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       },
     });
 
+    if (body.priority !== undefined) {
+      await prisma.order.updateMany({
+        where: { id: orderId, shopId: session.shopId },
+        data: { rush: body.priority === "URGENT" },
+      });
+    }
+
     await audit({
       shopId: session.shopId,
       userId: session.id,
