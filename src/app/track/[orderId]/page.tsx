@@ -174,8 +174,8 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
               <input type="hidden" name="receiptNumber" value={order.receiptNumber} />
               <input type="hidden" name="accessToken" value={order.publicAccessToken} />
               <div className="grid gap-3 sm:grid-cols-[1fr_160px_auto]">
-                <label className="flex items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3"><Phone size={16} className="text-slate-400" /><input className="min-h-11 flex-1 bg-transparent text-sm outline-none" name="phone" placeholder="+233..." required /></label>
-                <input className="field tracking-[0.18em]" name="code" inputMode="numeric" placeholder="Code" required />
+                <label className="flex items-center gap-2 rounded-[8px] border border-[#ded8cd] bg-white px-3"><span className="sr-only">Order phone</span><Phone size={16} className="text-slate-400" /><input className="min-h-11 flex-1 bg-transparent text-sm outline-none" name="phone" placeholder="+233..." required /></label>
+                <input className="field tracking-[0.18em]" name="code" inputMode="numeric" placeholder="Code" aria-label="Delivery verification code" required />
                 <Button><ShieldCheck size={16} /> Verify</Button>
               </div>
             </form>
@@ -187,7 +187,7 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
               <p className="mt-1 text-sm text-slate-600">Use the same phone number on the order. The shop will review it in Commerce.</p>
               <input type="hidden" name="receiptNumber" value={order.receiptNumber} />
               <input type="hidden" name="accessToken" value={order.publicAccessToken} />
-              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_2fr_auto]"><input className="field" name="phone" placeholder="+233..." required /><input className="field" name="reason" placeholder="Reason for return or exchange" required /><Button variant="outline">Send request</Button></div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_2fr_auto]"><input className="field" name="phone" aria-label="Return request phone" placeholder="+233..." required /><input className="field" name="reason" aria-label="Return request reason" placeholder="Reason for return or exchange" required /><Button variant="outline">Send request</Button></div>
             </form>
           ) : null}
           {openReturn ? <p className="mt-6 rounded-[8px] border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">A return request is already open for this order. Current status: <strong>{titleCase(openReturn.status)}</strong>.</p> : null}
