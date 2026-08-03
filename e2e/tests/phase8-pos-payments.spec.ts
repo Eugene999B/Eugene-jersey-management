@@ -63,8 +63,8 @@ test("balances mixed cash and mobile-money payment before checkout", async ({ pa
   await payment.getByLabel(/I confirmed this mobile-money amount was received/).check();
 
   await expect(payment.getByRole("status")).toContainText("Payment balances exactly");
-  await expect(payment.getByRole("status")).toContainText("Paid now: GHS 125.00");
-  await expect(payment.getByRole("status")).toContainText("Change: GHS 10.00");
+  await expect(payment.getByRole("status")).toContainText("Paid now: GH₵125.00");
+  await expect(payment.getByRole("status")).toContainText("Change: GH₵10.00");
   await expect(page.getByRole("button", { name: "Complete sale & print" })).toBeEnabled();
   await expectNoHorizontalOverflow(page);
 });
