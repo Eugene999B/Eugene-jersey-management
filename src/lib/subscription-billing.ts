@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { sendDirectMessage } from "@/lib/messaging";
 import { amountToSubunit, initializePlatformPaystackTransaction, verifyPaystackTransaction, type PaystackTransactionData } from "@/lib/payments";
 import { platformDb } from "@/lib/platform-db";
+import { activeShopAccessGrant } from "@/lib/subscription-access";
 import { parseSubscriptionPlanSnapshot } from "@/lib/subscription-plans";
 import { isEmailDeliveryConfigured, sendTransactionalEmail } from "@/lib/transactional-email";
 
@@ -63,12 +64,16 @@ export async function ensureSubscriptionRenewalInvoice(input: {
   force?: boolean;
 }) {
   const now = input.now ?? new Date();
+  const accessGrant = await activeShopAccessGrant(input.shopId, now);
+  if (accessGrant?.invoicesDisabled) return null;
   const contract = await platformDb.shopSubscriptionContract.findUnique({ where: { shopId: input.shopId } });
   if (!contract || contract.subscriptionStatus === SubscriptionStatus.CANCELLED) return null;
 
-  const parsed = parseSubscriptionPlanSnapshot(contract.termsSnapshot);
+  const parsed = accessGrant
+    ? { success: true as const, data: accessGrant.snapshot }
+    : parseSubscriptionPlanSnapshot(contract.termsSnapshot);
   if (!parsed.success || !parsed.data.isConfigured) return null;
-  const amount = selectedContractPrice(contract);
+  const amount = accessGrant?.priceOverride ?? selectedContractPrice(contract);
   if (amount === null || Number(amount) <= 0) return null;
 
   const dueAt = contractDueAt(contract) ?? (input.force ? now : null);
@@ -95,7 +100,7 @@ export async function ensureSubscriptionRenewalInvoice(input: {
       status,
       planVersion: contract.planVersion,
       planName: parsed.data.name,
-      description: `${parsed.data.name} ${contract.billingCycle.toLowerCase()} subscription renewal`,
+      description: `${parsed.data.name} ${contract.billingCycle.toLowerCase()} subscription renewal${accessGrant ? ` under ${accessGrant.accessType.toLowerCase().replaceAll("_", " ")} access` : ""}`,
       termsSnapshot: parsed.data as Prisma.InputJsonObject,
       nextReminderAt,
       createdById: input.createdById ?? null,
@@ -131,6 +136,8 @@ export async function createSubscriptionPaymentCheckout(input: {
   email: string;
   callbackUrl: string;
 }) {
+  const accessGrant = await activeShopAccessGrant(input.shopId);
+  if (accessGrant?.invoicesDisabled) throw new SubscriptionBillingError("invoice-disabled-by-access-grant", "Subscription payment is disabled while administrator-granted access is active.");
   const invoice = await platformDb.subscriptionInvoice.findFirst({
     where: { id: input.invoiceId, shopId: input.shopId },
   });

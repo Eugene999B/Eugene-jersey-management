@@ -14,6 +14,8 @@ Phase 2 introduces per-business modules. Home, Sales, Orders, Items, Customers, 
 
 Phase 5 adds `/dashboard/setup`, a server-verified ten-step onboarding workspace for new businesses. Existing operational tenants are marked complete during migration. New tenants configure identity, business type, Ghana location, enabled-module review, currency and tax, payment methods, receipt details, staff, first item/service and opening stock. Printing businesses also record the real cutter, manual heat press, materials, garments, placements, artwork sizes, stages and deposit policy before completion.
 
+Phase 6 adds `/admin/access`, an audited administrator access-grant ledger separate from ordinary recurring billing. Paid, free-trial, sponsored, promotional, free-forever, emergency and suspended access can carry exact dates, plan and feature terms, price overrides, invoice suppression and an explicit expiry outcome. The tenant subscription centre shows the active grant, while invoice generation and payment prompts are suppressed whenever the grant disables billing.
+
 ## Core Stack
 
 - Next.js 16 App Router and React 19
