@@ -99,7 +99,7 @@ test("configures, approves and advances one real order through the workflow cont
   await expect(page.getByRole("status")).toContainText(`Workflow for ${order.receiptNumber} saved`);
 
   await page.getByRole("button", { name: "Move to In Production" }).click();
-  await expect(page.getByRole("alert")).toContainText("Customer approval is required before production can start");
+  await expect(page.locator('p[role="alert"]')).toContainText("Customer approval is required before production can start");
 
   await page.getByLabel("Approval status").selectOption("APPROVED");
   await page.getByLabel("Approval evidence or requested changes").fill("Customer approved the exact option and work instructions.");
