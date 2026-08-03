@@ -4,6 +4,7 @@ import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { recordOrderWorkflowEvent } from "@/lib/order-workflow";
 import { normalizePhone } from "@/lib/phone";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { hashToken } from "@/lib/tokens";
@@ -79,6 +80,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "This order or payment changed. Refresh and try again." }, { status: 409 });
   }
 
+  await recordOrderWorkflowEvent({
+    shopId: session.shopId,
+    orderId: order.id,
+    actorId: session.id,
+    type: "FULFILLMENT_UPDATED",
+    fromStatus: OrderStatus.READY,
+    toStatus: OrderStatus.COMPLETED,
+    note: "Pickup verified and released to the customer.",
+    metadata: { fulfillmentType: FulfillmentType.PICKUP, cashCollected: Boolean(pendingCash) },
+  });
   await audit({
     shopId: session.shopId,
     userId: session.id,
