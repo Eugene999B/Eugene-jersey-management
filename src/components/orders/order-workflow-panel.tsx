@@ -12,7 +12,7 @@ import {
   ORDER_WORKFLOW_PRIORITIES,
   type OrderApprovalStatus,
   type OrderWorkflowPriority,
-} from "@/lib/order-workflow";
+} from "@/lib/order-workflow-types";
 
 type WorkflowView = {
   assignedToId: string | null;
