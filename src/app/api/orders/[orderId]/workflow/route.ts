@@ -13,9 +13,9 @@ import {
 } from "@/lib/order-workflow";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
-const workflowRoles = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.ACCOUNTANT];
-const financeRoles = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT];
-const assignmentRoles = [Role.OWNER, Role.MANAGER];
+const workflowRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.ACCOUNTANT];
+const financeRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT];
+const assignmentRoles: Role[] = [Role.OWNER, Role.MANAGER];
 
 const schema = z.object({
   assignedToId: z.string().min(1).nullable().optional(),
