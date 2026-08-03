@@ -47,6 +47,11 @@ type Props = {
   staff: StaffOption[];
 };
 
+const stageRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.CASHIER];
+const assignmentRoles: Role[] = [Role.OWNER, Role.MANAGER];
+const financeRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT];
+const productionRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER];
+
 const transitions: Record<OrderStatus, OrderStatus[]> = {
   PENDING: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
   IN_PRODUCTION: [OrderStatus.READY, OrderStatus.CANCELLED],
@@ -65,7 +70,7 @@ function allowedTransitions(status: OrderStatus, role: Role) {
     if (status === OrderStatus.IN_PRODUCTION) return [OrderStatus.READY];
     return [];
   }
-  if (![Role.OWNER, Role.MANAGER, Role.CASHIER].includes(role)) return [];
+  if (!stageRoles.includes(role)) return [];
   return transitions[status];
 }
 
@@ -95,9 +100,9 @@ export function OrderWorkflowPanel({
   const [timelineNote, setTimelineNote] = useState("");
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  const canAssign = [Role.OWNER, Role.MANAGER].includes(role);
-  const canFinance = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT].includes(role);
-  const canProduction = [Role.OWNER, Role.MANAGER, Role.CASHIER, Role.DESIGNER].includes(role);
+  const canAssign = assignmentRoles.includes(role);
+  const canFinance = financeRoles.includes(role);
+  const canProduction = productionRoles.includes(role);
   const balance = Math.max(orderTotal - paidAmount, 0);
   const depositTarget = Number(depositTargetAmount || 0);
   const depositMet = paidAmount + 0.005 >= depositTarget;
