@@ -39,6 +39,7 @@ async function createPaidOrder(page: Page) {
   const [response, popup] = await Promise.all([checkoutResponse, receiptPopup]);
   expect(response.ok()).toBeTruthy();
   const payload = await response.json() as { orderId: string; receiptNumber: string };
+  await expect(page.getByText(new RegExp(`Sale complete\\. Receipt ${payload.receiptNumber}`))).toBeVisible();
   await popup.close();
   return payload;
 }
@@ -79,7 +80,7 @@ test("configures, approves and advances one real order through the workflow cont
   await page.getByLabel("Due date").fill(futureDate(4));
   await page.getByLabel("Approval status").selectOption("PENDING");
   await page.getByLabel("Approval evidence or requested changes").fill("Awaiting final customer confirmation in the shop.");
-  await page.getByLabel("Exact work instructions, quality checks, measurements, placement, service steps, or preparation notes").fill("Use the exact XL black cotton long-sleeve option and inspect all selected details before production.");
+  await page.getByPlaceholder("Exact work instructions, quality checks, measurements, placement, service steps, or preparation notes").fill("Use the exact XL black cotton long-sleeve option and inspect all selected details before production.");
   await page.getByLabel("Deposit target").fill("50");
   await page.getByLabel("Balance due date").fill(futureDate(3));
   await page.getByLabel("Current internal notes").fill("Keep this internal note private from the customer tracker.");
