@@ -12,11 +12,11 @@ async function signInAsAdministrator(page: Page) {
   const login = page.getByPlaceholder("Click, then enter Login ID or email");
   const secret = page.getByPlaceholder("Click, then enter password");
   await login.click();
-  await login.fill("EJM-E2E-ADMIN");
+  await login.fill("EJM-E2E-ACCESS");
   await secret.click();
   await secret.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
-  await page.waitForURL((url) => url.pathname === "/admin", { timeout: 30_000 });
+  await page.waitForURL((url) => url.pathname === "/admin/billing", { timeout: 30_000 });
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -37,13 +37,13 @@ test("shows administrator-controlled access terms without changing a business", 
   await expect(page).toHaveURL(/\/admin\/access$/);
   await expect(page.getByRole("heading", { name: "Free, sponsored and emergency access" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Create or replace a business access grant" })).toBeVisible();
-  await expect(page.getByLabel("Business")).toBeVisible();
-  await expect(page.getByLabel("Access type")).toBeVisible();
-  await expect(page.getByLabel("Plan and limits")).toBeVisible();
-  await expect(page.getByLabel("Start date")).toBeVisible();
-  await expect(page.getByLabel("End date")).toBeVisible();
-  await expect(page.getByLabel("After expiry")).toBeVisible();
-  await expect(page.getByLabel("Disable invoices and payment prompts during this grant")).toBeChecked();
+  await expect(page.getByRole("combobox", { name: "Business", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Access type", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Plan and limits", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Start date", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("End date", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "After expiry", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Disable invoices and payment prompts during this grant", { exact: true })).toBeChecked();
   await expect(page.getByRole("heading", { name: "Access grant ledger" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
