@@ -34,6 +34,13 @@ describe("Phase 8 POS tender reconciliation", () => {
     expect(plan.creditAmount).toBe(45);
   });
 
+  it("allows a zero-total order without fake payment records", () => {
+    const plan = normalizePosTenders([], 0);
+    expect(plan.tenders).toEqual([]);
+    expect(plan.totalAmount).toBe(0);
+    expect(plan.paidAmount).toBe(0);
+  });
+
   it.each([
     {
       inputs: [{ method: "CASH" as const, amount: 50 }],
@@ -77,8 +84,9 @@ describe("Phase 8 POS tender reconciliation", () => {
     expect(checkout).toContain("normalizePosTenders");
     expect(checkout).toContain("creditAmount");
     expect(checkout).toContain("tenderedAmount");
-    expect(checkout).toContain("payments: tenderSelection.inputs");
+    expect(checkout).toContain("payments: tenderPlan.tenders.length");
     expect(terminal).toContain("PosPaymentPanel");
+    expect(terminal).toContain("payments: tenderSelection.inputs");
     expect(panel).toContain("Split or mixed");
     expect(panel).toContain("Cash received");
     expect(receipt).toContain("Payment breakdown");
