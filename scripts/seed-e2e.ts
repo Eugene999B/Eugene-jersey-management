@@ -37,6 +37,11 @@ const identities = {
     loginId: "EJM-E2E-OWNER",
     name: "EJM Browser Shop Owner",
   },
+  catalogOwner: {
+    email: "browser-catalog-owner@ejm.test",
+    loginId: "EJM-E2E-CATALOG",
+    name: "EJM Browser Catalogue Owner",
+  },
   designer: {
     email: "browser-designer@ejm.test",
     loginId: "EJM-E2E-DESIGNER",
@@ -282,6 +287,32 @@ async function main() {
   });
 
   await prisma.user.upsert({
+    where: { email: identities.catalogOwner.email },
+    update: {
+      adminLoginId: identities.catalogOwner.loginId,
+      name: identities.catalogOwner.name,
+      passwordHash,
+      role: Role.OWNER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+      failedLoginCount: 0,
+      lockUntil: null,
+      sessionVersion: 0,
+    },
+    create: {
+      adminLoginId: identities.catalogOwner.loginId,
+      email: identities.catalogOwner.email,
+      name: identities.catalogOwner.name,
+      passwordHash,
+      role: Role.OWNER,
+      shopId: shop.id,
+      adminPermissions: [],
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
     where: { email: identities.designer.email },
     update: {
       adminLoginId: identities.designer.loginId,
@@ -431,6 +462,43 @@ async function main() {
           quantity: 25,
           unitCost: 10,
         },
+      },
+    },
+  });
+
+  const phase7Category = await prisma.category.upsert({
+    where: { shopId_name: { shopId: shop.id, name: "Phase 7 Catalogue" } },
+    update: {},
+    create: { shopId: shop.id, name: "Phase 7 Catalogue" },
+  });
+  await prisma.product.deleteMany({
+    where: { shopId: shop.id, name: "Phase 7 exact option item" },
+  });
+  await prisma.product.create({
+    data: {
+      shopId: shop.id,
+      categoryId: phase7Category.id,
+      name: "Phase 7 exact option item",
+      brand: "ESM Test",
+      productType: "Stocked product",
+      condition: "NEW",
+      basePrice: 100,
+      lowStockThreshold: 2,
+      variants: {
+        create: [
+          {
+            sku: "EJM-P7-BLACK-XL",
+            stockQty: 5,
+            priceOverride: 125,
+            attributes: { size: "XL", color: "Black", material: "Cotton", custom_sleeve: "Long" },
+          },
+          {
+            sku: "EJM-P7-BLUE-M",
+            stockQty: 0,
+            priceOverride: 110,
+            attributes: { size: "M", color: "Blue", material: "Cotton" },
+          },
+        ],
       },
     },
   });

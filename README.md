@@ -16,6 +16,8 @@ Phase 5 adds `/dashboard/setup`, a server-verified ten-step onboarding workspace
 
 Phase 6 adds `/admin/access`, an audited administrator access-grant ledger separate from ordinary recurring billing. Paid, free-trial, sponsored, promotional, free-forever, emergency and suspended access can carry exact dates, plan and feature terms, price overrides, invoice suppression and an explicit expiry outcome. The tenant subscription centre shows the active grant, while invoice generation and payment prompts are suppressed whenever the grant disables billing.
 
+Phase 7 generalizes the catalogue around stocked products, services, custom production items, rental assets, bundles and non-stock items. Every option can record size, colour, material, model, capacity, unit, condition, duration and custom attributes. POS groups those options under one item, disables unavailable choices, and requires an explicit highlighted selection before cart entry. The chosen option is preserved on the cart, order board, receipt and customer tracking page.
+
 ## Core Stack
 
 - Next.js 16 App Router and React 19

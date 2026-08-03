@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { currency } from "@/lib/format";
 import { permissions } from "@/lib/rbac";
 import { requireTenantShopId, withTenantScope } from "@/lib/tenant-scope";
+import { productVariantOptionLabel } from "@/lib/product-variants";
 
 type RouteContext = {
   params: Promise<{ orderId: string }>;
@@ -60,7 +61,7 @@ export async function GET(_request: Request, context: RouteContext) {
         <table>
           ${order.items.map((item) => `
             <tr>
-              <td>${item.quantity}x ${escapeHtml(item.productVariant.product.name)}<br><small>${escapeHtml(item.productVariant.sku)}</small></td>
+              <td>${item.quantity}x ${escapeHtml(item.productVariant.product.name)}<br><small>${escapeHtml(productVariantOptionLabel(item.productVariant.attributes))} · ${escapeHtml(item.productVariant.sku)}</small></td>
               <td style="text-align:right">${escapeHtml(currency(Number(item.unitPrice) * item.quantity, order.shop.currency))}</td>
             </tr>
           `).join("")}

@@ -1,3 +1,13 @@
+import {
+  VARIANT_OPTION_FIELDS,
+  cleanOptionValue,
+  customAttributesToText,
+  variantOptionEntries,
+  variantOptionLabel,
+  variantOptionSignature,
+  type VariantOptionKey,
+} from "@/lib/catalog-options";
+
 export type ProductVariantLike = {
   sku: string;
   stockQty: number;
@@ -14,25 +24,43 @@ export function productVariantAttributes(value: unknown): Record<string, string>
   );
 }
 
+export function productVariantOption(attributes: unknown, key: VariantOptionKey) {
+  return cleanOptionValue(productVariantAttributes(attributes)[key]);
+}
+
 export function productVariantSize(attributes: unknown) {
-  return productVariantAttributes(attributes).size ?? "";
+  return productVariantOption(attributes, "size");
 }
 
 export function productVariantIsArchived(attributes: unknown) {
   return productVariantAttributes(attributes)._archived === "true";
 }
 
+export function productVariantFormValues(attributes: unknown) {
+  const source = productVariantAttributes(attributes);
+  return {
+    ...Object.fromEntries(VARIANT_OPTION_FIELDS.map((field) => [field.key, source[field.key] ?? ""])),
+    customAttributes: customAttributesToText(source),
+  } as Record<VariantOptionKey, string> & { customAttributes: string };
+}
+
+export function productVariantOptionEntries(attributes: unknown) {
+  return variantOptionEntries(attributes);
+}
+
+export function productVariantOptionLabel(attributes: unknown, fallback = "Standard") {
+  return variantOptionLabel(attributes, fallback);
+}
+
+export function productVariantOptionSignature(attributes: unknown) {
+  return variantOptionSignature(attributes);
+}
+
 export function productVariantLabel(
   variant: ProductVariantLike,
   options: { includeSku?: boolean; includeStock?: boolean } = {},
 ) {
-  const attributes = productVariantAttributes(variant.attributes);
-  const parts: string[] = [];
-  const size = attributes.size;
-  const color = attributes.color;
-
-  parts.push(size ? `Size ${size}` : "Standard");
-  if (color) parts.push(color);
+  const parts = [productVariantOptionLabel(variant.attributes)];
   if (options.includeSku) parts.push(variant.sku);
   if (options.includeStock !== false) parts.push(`${variant.stockQty} available`);
   return parts.join(" · ");

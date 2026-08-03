@@ -11,7 +11,8 @@ import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { imageListFromUrl } from "@/lib/product-images";
 import { createOptimizedMediaAsset } from "@/lib/media-storage";
-import { productVariantAttributes, productVariantSize } from "@/lib/product-variants";
+import { productVariantAttributes, productVariantFormValues, productVariantSize } from "@/lib/product-variants";
+import { variantOptionSignature, variantOptionsFromRow } from "@/lib/catalog-options";
 import { assertProductCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const categorySchema = z.object({
@@ -81,20 +82,29 @@ const optionalPrice = z.preprocess(
   z.number().positive().max(100_000_000).optional(),
 );
 
+const optionText = z.string().trim().max(120).default("");
 const variantRowSchema = z.object({
   id: z.string().trim().min(1).max(100).optional(),
-  size: z.string().trim().max(80).default(""),
+  size: optionText,
+  color: optionText,
+  material: optionText,
+  model: optionText,
+  capacity: optionText,
+  unit: optionText,
+  condition: optionText,
+  duration: optionText,
+  customAttributes: z.string().trim().max(1200).default(""),
   stockQty: z.preprocess((value) => Number(value), z.number().int().min(0).max(10_000_000)),
   sku: z.string().trim().max(100).default(""),
   priceOverride: optionalPrice,
 });
 
-const variantRowsSchema = z.array(variantRowSchema).min(1).max(40).superRefine((rows, context) => {
+const variantRowsSchema = z.array(variantRowSchema).min(1).max(80).superRefine((rows, context) => {
   const seen = new Set<string>();
   rows.forEach((row, index) => {
-    const key = (row.size || "Standard").toLocaleLowerCase();
+    const key = variantOptionSignature(variantOptionsFromRow(row));
     if (seen.has(key)) {
-      context.addIssue({ code: "custom", message: "Each size or option must be listed once.", path: [index, "size"] });
+      context.addIssue({ code: "custom", message: "Each exact option combination must be listed once.", path: [index] });
     }
     seen.add(key);
   });
@@ -156,6 +166,14 @@ function parseVariantRows(formData: FormData): VariantRow[] | null {
   const legacy = variantRowsSchema.safeParse([{
     id: formData.get("variantId") || undefined,
     size: String(formData.get("size") || ""),
+    color: "",
+    material: "",
+    model: "",
+    capacity: "",
+    unit: "",
+    condition: "",
+    duration: "",
+    customAttributes: "",
     stockQty: Number(formData.get("stockQty") || 0),
     sku: String(formData.get("sku") || ""),
     priceOverride: undefined,
@@ -170,13 +188,18 @@ function skuPart(value: string, fallback: string) {
 
 function variantSku(productName: string, row: VariantRow) {
   if (row.sku) return row.sku;
-  return `${skuPart(productName, "ITEM")}-${skuPart(row.size || "STD", "STD")}-${nanoid(5).toUpperCase()}`;
+  const optionCode = Object.values(variantOptionsFromRow(row)).slice(0, 3).join("-") || "STD";
+  return `${skuPart(productName, "ITEM")}-${skuPart(optionCode, "STD")}-${nanoid(5).toUpperCase()}`;
 }
 
-function mergeVariantAttributes(existing: unknown, input: { size: string; color?: string; equipmentGroup?: string; sportType?: string; teamName?: string }) {
+function mergeVariantAttributes(existing: unknown, row: VariantRow, inherited: { color?: string; equipmentGroup?: string; sportType?: string; teamName?: string }) {
   const next: Record<string, string> = { ...productVariantAttributes(existing) };
   delete next._archived;
-  for (const [key, value] of Object.entries(input)) {
+  for (const key of ["size", "color", "material", "model", "capacity", "unit", "condition", "duration"]) delete next[key];
+  for (const key of Object.keys(next)) if (key.startsWith("custom_")) delete next[key];
+  Object.assign(next, variantOptionsFromRow({ ...row, color: row.color || inherited.color || "" }));
+  for (const [key, value] of Object.entries(inherited)) {
+    if (key === "color") continue;
     if (value?.trim()) next[key] = value.trim();
     else delete next[key];
   }
@@ -188,8 +211,11 @@ function sizeGuide(rows: VariantRow[]) {
 }
 
 function serviceRows(rows: VariantRow[], firstExistingId?: string): VariantRow[] {
-  const first = rows[0] ?? { size: "Service", stockQty: 9999, sku: "", priceOverride: undefined };
-  return [{ ...first, id: first.id ?? firstExistingId, size: "Service", stockQty: 9999 }];
+  const first = rows[0] ?? {
+    size: "Service", color: "", material: "", model: "", capacity: "", unit: "Service",
+    condition: "", duration: "", customAttributes: "", stockQty: 9999, sku: "", priceOverride: undefined,
+  };
+  return [{ ...first, id: first.id ?? firstExistingId, size: first.size || "Service", unit: first.unit || "Service", stockQty: 9999 }];
 }
 
 export async function createProductAction(formData: FormData) {
@@ -243,8 +269,7 @@ export async function createProductAction(formData: FormData) {
             sku: variantSku(parsed.data.name, row),
             stockQty: parsed.data.isService ? 9999 : row.stockQty,
             priceOverride: row.priceOverride ?? null,
-            attributes: mergeVariantAttributes(null, {
-              size: row.size,
+            attributes: mergeVariantAttributes(null, row, {
               color: parsed.data.color,
               equipmentGroup: parsed.data.equipmentGroup,
               sportType: parsed.data.sportType,
@@ -303,6 +328,7 @@ export async function updateProductAction(formData: FormData) {
   const mergedRows: VariantRow[] = [
     ...product.variants.map((variant) => submittedById.get(variant.id) ?? {
       id: variant.id,
+      ...productVariantFormValues(variant.attributes),
       size: productVariantSize(variant.attributes),
       stockQty: variant.stockQty,
       sku: variant.sku,
@@ -340,8 +366,7 @@ export async function updateProductAction(formData: FormData) {
           sku: variantSku(parsed.data.name, row),
           stockQty: parsed.data.isService ? 9999 : row.stockQty,
           priceOverride: row.priceOverride ?? null,
-          attributes: mergeVariantAttributes(existing?.attributes, {
-            size: row.size,
+          attributes: mergeVariantAttributes(existing?.attributes, row, {
             color: parsed.data.color,
             equipmentGroup: parsed.data.equipmentGroup,
             sportType: parsed.data.sportType,
