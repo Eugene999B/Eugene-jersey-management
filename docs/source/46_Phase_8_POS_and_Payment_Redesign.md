@@ -55,9 +55,15 @@ When credit is mixed with cash, card or mobile money:
 
 ## Persistence
 
-ESM creates one existing `Payment` record per tender. No destructive schema change is required.
+ESM creates one `Payment` record per tender. Phase 8 adds three backward-compatible fields to the existing payment table:
 
-The existing payment fields store:
+- `tenderedAmount` for cash physically received
+- `changeAmount` for change returned
+- `metadata` for structured tender facts
+
+An additive index supports order/method/status reconciliation. Existing payment rows receive safe defaults and are not rewritten or deleted.
+
+The payment record also retains:
 
 - Method
 - Allocated amount
@@ -65,9 +71,7 @@ The existing payment fields store:
 - Provider reference
 - Verification time
 - Provider channel
-- Structured gateway-response JSON containing cash received, change, confirmation and payment mode
-
-Existing historical payments remain compatible.
+- Structured gateway-response JSON for backward-compatible diagnostics
 
 ## Receipt
 
@@ -105,4 +109,4 @@ Permanent verification includes:
 - Unit tests for cash/change, mixed payment, partial credit and invalid plans.
 - Structural tests for server, POS and receipt integration.
 - Mobile Chromium acceptance for a GHS 125 sale split into GHS 50 cash and GHS 75 mobile money, with GHS 60 cash received and GHS 10 change.
-- Full lint, TypeScript, unit, tenant-isolation, documentation, production-build and Chromium validation before merge.
+- Full migration, lint, TypeScript, unit, tenant-isolation, documentation, production-build and Chromium validation before merge.
