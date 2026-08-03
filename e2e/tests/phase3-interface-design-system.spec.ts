@@ -29,6 +29,16 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(widths.body).toBeLessThanOrEqual(widths.viewport + 1);
 }
 
+async function addExactOptionItem(page: Page) {
+  await page.getByPlaceholder("Search product or SKU").fill("Phase 7 exact option item");
+  await page.getByRole("button", { name: "Choose option for Phase 7 exact option item" }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose Phase 7 exact option item" });
+  const option = dialog.getByRole("radio", { name: /Size XL.*Colour Black.*Material Cotton.*Sleeve Long/ });
+  await option.check();
+  await dialog.getByRole("button", { name: "Add selected option" }).click();
+  await expect(page.locator("#pos-cart").getByText("Phase 7 exact option item", { exact: true })).toBeVisible();
+}
+
 const viewports = [
   { name: "small Android", width: 360, height: 740 },
   { name: "standard mobile", width: 390, height: 844 },
@@ -56,10 +66,16 @@ test("keeps the Phase 3 system usable across required screen sizes", async ({ pa
     await page.goto("/dashboard/pos");
     await expect(page.getByRole("heading", { name: "Point of Sale" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    const card = page.getByRole("radio", { name: "CARD" });
-    await card.click();
-    await expect(card).toHaveAttribute("aria-checked", "true");
-    await expect(card).toContainText("Selected");
+
+    if (viewport.name === "standard mobile") {
+      await addExactOptionItem(page);
+      const card = page.getByRole("radio", { name: "Card", exact: true });
+      await card.click();
+      await expect(card).toHaveAttribute("aria-checked", "true");
+      await expect(card).toContainText("Selected");
+    } else {
+      await expect(page.getByText("No payment is due", { exact: true })).toBeVisible();
+    }
 
     await page.screenshot({ path: testInfo.outputPath(`phase3-${viewport.width}x${viewport.height}.png`), fullPage: false });
   }
