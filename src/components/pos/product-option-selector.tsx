@@ -35,7 +35,7 @@ export function ProductOptionSelector({ product, currencyCode, onClose, onConfir
     () => product.variants.filter((variant) => product.isService || variant.stockQty > 0),
     [product],
   );
-  const [selectedId, setSelectedId] = useState(available.length === 1 ? available[0].id : "");
+  const [selectedId, setSelectedId] = useState("");
   const selected = product.variants.find((variant) => variant.id === selectedId) ?? null;
 
   useEffect(() => {
