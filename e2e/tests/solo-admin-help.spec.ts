@@ -79,9 +79,11 @@ test("shows the owner Login ID, online controls, credit guidance and Design Stud
 
   await page.goto("/dashboard/pos");
   await addExactOptionItem(page);
-  await page.getByRole("radio", { name: "Credit", exact: true }).click();
+  const credit = page.getByRole("radio", { name: "Credit", exact: true });
+  await credit.click();
+  await expect(credit).toContainText("Create debt for only this portion");
   await expect(page.getByText(/Choose an existing customer or enter a new customer name before using credit/)).toBeVisible();
-  await expect(page.getByText(/Only the credit allocation will become debt/)).toBeVisible();
+  await expect(page.getByText(/Customer details are required for any credit allocation/)).toBeVisible();
 
   await page.goto("/dashboard/designs");
   const guideDownload = page.waitForEvent("download");
