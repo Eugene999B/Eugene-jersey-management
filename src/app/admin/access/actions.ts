@@ -61,13 +61,23 @@ function statusForAccessType(type: SubscriptionAccessType) {
   return SubscriptionStatus.ACTIVE;
 }
 
+const temporaryAccessTypes = new Set<SubscriptionAccessType>([
+  SubscriptionAccessType.FREE_TRIAL,
+  SubscriptionAccessType.SPONSORED,
+  SubscriptionAccessType.PROMOTIONAL,
+  SubscriptionAccessType.EMERGENCY,
+]);
+
+const invoiceFreeAccessTypes = new Set<SubscriptionAccessType>([
+  SubscriptionAccessType.FREE_TRIAL,
+  SubscriptionAccessType.SPONSORED,
+  SubscriptionAccessType.FREE_FOREVER,
+  SubscriptionAccessType.EMERGENCY,
+  SubscriptionAccessType.SUSPENDED,
+]);
+
 function requiresEndDate(type: SubscriptionAccessType) {
-  return [
-    SubscriptionAccessType.FREE_TRIAL,
-    SubscriptionAccessType.SPONSORED,
-    SubscriptionAccessType.PROMOTIONAL,
-    SubscriptionAccessType.EMERGENCY,
-  ].includes(type);
+  return temporaryAccessTypes.has(type);
 }
 
 export async function grantShopAccessAction(formData: FormData) {
@@ -89,6 +99,8 @@ export async function grantShopAccessAction(formData: FormData) {
   if (!parsed.success) accessRedirect("values");
 
   const input = parsed.data;
+  const now = new Date();
+  if (input.startsAt.getTime() > now.getTime()) accessRedirect("future-start");
   if (requiresEndDate(input.accessType) && !input.endsAt) accessRedirect("end-required");
   if (input.endsAt && input.endsAt <= input.startsAt) accessRedirect("date-order");
   if (input.accessType === SubscriptionAccessType.FREE_FOREVER && input.endsAt) accessRedirect("free-forever-end");
@@ -108,15 +120,12 @@ export async function grantShopAccessAction(formData: FormData) {
     if (!freePlan || freePlan.tier !== PlanTier.FREE || !freePlan.isConfigured || !freePlan.isActive) accessRedirect("expiry-free-plan");
   }
 
-  const freeLike = [
-    SubscriptionAccessType.FREE_TRIAL,
-    SubscriptionAccessType.SPONSORED,
-    SubscriptionAccessType.FREE_FOREVER,
-    SubscriptionAccessType.EMERGENCY,
-    SubscriptionAccessType.SUSPENDED,
-  ].includes(input.accessType);
-  const invoicesDisabled = freeLike ? true : input.invoicesDisabled;
-  const priceOverride = input.accessType === SubscriptionAccessType.FREE_FOREVER ? new Prisma.Decimal(0) : input.priceOverride === null ? null : new Prisma.Decimal(input.priceOverride);
+  const invoicesDisabled = invoiceFreeAccessTypes.has(input.accessType) ? true : input.invoicesDisabled;
+  const priceOverride = input.accessType === SubscriptionAccessType.FREE_FOREVER
+    ? new Prisma.Decimal(0)
+    : input.priceOverride === null
+      ? null
+      : new Prisma.Decimal(input.priceOverride);
   const snapshot = subscriptionPlanSnapshot(plan);
   const termsSnapshot = input.featureOverrides.length
     ? snapshotAsJson({ ...snapshot, features: input.featureOverrides })
@@ -132,11 +141,16 @@ export async function grantShopAccessAction(formData: FormData) {
         where: { id: existing.id },
         data: {
           isActive: false,
-          revokedAt: new Date(),
+          revokedAt: now,
           revokedById: session.id,
           revocationReason: `Superseded by a new ${input.accessType} grant.`,
         },
       });
+    }
+
+    let resolvedExpiryPlanId = input.expiryPlanId;
+    if (input.expiryAction === SubscriptionAccessExpiryAction.RETURN_TO_FREE && !resolvedExpiryPlanId) {
+      resolvedExpiryPlanId = (await tx.subscriptionPlan.findUniqueOrThrow({ where: { tier: PlanTier.FREE } })).id;
     }
 
     const created = await tx.shopAccessGrant.create({
@@ -152,9 +166,7 @@ export async function grantShopAccessAction(formData: FormData) {
         reason: input.reason,
         approvedById: session.id,
         expiryAction: input.expiryAction,
-        expiryPlanId: input.expiryAction === SubscriptionAccessExpiryAction.RETURN_TO_FREE
-          ? (expiryPlan?.id ?? (await tx.subscriptionPlan.findUniqueOrThrow({ where: { tier: PlanTier.FREE } })).id)
-          : input.expiryPlanId,
+        expiryPlanId: resolvedExpiryPlanId,
         automaticExtensionDays: input.automaticExtensionDays,
         featureOverrides: input.featureOverrides,
         termsSnapshot,
@@ -212,7 +224,7 @@ export async function grantShopAccessAction(formData: FormData) {
         },
         data: {
           status: SubscriptionInvoiceStatus.VOID,
-          voidedAt: new Date(),
+          voidedAt: now,
           voidReason: `Invoice suppressed by ${input.accessType} grant approved by ${session.name}.`,
           nextReminderAt: null,
         },
@@ -261,15 +273,28 @@ export async function revokeShopAccessAction(formData: FormData) {
   if (!parsed.success) accessRedirect("revoke");
   const grant = await prisma.shopAccessGrant.findUnique({ where: { id: parsed.data.grantId } });
   if (!grant || !grant.isActive) accessRedirect("grant-missing");
-  await prisma.shopAccessGrant.update({
-    where: { id: grant.id },
-    data: {
-      isActive: false,
-      revokedAt: new Date(),
-      revokedById: session.id,
-      revocationReason: parsed.data.reason,
-    },
-  });
+
+  const revokedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.shopAccessGrant.update({
+      where: { id: grant.id },
+      data: {
+        isActive: false,
+        revokedAt,
+        revokedById: session.id,
+        revocationReason: parsed.data.reason,
+      },
+    });
+    await tx.shop.update({
+      where: { id: grant.shopId },
+      data: { subscriptionStatus: SubscriptionStatus.SUSPENDED },
+    });
+    await tx.shopSubscriptionContract.updateMany({
+      where: { shopId: grant.shopId },
+      data: { subscriptionStatus: SubscriptionStatus.SUSPENDED },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
   await audit({
     shopId: grant.shopId,
     userId: session.id,
