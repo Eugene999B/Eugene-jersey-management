@@ -59,7 +59,7 @@ test("guides a new business through real operational setup", async ({ page }) =>
   await expect(page.getByRole("region", { name: "Setup progress" })).toBeVisible();
 
   for (let step = 1; step <= 10; step += 1) {
-    await expect(page.getByRole("link", { name: new RegExp(`Step ${step}`) })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(`^Step ${step}\\b`) })).toBeVisible();
   }
   await expect(page.getByRole("heading", { name: "Production-business extension" })).toBeVisible();
   await expect(page.getByText(/Do not guess a machine protocol/)).toBeVisible();
