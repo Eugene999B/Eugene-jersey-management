@@ -104,6 +104,7 @@ test("configures, approves and advances one real order through the workflow cont
   await expect(page.getByText("Order stage changed", { exact: true }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
+  await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/dashboard/orders");
   const card = page.locator("article").filter({ hasText: order.receiptNumber });
   await expect(card).toContainText("High");
@@ -114,6 +115,7 @@ test("configures, approves and advances one real order through the workflow cont
   await card.getByRole("link", { name: "Open workflow" }).click();
   const customerHref = await page.getByRole("link", { name: "Customer view" }).getAttribute("href");
   expect(customerHref).toBeTruthy();
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(customerHref!);
   await expect(page.getByText("Expected date", { exact: true })).toBeVisible();
   await expect(page.getByText("Order updates", { exact: true })).toBeVisible();
