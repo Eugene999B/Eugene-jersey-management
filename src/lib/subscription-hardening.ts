@@ -216,7 +216,7 @@ export function deriveCommercialSubscriptionState(input: {
   };
 }
 
-async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = new Date()) {
+async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = new Date()): Promise<CommercialSubscriptionState> {
   const accessGrant = await activeShopAccessGrant(shopId, now);
   const [contract, shop] = await Promise.all([
     db.shopSubscriptionContract.findUnique({
@@ -241,7 +241,8 @@ async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = n
     const status = accessGrantCommercialStatus(accessGrant);
     const suspended = accessGrant.accessType === SubscriptionAccessType.SUSPENDED;
     const label = accessTypeLabel(accessGrant.accessType);
-    return {
+    const blockCode: SubscriptionBlockCode | null = suspended ? "SUBSCRIPTION_SUSPENDED" : null;
+    const state: CommercialSubscriptionState = {
       shopId,
       hasContract: Boolean(contract),
       enforcementEnabled: true,
@@ -256,7 +257,7 @@ async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = n
       notice: suspended
         ? "Commercial actions are suspended by the platform administrator."
         : `${label} is active${accessGrant.endsAt ? ` until ${accessGrant.endsAt.toLocaleDateString("en-GB")}` : " without an expiry date"}.${accessGrant.invoicesDisabled ? " Subscription invoices are disabled during this grant." : ""}`,
-      blockCode: suspended ? "SUBSCRIPTION_SUSPENDED" : null,
+      blockCode,
       accessGrant: {
         id: accessGrant.id,
         accessType: accessGrant.accessType,
@@ -268,6 +269,7 @@ async function commercialStateFromDb(db: SubscriptionDb, shopId: string, now = n
         reason: accessGrant.reason,
       },
     };
+    return state;
   }
 
   let snapshot: SubscriptionPlanSnapshot | null = null;
