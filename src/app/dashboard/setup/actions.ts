@@ -8,7 +8,6 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
 import { businessModuleEnabled } from "@/lib/business-modules";
 import { buildLocationSearchText, canonicalGhanaRegion, cleanLocationText } from "@/lib/ghana-locations";
-import { platformDb } from "@/lib/platform-db";
 import { prisma } from "@/lib/db";
 import { permissions } from "@/lib/rbac";
 
@@ -118,7 +117,7 @@ export async function saveOnboardingLocationAction(formData: FormData) {
     searchText: "",
   };
   location.searchText = buildLocationSearchText(location);
-  await platformDb.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     await tx.shop.update({ where: { id: shopId }, data: { city: location.town, country: location.country, credentialAddress: location.streetAddress } });
     await tx.shopLocation.upsert({ where: { shopId }, create: { shopId, ...location }, update: location });
   });
@@ -236,7 +235,7 @@ export async function completeBusinessOnboardingAction() {
   const { session, shopId } = await onboardingSession();
   const [shop, location, paymentConfig, products, services, stockedVariants] = await Promise.all([
     prisma.shop.findFirst({ where: { id: shopId } }),
-    platformDb.shopLocation.findUnique({ where: { shopId }, select: { id: true } }),
+    prisma.shopLocation.findUnique({ where: { shopId }, select: { id: true } }),
     prisma.shopPaymentConfig.findUnique({ where: { shopId }, select: { id: true, allowCash: true, allowCard: true, allowMomo: true } }),
     prisma.product.count({ where: { shopId } }),
     prisma.product.count({ where: { shopId, isService: true } }),

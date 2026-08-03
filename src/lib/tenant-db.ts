@@ -41,6 +41,7 @@ const directTenantModels = new Set([
   "Supplier",
   "SupplierOrder",
   "ShopPaymentConfig",
+  "ShopLocation",
   "AuditLog",
 ]);
 
@@ -119,6 +120,7 @@ const modelPropertyNames: Record<string, string> = {
   shopNetworkOrder: "ShopNetworkOrder",
   shopNetworkOrderItem: "ShopNetworkOrderItem",
   shopPaymentConfig: "ShopPaymentConfig",
+  shopLocation: "ShopLocation",
   auditLog: "AuditLog",
 };
 

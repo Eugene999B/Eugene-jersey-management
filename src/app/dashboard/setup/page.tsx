@@ -20,7 +20,6 @@ import { BUSINESS_TYPE_OPTIONS } from "@/lib/brand";
 import { businessModuleEnabled, OPTIONAL_BUSINESS_MODULES } from "@/lib/business-modules";
 import { currency } from "@/lib/format";
 import { GHANA_REGIONS } from "@/lib/ghana-locations";
-import { platformDb } from "@/lib/platform-db";
 import { prisma } from "@/lib/db";
 import { permissions } from "@/lib/rbac";
 import { requireRole } from "@/lib/auth";
@@ -67,7 +66,7 @@ export default async function BusinessSetupPage({ searchParams }: Props) {
   if (!shop) return null;
 
   const [location, paymentConfig, staffCount, productCount, serviceCount, stockedVariantCount, machineProfiles] = await Promise.all([
-    platformDb.shopLocation.findUnique({ where: { shopId: shop.id } }),
+    prisma.shopLocation.findUnique({ where: { shopId: shop.id } }),
     prisma.shopPaymentConfig.findUnique({ where: { shopId: shop.id } }),
     prisma.user.count({ where: { shopId: shop.id, isActive: true } }),
     prisma.product.count({ where: { shopId: shop.id } }),
