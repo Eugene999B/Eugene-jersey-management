@@ -41,7 +41,7 @@ test("shows administrator-controlled access terms without changing a business", 
   await expect(page.getByRole("combobox", { name: "Access type", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Plan and limits", exact: true })).toBeVisible();
   await expect(page.getByLabel("Start date", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("End date", { exact: true })).toBeVisible();
+  await expect(page.locator('input[name="endsAt"]')).toBeVisible();
   await expect(page.getByRole("combobox", { name: "After expiry", exact: true })).toBeVisible();
   await expect(page.getByLabel("Disable invoices and payment prompts during this grant", { exact: true })).toBeChecked();
   await expect(page.getByRole("heading", { name: "Access grant ledger" })).toBeVisible();
