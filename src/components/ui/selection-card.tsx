@@ -26,7 +26,7 @@ export function SelectionCard({
   "aria-label": ariaLabel,
   ...props
 }: SelectionCardProps) {
-  const resolvedAriaLabel = ariaLabel ?? (role === "radio" && typeof title === "string" ? title.toUpperCase() : undefined);
+  const resolvedAriaLabel = ariaLabel ?? (role === "radio" && typeof title === "string" ? title : undefined);
 
   return (
     <button

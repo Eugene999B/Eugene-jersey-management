@@ -580,6 +580,9 @@ model Payment {
   method            PaymentMethod
   amount            Decimal       @db.Decimal(12, 2)
   status            PaymentStatus @default(PENDING)
+  tenderedAmount    Decimal?      @db.Decimal(12, 2)
+  changeAmount      Decimal       @default(0) @db.Decimal(12, 2)
+  metadata          Json          @default("{}")
   providerReference String?
   verifiedAt        DateTime?
   gatewayResponse   String?
@@ -591,6 +594,7 @@ model Payment {
 
   @@index([providerReference])
   @@index([status, verifiedAt])
+  @@index([orderId, method, status])
 }
 
 model MediaAsset {

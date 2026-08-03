@@ -37,11 +37,13 @@ describe("Phase 3 interface design system", () => {
 
   test("applies obvious selected states to checkout and customer choice", () => {
     const pos = source("src/components/pos/pos-terminal.tsx");
+    const payments = source("src/components/pos/pos-payment-panel.tsx");
     const customer = source("src/components/customers/customer-search-select.tsx");
 
-    expect(pos).toContain('role="radiogroup"');
-    expect(pos).toContain('aria-checked={selected}');
-    expect(pos).toContain('selectedLabel="Selected"');
+    expect(pos).toContain("<PosPaymentPanel");
+    expect(payments).toContain('role="radiogroup"');
+    expect(payments).toContain('aria-checked={mode === "SINGLE"}');
+    expect(payments).toContain('selectedLabel="Selected"');
     expect(customer).toContain("<SelectionCard");
     expect(customer).toContain("Tap to change customer");
   });

@@ -33,6 +33,15 @@ function settingsLoginId(page: Page) {
   return page.getByRole("main").getByText("EJM-E2E-R25-OWNER", { exact: true });
 }
 
+async function addExactOptionItem(page: Page) {
+  await page.getByPlaceholder("Search product or SKU").fill("Phase 7 exact option item");
+  await page.getByRole("button", { name: "Choose option for Phase 7 exact option item" }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose Phase 7 exact option item" });
+  await dialog.getByRole("radio", { name: /Size XL.*Colour Black.*Material Cotton.*Sleeve Long/ }).check();
+  await dialog.getByRole("button", { name: "Add selected option" }).click();
+  await expect(page.locator("#pos-cart").getByText("Phase 7 exact option item", { exact: true })).toBeVisible();
+}
+
 test("gives the sole administrator page help and downloadable handbooks", async ({ page }) => {
   await signIn(page, "EJM-E2E-R25-ADMIN");
   await expect(page).toHaveURL(/\/admin$/);
@@ -69,9 +78,12 @@ test("shows the owner Login ID, online controls, credit guidance and Design Stud
   await expect(page.getByText("ONLINE", { exact: true })).toBeVisible();
 
   await page.goto("/dashboard/pos");
-  await page.getByRole("radio", { name: "CREDIT", exact: true }).click();
-  await expect(page.getByText(/Choose an existing customer above or enter a new customer name/)).toBeVisible();
-  await expect(page.getByText(/Each credit sale is saved separately under Debts/)).toBeVisible();
+  await addExactOptionItem(page);
+  const credit = page.getByRole("radio", { name: "Credit", exact: true });
+  await credit.click();
+  await expect(credit).toContainText("Create debt for only this portion");
+  await expect(page.getByText(/Choose an existing customer or enter a new customer name before using credit/)).toBeVisible();
+  await expect(page.getByText(/Customer details are required for any credit allocation/)).toBeVisible();
 
   await page.goto("/dashboard/designs");
   const guideDownload = page.waitForEvent("download");
