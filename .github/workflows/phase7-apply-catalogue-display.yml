@@ -1,0 +1,32 @@
+name: Phase 7 apply catalogue display
+
+on:
+  push:
+    branches:
+      - phase-7/generic-catalogue-exact-options
+    paths:
+      - scripts/apply-phase7-catalogue-display.py
+      - .github/workflows/phase7-apply-catalogue-display.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-7/generic-catalogue-exact-options
+          fetch-depth: 0
+      - name: Apply exact Phase 7 display patches
+        run: python3 scripts/apply-phase7-catalogue-display.py
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/dashboard/catalog/page.tsx src/app/dashboard/orders/page.tsx 'src/app/api/receipts/[orderId]/route.ts' 'src/app/track/[orderId]/page.tsx' README.md
+          git diff --cached --check
+          git commit -m "Phase 7: show exact options through fulfilment"
+          git push origin HEAD:phase-7/generic-catalogue-exact-options
