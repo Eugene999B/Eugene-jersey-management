@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, BarChart3, Boxes, ClipboardList, CreditCard, Palette, ShoppingBag, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, BarChart3, Boxes, ClipboardList, CreditCard, Palette, ShoppingBag, Users, WandSparkles } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { SalesChart } from "@/components/reports/sales-chart";
@@ -19,7 +19,7 @@ function lastSevenDays() {
   });
 }
 
-type DashboardPageProps = { searchParams?: Promise<{ error?: string; from?: string }> };
+type DashboardPageProps = { searchParams?: Promise<{ error?: string; from?: string; setup?: string }> };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = (await searchParams) ?? {};
@@ -55,6 +55,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div className="space-y-5">
       {params.error === "permission" ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Access restricted.</strong> Your {titleCase(session.role)} role cannot open {params.from ?? "that page"}. Choose an available area below or ask the owner to update your role.</div> : null}
+      {params.setup === "complete" ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Business setup completed. The workspace is ready for daily operations.</div> : null}
+      {!shop.onboardingCompletedAt && visibleNavigation.settings ? <section className="rounded-xl border border-cyan-200 bg-cyan-50 p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-start gap-3"><span className="rounded-xl bg-cyan-100 p-2 text-cyan-800"><WandSparkles size={20} /></span><div><h2 className="font-bold text-cyan-950">Finish business setup</h2><p className="mt-1 text-sm leading-6 text-cyan-900/75">Confirm identity, location, payments, receipt details, staff, first item and opening stock before the business begins full operation.</p></div></div><Link href="/dashboard/setup" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-cyan-900 px-4 text-sm font-bold text-white">Continue setup <ArrowRight size={16} className="ml-2" /></Link></div></section> : null}
       <section className="rounded-xl bg-slate-950 p-4 text-white shadow-xl sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Shop operations</p><h1 className="mt-2 text-xl font-semibold sm:text-2xl">What needs attention at {shop.name}?</h1><p className="mt-2 text-sm text-slate-300">Start the common work immediately. Detailed controls remain in the navigation.</p></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{titleCase(session.role)}</span></div>
         <div className="mt-5 grid grid-cols-2 gap-2 xl:grid-cols-4">

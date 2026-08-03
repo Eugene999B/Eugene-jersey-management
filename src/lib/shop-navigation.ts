@@ -14,6 +14,7 @@ import {
   ReceiptText,
   Settings,
   ShoppingCart,
+  WandSparkles,
   Tags,
   Truck,
   Users,
@@ -63,6 +64,7 @@ export const shopNavigationItems: readonly ShopNavItem[] = [
   { section: "Management", key: "staff", href: "/dashboard/staff", label: "Staff & permissions", shortLabel: "Staff", description: "Team accounts and access", icon: Users },
   { section: "Management", key: "activity", href: "/dashboard/activity", label: "Activity & security", shortLabel: "Activity", description: "Audit activity and security events", icon: Activity },
   { section: "Management", key: "subscription", href: "/dashboard/subscription", label: "Modules, plan & usage", shortLabel: "Plan", description: "Enabled modules and account limits", icon: ReceiptText },
+  { section: "Management", key: "settings", href: "/dashboard/setup", label: "Business setup", shortLabel: "Setup", description: "Guided identity, location, payments, catalogue and production configuration", icon: WandSparkles },
   { section: "Management", key: "settings", href: "/dashboard/settings", label: "Business settings", shortLabel: "Settings", description: "Identity, payments and configuration", icon: Settings },
 ] as const;
 
