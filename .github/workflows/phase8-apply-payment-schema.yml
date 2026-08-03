@@ -1,0 +1,32 @@
+name: Phase 8 apply payment schema
+
+on:
+  push:
+    branches:
+      - phase-8/pos-payment-redesign
+    paths:
+      - scripts/apply-phase8-payment-schema.py
+      - .github/workflows/phase8-apply-payment-schema.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-8/pos-payment-redesign
+          fetch-depth: 0
+      - name: Apply Phase 8 payment schema patch
+        run: python3 scripts/apply-phase8-payment-schema.py
+      - name: Commit generated schema change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/schema.prisma
+          git diff --cached --check
+          git commit -m "Phase 8: store exact POS tender details"
+          git push origin HEAD:phase-8/pos-payment-redesign
