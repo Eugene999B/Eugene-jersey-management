@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { Bike, CheckCircle2, Clock3, CreditCard, History, MapPin, PackageCheck, Phone, ShieldCheck, Store, Wallet } from "lucide-react";
+import { Bike, CheckCircle2, Clock3, History, MapPin, PackageCheck, Phone, ShieldCheck, Store } from "lucide-react";
 import { FulfillmentType, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { verifyFulfillmentAction } from "@/app/track/[orderId]/actions";
 import { requestReturnAction } from "@/app/track/[orderId]/return-actions";
@@ -71,7 +71,6 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
     .reduce((sum, payment) => sum + Number(payment.amount), 0);
   const balanceAmount = Math.max(Number(order.totalAmount) - paidAmount, 0);
   const paid = balanceAmount <= 0.005;
-  const pendingPayment = order.payments.find((payment) => payment.status === PaymentStatus.PENDING);
   const isDelivery = order.fulfillmentType === FulfillmentType.DELIVERY;
   const verified = Boolean(order.customerVerifiedAt);
   const returnDeadline = new Date((order.customerVerifiedAt ?? order.updatedAt).getTime() + 30 * 24 * 60 * 60 * 1000);
