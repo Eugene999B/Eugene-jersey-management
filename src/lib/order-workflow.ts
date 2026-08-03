@@ -63,7 +63,7 @@ type EventRow = Omit<OrderWorkflowEventRecord, "metadata"> & {
   metadata: Prisma.JsonValue;
 };
 
-type TransactionClient = Parameters<Parameters<typeof platformDb.$transaction>[0]>[0];
+type TransactionClient = Prisma.TransactionClient;
 
 type WorkflowMutation = {
   assignedToId?: string | null;
@@ -108,6 +108,28 @@ function eventFromRow(row: EventRow): OrderWorkflowEventRecord {
   return { ...row, metadata };
 }
 
+async function insertEvent(tx: TransactionClient, input: EventInput) {
+  await tx.$executeRaw`
+    INSERT INTO "OrderWorkflowEvent" (
+      "id", "shopId", "orderId", "actorId", "type", "fromStatus", "toStatus", "note", "metadata", "createdAt"
+    )
+    SELECT
+      ${nanoid()},
+      ${input.shopId},
+      ${input.orderId},
+      ${input.actorId ?? null},
+      ${input.type},
+      ${input.fromStatus ?? null},
+      ${input.toStatus ?? null},
+      ${cleanText(input.note, 800)},
+      ${JSON.stringify(input.metadata ?? {})}::jsonb,
+      NOW()
+    WHERE EXISTS (
+      SELECT 1 FROM "Order" WHERE "id" = ${input.orderId} AND "shopId" = ${input.shopId}
+    )
+  `;
+}
+
 async function ensureWorkflow(tx: TransactionClient, shopId: string, orderId: string) {
   const inserted = await tx.$executeRaw`
     INSERT INTO "OrderWorkflow" ("orderId", "shopId", "priority", "approvalStatus", "createdAt", "updatedAt")
@@ -116,13 +138,23 @@ async function ensureWorkflow(tx: TransactionClient, shopId: string, orderId: st
     WHERE "id" = ${orderId} AND "shopId" = ${shopId}
     ON CONFLICT ("orderId") DO NOTHING
   `;
-  const rows = await tx.$queryRaw<Array<{ orderId: string }>>`
-    SELECT "orderId"
-    FROM "OrderWorkflow"
-    WHERE "orderId" = ${orderId} AND "shopId" = ${shopId}
+  const rows = await tx.$queryRaw<Array<{ orderId: string; status: string }>>`
+    SELECT workflow."orderId", orders."status"::TEXT AS "status"
+    FROM "OrderWorkflow" workflow
+    INNER JOIN "Order" orders ON orders."id" = workflow."orderId" AND orders."shopId" = workflow."shopId"
+    WHERE workflow."orderId" = ${orderId} AND workflow."shopId" = ${shopId}
     LIMIT 1
   `;
   if (!rows.length) throw new Error("ORDER_WORKFLOW_NOT_FOUND");
+  if (inserted > 0) {
+    await insertEvent(tx, {
+      shopId,
+      orderId,
+      type: "CREATED",
+      toStatus: rows[0].status,
+      metadata: { source: "workflow-initialization" },
+    });
+  }
   return inserted;
 }
 
@@ -154,28 +186,6 @@ async function fetchWorkflow(tx: TransactionClient, shopId: string, orderId: str
   return rows[0] ? workflowFromRow(rows[0]) : null;
 }
 
-async function insertEvent(tx: TransactionClient, input: EventInput) {
-  await tx.$executeRaw`
-    INSERT INTO "OrderWorkflowEvent" (
-      "id", "shopId", "orderId", "actorId", "type", "fromStatus", "toStatus", "note", "metadata", "createdAt"
-    )
-    SELECT
-      ${nanoid()},
-      ${input.shopId},
-      ${input.orderId},
-      ${input.actorId ?? null},
-      ${input.type},
-      ${input.fromStatus ?? null},
-      ${input.toStatus ?? null},
-      ${cleanText(input.note, 800)},
-      ${JSON.stringify(input.metadata ?? {})}::jsonb,
-      NOW()
-    WHERE EXISTS (
-      SELECT 1 FROM "Order" WHERE "id" = ${input.orderId} AND "shopId" = ${input.shopId}
-    )
-  `;
-}
-
 export async function getOrderWorkflow(shopId: string, orderId: string) {
   return platformDb.$transaction(async (tx) => {
     await ensureWorkflow(tx, shopId, orderId);
@@ -187,13 +197,28 @@ export async function listOrderWorkflows(shopId: string, orderIds: readonly stri
   if (!orderIds.length) return new Map<string, OrderWorkflowRecord>();
   const uniqueIds = [...new Set(orderIds)];
   await platformDb.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      INSERT INTO "OrderWorkflow" ("orderId", "shopId", "priority", "approvalStatus", "createdAt", "updatedAt")
-      SELECT "id", "shopId", CASE WHEN "rush" THEN 'URGENT' ELSE 'NORMAL' END, 'NOT_REQUIRED', "createdAt", NOW()
-      FROM "Order"
-      WHERE "shopId" = ${shopId} AND "id" IN (${Prisma.join(uniqueIds)})
-      ON CONFLICT ("orderId") DO NOTHING
+    const insertedOrders = await tx.$queryRaw<Array<{ orderId: string; status: string }>>`
+      WITH inserted AS (
+        INSERT INTO "OrderWorkflow" ("orderId", "shopId", "priority", "approvalStatus", "createdAt", "updatedAt")
+        SELECT "id", "shopId", CASE WHEN "rush" THEN 'URGENT' ELSE 'NORMAL' END, 'NOT_REQUIRED', "createdAt", NOW()
+        FROM "Order"
+        WHERE "shopId" = ${shopId} AND "id" IN (${Prisma.join(uniqueIds)})
+        ON CONFLICT ("orderId") DO NOTHING
+        RETURNING "orderId"
+      )
+      SELECT inserted."orderId", orders."status"::TEXT AS "status"
+      FROM inserted
+      INNER JOIN "Order" orders ON orders."id" = inserted."orderId" AND orders."shopId" = ${shopId}
     `;
+    for (const inserted of insertedOrders) {
+      await insertEvent(tx, {
+        shopId,
+        orderId: inserted.orderId,
+        type: "CREATED",
+        toStatus: inserted.status,
+        metadata: { source: "workflow-list-initialization" },
+      });
+    }
   });
 
   const rows = await platformDb.$queryRaw<WorkflowRow[]>`
