@@ -6,11 +6,13 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
+import { getOrderWorkflow, recordOrderWorkflowEvent } from "@/lib/order-workflow";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
 const schema = z.object({
   status: z.nativeEnum(OrderStatus),
   rush: z.boolean().optional(),
+  note: z.string().trim().max(800).optional(),
 });
 const designerAllowed: Record<OrderStatus, OrderStatus[]> = {
   PENDING: [OrderStatus.IN_PRODUCTION],
@@ -51,10 +53,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: `Orders cannot move from ${order.status} to ${parsed.data.status}.` }, { status: 409 });
   }
 
+  if (parsed.data.status === OrderStatus.IN_PRODUCTION && order.status !== OrderStatus.IN_PRODUCTION) {
+    const workflow = await getOrderWorkflow(session.shopId, order.id);
+    if (workflow && ["PENDING", "CHANGES_REQUESTED"].includes(workflow.approvalStatus)) {
+      return NextResponse.json({
+        error: workflow.approvalStatus === "CHANGES_REQUESTED"
+          ? "Customer changes are still required before production can start."
+          : "Customer approval is required before production can start.",
+      }, { status: 409 });
+    }
+  }
+
   if (parsed.data.status === OrderStatus.CANCELLED && order.channel === OrderChannel.ONLINE) {
     const result = await releaseUnpaidOnlineReservation({
       orderId: order.id,
-      reason: `Cancelled by ${session.name} before confirmed payment.`,
+      reason: parsed.data.note || `Cancelled by ${session.name} before confirmed payment.`,
     });
     if (!result.released) {
       const error = result.reason === "paid"
@@ -62,6 +75,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         : "This order changed before cancellation. Refresh and try again.";
       return NextResponse.json({ error }, { status: 409 });
     }
+    await recordOrderWorkflowEvent({
+      shopId: session.shopId,
+      orderId: order.id,
+      actorId: session.id,
+      type: "CANCELLED",
+      fromStatus: order.status,
+      toStatus: OrderStatus.CANCELLED,
+      note: parsed.data.note || `Cancelled by ${session.name}.`,
+      metadata: { channel: order.channel, stockReleased: true },
+    });
     return NextResponse.json({ ok: true, order: { ...order, status: OrderStatus.CANCELLED } });
   }
 
@@ -78,6 +101,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (changed.count !== 1) return NextResponse.json({ error: "This order changed. Refresh and try again." }, { status: 409 });
 
   const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+  if (parsed.data.status !== order.status) {
+    await recordOrderWorkflowEvent({
+      shopId: session.shopId,
+      orderId: order.id,
+      actorId: session.id,
+      type: parsed.data.status === OrderStatus.CANCELLED ? "CANCELLED" : "STATUS_CHANGED",
+      fromStatus: order.status,
+      toStatus: parsed.data.status,
+      note: parsed.data.note,
+      metadata: { rush: updated.rush },
+    });
+  }
   await prisma.notification.create({
     data: {
       shopId: session.shopId,
@@ -94,7 +129,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     action: "orders.status_changed",
     entityType: "Order",
     entityId: order.id,
-    metadata: { from: order.status, to: parsed.data.status, rush: updated.rush },
+    metadata: { from: order.status, to: parsed.data.status, rush: updated.rush, note: parsed.data.note },
   });
   return NextResponse.json({ ok: true, order: updated });
 }
