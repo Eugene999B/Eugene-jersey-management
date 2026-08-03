@@ -88,7 +88,7 @@ export function ProductOptionSelector({ product, currencyCode, onClose, onConfir
             return (
               <label
                 key={variant.id}
-                className={`relative min-h-32 rounded-2xl border-2 p-4 text-left transition ${isSelected ? "border-cyan-600 bg-cyan-50 shadow-md" : isAvailable ? "cursor-pointer border-slate-200 bg-white hover:border-cyan-300" : "cursor-not-allowed border-slate-100 bg-slate-100 opacity-65"}`}
+                className={`relative min-h-32 overflow-hidden rounded-2xl border-2 p-4 text-left transition ${isSelected ? "border-cyan-600 bg-cyan-50 shadow-md" : isAvailable ? "cursor-pointer border-slate-200 bg-white hover:border-cyan-300" : "cursor-not-allowed border-slate-100 bg-slate-100 opacity-65"}`}
               >
                 <input
                   type="radio"
@@ -97,7 +97,7 @@ export function ProductOptionSelector({ product, currencyCode, onClose, onConfir
                   checked={isSelected}
                   disabled={!isAvailable}
                   onChange={() => setSelectedId(variant.id)}
-                  className="sr-only"
+                  className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
