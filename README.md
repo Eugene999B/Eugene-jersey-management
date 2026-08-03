@@ -12,6 +12,8 @@ Every tenant is classified as Retail, Wholesale, Services, Production / printing
 
 Phase 2 introduces per-business modules. Home, Sales, Orders, Items, Customers, Payments, Reports and Settings are universal. Optional production, purchasing, online-selling and marketplace tools appear only when the platform administrator enables them and the assigned plan includes the necessary capability. Services, rentals, multi-location stock and advanced accounting are registered for later phases without exposing empty navigation.
 
+Phase 5 adds `/dashboard/setup`, a server-verified ten-step onboarding workspace for new businesses. Existing operational tenants are marked complete during migration. New tenants configure identity, business type, Ghana location, enabled-module review, currency and tax, payment methods, receipt details, staff, first item/service and opening stock. Printing businesses also record the real cutter, manual heat press, materials, garments, placements, artwork sizes, stages and deposit policy before completion.
+
 ## Core Stack
 
 - Next.js 16 App Router and React 19

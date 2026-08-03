@@ -243,6 +243,15 @@ model Shop {
   city                       String?
   country                    String?                @default("Ghana")
   currency                   String                 @default("GHS")
+  taxRate                    Decimal                @default(0) @db.Decimal(5, 2)
+  receiptHeader              String?
+  receiptFooter              String?
+  defaultDepositPercent      Int                    @default(0)
+  productionSetup            Json                   @default("{}")
+  onboardingCurrentStep      Int                    @default(1)
+  onboardingCompletedSteps   Int[]                  @default([])
+  onboardingStartedAt        DateTime?
+  onboardingCompletedAt      DateTime?
   publicOrderingEnabled      Boolean                @default(true)
   storefrontEnabled          Boolean                @default(true)
   cashOrderHoldMinutes       Int                    @default(120)

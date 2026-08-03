@@ -54,6 +54,7 @@ export async function GET(_request: Request, context: RouteContext) {
     <body>
       <div class="receipt">
         <h1>${escapeHtml(order.shop.name)}</h1>
+        ${order.shop.receiptHeader ? `<p><strong>${escapeHtml(order.shop.receiptHeader)}</strong></p>` : ""}
         <p>Receipt: ${escapeHtml(order.receiptNumber)}</p>
         <p>Customer: ${escapeHtml(order.customer?.name ?? "Walk-in")}</p>
         <table>
@@ -65,6 +66,7 @@ export async function GET(_request: Request, context: RouteContext) {
           `).join("")}
           <tr><td class="total">Total</td><td class="total" style="text-align:right">${escapeHtml(currency(order.totalAmount.toString(), order.shop.currency))}</td></tr>
         </table>
+        ${order.shop.receiptFooter ? `<p style="margin-top:16px;font-size:12px;text-align:center">${escapeHtml(order.shop.receiptFooter)}</p>` : ""}
       </div>
       <script>window.print()</script>
     </body>
