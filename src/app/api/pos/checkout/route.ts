@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { DebtStatus, NotificationChannel, OrderChannel, PaymentMethod, PaymentStatus, OrderStatus, Role } from "@prisma/client";
+import {
+  DebtStatus,
+  NotificationChannel,
+  OrderChannel,
+  PaymentMethod,
+  PaymentStatus,
+  OrderStatus,
+  Role,
+  type Customer,
+  type Order,
+} from "@prisma/client";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -9,7 +19,12 @@ import { audit } from "@/lib/audit";
 import { sendCustomerMessage } from "@/lib/messaging";
 import { normalizePhone } from "@/lib/phone";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
-import { normalizePosTenders, posTenderError, type PosTenderInput } from "@/lib/pos-tenders";
+import {
+  normalizePosTenders,
+  posTenderError,
+  type PosTenderInput,
+  type PosTenderPlan,
+} from "@/lib/pos-tenders";
 import { assertOrderCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const tenderSchema = z.object({
@@ -25,7 +40,7 @@ const checkoutSchema = z.object({
   customerId: z.string().optional(),
   customerPhone: z.string().trim().max(24).optional(),
   customerEmail: z.string().email().optional(),
-  payments: z.array(tenderSchema).min(1).max(4).optional(),
+  payments: z.array(tenderSchema).max(4).optional(),
   paymentMethod: z.nativeEnum(PaymentMethod).optional(),
   cashReceived: z.coerce.number().positive().max(100_000_000).optional(),
   creditDueDate: z.coerce.date().optional(),
@@ -41,11 +56,21 @@ const checkoutSchema = z.object({
     quantity: z.number().int().positive().max(100),
     personalizationData: z.record(z.string(), z.string()).optional(),
   })).min(1),
-}).superRefine((value, context) => {
-  if (!value.payments?.length && !value.paymentMethod) {
-    context.addIssue({ code: "custom", message: "Add a payment method.", path: ["payments"] });
-  }
 });
+
+type CreditSummary = {
+  customerId: string;
+  customerName: string;
+  previousOutstanding: number;
+  addedDebt: number;
+  newOutstanding: number;
+};
+
+type CheckoutTransactionResult = {
+  order: Order;
+  customer: Customer | null;
+  creditSummary: CreditSummary | null;
+};
 
 function receiptNumber(shopSlug: string) {
   const prefix = shopSlug
@@ -185,7 +210,7 @@ export async function POST(request: NextRequest) {
     confirmed: payment.confirmed,
   })) ?? legacyTender;
 
-  let tenderPlan;
+  let tenderPlan: PosTenderPlan;
   try {
     tenderPlan = normalizePosTenders(tenderInputs, totalAmount);
   } catch (error) {
@@ -222,7 +247,7 @@ export async function POST(request: NextRequest) {
   }
 
   const publicAccessToken = nanoid(32);
-  let checkoutResult;
+  let checkoutResult: CheckoutTransactionResult;
   try {
     checkoutResult = await prisma.$transaction(async (tx) => {
       const normalizedCustomerPhone = parsed.data.customerPhone ? normalizePhone(parsed.data.customerPhone) : undefined;
@@ -294,6 +319,17 @@ export async function POST(request: NextRequest) {
                 method,
                 amount: tender.amount,
                 status: isCredit ? PaymentStatus.PENDING : PaymentStatus.SUCCESS,
+                tenderedAmount: tender.tenderedAmount,
+                changeAmount: tender.changeAmount,
+                metadata: {
+                  source: "POS",
+                  paymentMode,
+                  allocatedAmount: tender.amount,
+                  tenderedAmount: tender.tenderedAmount,
+                  changeAmount: tender.changeAmount,
+                  confirmed: tender.confirmed,
+                  reference: tender.reference,
+                },
                 providerReference: isCredit
                   ? `POS-CREDIT-${nanoid(10)}`
                   : method === PaymentMethod.CASH
