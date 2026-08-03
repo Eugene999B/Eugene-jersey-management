@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { CheckCircle2, Minus, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, CheckCircle2, Minus, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SelectionCard } from "@/components/ui/selection-card";
@@ -57,12 +57,15 @@ type PosTerminalProps = {
   currencyCode: string;
 };
 
+type PosCheckoutMode = "SALE" | "ORDER_JOB";
+
 export function PosTerminal({ products, customers, currencyCode }: PosTerminalProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountReason, setDiscountReason] = useState("");
+  const [checkoutMode, setCheckoutMode] = useState<PosCheckoutMode>("SALE");
   const [paymentMode, setPaymentMode] = useState<PosPaymentMode>("SINGLE");
   const [tenders, setTenders] = useState<PosTenderDraft[]>(() => createPosTenderDrafts());
   const [creditDueDate, setCreditDueDate] = useState("");
@@ -101,6 +104,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
   );
   const creditRequired = (tenderSelection.plan?.creditMinor ?? 0) > 0;
   const creditCustomerReady = Boolean(selectedCustomerId || customerName.trim());
+  const orderJobCustomerReady = checkoutMode === "SALE" || creditCustomerReady;
 
   function addLine(product: PosProduct, variant: PosVariant, personalization?: Partial<CartLine>) {
     const key = `${variant.id}-${personalization?.personalName ?? ""}-${personalization?.personalNumber ?? ""}-${personalization?.notes ?? ""}`;
@@ -166,6 +170,10 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
       setMessage("Choose an existing customer or enter a new customer name for the credit allocation.");
       return;
     }
+    if (checkoutMode === "ORDER_JOB" && !creditCustomerReady) {
+      setMessage("Choose an existing customer or enter a new customer name before creating an order or job.");
+      return;
+    }
 
     const receiptWindow = window.open("", "_blank");
     startTransition(async () => {
@@ -178,6 +186,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
           customerId: selectedCustomerId || undefined,
           customerPhone: customerPhone || undefined,
           customerEmail: customerEmail || undefined,
+          checkoutMode,
           payments: tenderSelection.inputs,
           creditDueDate: paymentPlan.creditMinor > 0 ? creditDueDate || undefined : undefined,
           creditInstallments: paymentPlan.creditMinor > 0 ? creditInstallments : undefined,
@@ -204,6 +213,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
       setCart([]);
       setDiscountAmount(0);
       setDiscountReason("");
+      setCheckoutMode("SALE");
       setPaymentMode("SINGLE");
       setTenders(createPosTenderDrafts());
       setCustomerName("");
@@ -222,7 +232,8 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
       const changeMessage = payload.paymentSummary?.changeAmount > 0
         ? ` Change due: ${currency(payload.paymentSummary.changeAmount, currencyCode)}.`
         : "";
-      setMessage(`Sale complete. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}${receiptWindow ? " opened for printing" : " is ready to reprint"}.${changeMessage}${creditMessage}`);
+      const completion = payload.checkoutMode === "ORDER_JOB" ? "Order/job created" : "Sale complete";
+      setMessage(`${completion}. Receipt ${payload.receiptNumber} for ${currency(payload.totalAmount, currencyCode)}${receiptWindow ? " opened for printing" : " is ready to reprint"}.${changeMessage}${creditMessage}`);
     });
   }
 
@@ -233,7 +244,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold">Point of Sale</h1>
-              <p className="text-sm text-slate-500">Touch-friendly checkout with exact options, balanced payments and printable receipts.</p>
+              <p className="text-sm text-slate-500">Touch-friendly sales and customer orders with exact options, balanced payments and printable receipts.</p>
             </div>
             <Badge tone="green">{products.length} products</Badge>
           </div>
@@ -293,14 +304,41 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
             <h2 className="text-lg font-semibold">Cart</h2>
             <Badge tone={itemCount ? "green" : undefined}>{itemCount} item{itemCount === 1 ? "" : "s"}</Badge>
           </div>
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-sm font-semibold text-slate-900">Customer for this sale</p><p className="mt-1 text-xs leading-5 text-slate-600">Search an existing customer first. For a new customer, leave the search unselected and enter their name below.</p></div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Checkout purpose">
+            <SelectionCard
+              role="radio"
+              aria-checked={checkoutMode === "SALE"}
+              selected={checkoutMode === "SALE"}
+              selectedLabel="Selected"
+              leading={<Printer size={17} />}
+              title="Immediate sale"
+              description="Complete and record the sale now"
+              onClick={() => setCheckoutMode("SALE")}
+            />
+            <SelectionCard
+              role="radio"
+              aria-checked={checkoutMode === "ORDER_JOB"}
+              selected={checkoutMode === "ORDER_JOB"}
+              selectedLabel="Selected"
+              leading={<BriefcaseBusiness size={17} />}
+              title="Order or job"
+              description="Create Pending work for follow-up"
+              onClick={() => setCheckoutMode("ORDER_JOB")}
+            />
+          </div>
+          {checkoutMode === "ORDER_JOB" ? (
+            <p className="mt-2 rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-xs font-semibold leading-5 text-cyan-900">A customer is required. The payment is recorded now, stock is reserved, and the order starts Pending for assignment, approval and production.</p>
+          ) : null}
+
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-sm font-semibold text-slate-900">Customer for this {checkoutMode === "ORDER_JOB" ? "order or job" : "sale"}</p><p className="mt-1 text-xs leading-5 text-slate-600">Search an existing customer first. For a new customer, leave the search unselected and enter their name below.</p></div>
           <label className="mt-3 block text-xs font-semibold text-slate-600">Find existing customer
             <input className="field mt-1" aria-label="Find existing customer" placeholder="Search name, phone or email" value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} />
           </label>
           {!selectedCustomerId && customerQuery ? <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-[#ded8cd] bg-white p-1">{customerMatches.map((customer) => <button key={customer.id} type="button" className="block min-h-11 w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#f6f4ef]" onClick={() => { setSelectedCustomerId(customer.id); setCustomerName(customer.name); setCustomerPhone(customer.phone ?? ""); setCustomerEmail(customer.email ?? ""); setCustomerQuery(customer.name); }}><strong className="block">{customer.name}</strong><span className="text-xs text-slate-500">{customer.phone ?? customer.email ?? "No contact"} · owes {currency(customer.outstandingBalance, currencyCode)}</span></button>)}{!customerMatches.length ? <p className="p-3 text-xs text-slate-500">No match. Enter a new customer below.</p> : null}</div> : null}
           {selectedCustomer ? <div className="mt-2"><SelectionCard selected selectedLabel="Selected" leading={<CheckCircle2 size={17} />} title={selectedCustomer.name} description={`Current outstanding debt: ${currency(selectedCustomer.outstandingBalance, currencyCode)}`} detail="Tap to change customer" onClick={() => { setSelectedCustomerId(""); setCustomerQuery(""); setCustomerName(""); setCustomerPhone(""); setCustomerEmail(""); }} /></div> : null}
           <label className="mt-3 block text-xs font-semibold text-slate-600">Customer name
-            <input className="field mt-1" placeholder={creditRequired ? "New credit customer name" : "Walk-in or new customer (optional)"} value={customerName} onChange={(event) => { setCustomerName(event.target.value); if (selectedCustomerId) setSelectedCustomerId(""); }} />
+            <input className="field mt-1" placeholder={checkoutMode === "ORDER_JOB" ? "Required order or job customer" : creditRequired ? "New credit customer name" : "Walk-in or new customer (optional)"} value={customerName} onChange={(event) => { setCustomerName(event.target.value); if (selectedCustomerId) setSelectedCustomerId(""); }} />
           </label>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <label className="text-xs font-semibold text-slate-600">Phone<input className="field mt-1" placeholder="Phone for receipt" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} /></label>
@@ -350,7 +388,7 @@ export function PosTerminal({ products, customers, currencyCode }: PosTerminalPr
             selectedCustomer={selectedCustomer ? { name: selectedCustomer.name, outstandingBalance: selectedCustomer.outstandingBalance } : null}
             customerName={customerName}
           />
-          <Button className="w-full" onClick={checkout} disabled={!cart.length || isPending || !tenderSelection.plan || (creditRequired && !creditCustomerReady)}><Printer size={16} />{isPending ? "Processing..." : "Complete sale & print"}</Button>
+          <Button className="w-full" onClick={checkout} disabled={!cart.length || isPending || !tenderSelection.plan || (creditRequired && !creditCustomerReady) || !orderJobCustomerReady}><Printer size={16} />{isPending ? "Processing..." : checkoutMode === "ORDER_JOB" ? "Create order/job & print" : "Complete sale & print"}</Button>
           {message ? <p className="rounded-lg bg-[#f6f4ef] p-3 text-sm text-slate-700">{message}</p> : null}
           {lastReceiptUrl ? <a className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href={lastReceiptUrl} target="_blank" rel="noreferrer"><Printer size={16} /> Reprint receipt</a> : null}
         </div>

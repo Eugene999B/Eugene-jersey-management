@@ -4,6 +4,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { productVariantOptionLabel } from "@/lib/product-variants";
+import { listOrderWorkflows } from "@/lib/order-workflow";
 
 type OrdersPageProps = { searchParams?: Promise<{ q?: string }> };
 
@@ -21,6 +22,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         OR: [
           { receiptNumber: { contains: query, mode: "insensitive" as const } },
           { customer: { is: { name: { contains: query, mode: "insensitive" as const } } } },
+          { buyer: { is: { name: { contains: query, mode: "insensitive" as const } } } },
           { items: { some: { productVariant: { is: { sku: { contains: query, mode: "insensitive" as const } } } } } },
           { items: { some: { productVariant: { is: { product: { is: { name: { contains: query, mode: "insensitive" as const } } } } } } } },
         ],
@@ -28,6 +30,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     },
     include: {
       customer: true,
+      buyer: true,
       payments: true,
       items: {
         include: {
@@ -40,14 +43,15 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     orderBy: [{ rush: "desc" }, { createdAt: "desc" }],
     take: 80,
   });
+  const workflows = await listOrderWorkflows(shop.id, orders.map((order) => order.id));
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Production orders</h1>
+          <h1 className="text-2xl font-semibold">Production orders and jobs</h1>
           <p className="mt-2 text-sm text-slate-500">
-            Button-driven Kanban for retail orders, services, custom production and fulfilment handoff.
+            Priorities, customer approval, assigned staff, payment balance, production, service work and fulfilment in one controlled board.
           </p>
         </div>
         <form className="flex w-full max-w-md gap-2 sm:w-auto">
@@ -59,24 +63,35 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
       <OrderBoard
         role={session.role}
         currencyCode={shop.currency}
-        orders={orders.map((order) => ({
-          id: order.id,
-          receiptNumber: order.receiptNumber,
-          customerName: order.customer?.name ?? "Walk-in customer",
-          status: order.status,
-          rush: order.rush,
-          fulfillmentType: order.fulfillmentType,
-          fulfillmentVerified: Boolean(order.customerVerifiedAt),
-          hasPendingCash: order.payments.some((payment) => payment.method === "CASH" && payment.status === "PENDING"),
-          hasPendingOnlinePayment: order.payments.some((payment) => payment.method !== "CASH" && payment.status === "PENDING"),
-          totalAmount: Number(order.totalAmount),
-          items: order.items.map((item) => ({
-            name: `${item.productVariant.product.name} — ${productVariantOptionLabel(item.productVariant.attributes)}`,
-            sku: item.productVariant.sku,
-            quantity: item.quantity,
-            personalizationData: item.personalizationData as Record<string, unknown> | null,
-          })),
-        }))}
+        orders={orders.map((order) => {
+          const workflow = workflows.get(order.id);
+          const paidAmount = order.payments
+            .filter((payment) => payment.status === "SUCCESS")
+            .reduce((sum, payment) => sum + Number(payment.amount), 0);
+          return {
+            id: order.id,
+            receiptNumber: order.receiptNumber,
+            customerName: order.customer?.name ?? order.buyer?.name ?? "Walk-in customer",
+            status: order.status,
+            rush: order.rush,
+            priority: workflow?.priority ?? (order.rush ? "URGENT" : "NORMAL"),
+            dueAt: workflow?.dueAt?.toISOString() ?? null,
+            approvalStatus: workflow?.approvalStatus ?? "NOT_REQUIRED",
+            assignedToName: workflow?.assignedToName ?? null,
+            fulfillmentType: order.fulfillmentType,
+            fulfillmentVerified: Boolean(order.customerVerifiedAt),
+            hasPendingCash: order.payments.some((payment) => payment.method === "CASH" && payment.status === "PENDING"),
+            hasPendingOnlinePayment: order.payments.some((payment) => payment.method !== "CASH" && payment.method !== "STORE_CREDIT" && payment.status === "PENDING"),
+            totalAmount: Number(order.totalAmount),
+            paidAmount,
+            items: order.items.map((item) => ({
+              name: `${item.productVariant.product.name} — ${productVariantOptionLabel(item.productVariant.attributes)}`,
+              sku: item.productVariant.sku,
+              quantity: item.quantity,
+              personalizationData: item.personalizationData as Record<string, unknown> | null,
+            })),
+          };
+        })}
       />
     </div>
   );

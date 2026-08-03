@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { hashToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
 import { getBuyerSession } from "@/lib/buyer-session";
+import { recordOrderWorkflowEvent } from "@/lib/order-workflow";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -69,6 +70,15 @@ export async function verifyFulfillmentAction(formData: FormData) {
   });
   if (updated.count !== 1) redirect(`${trackingPath}&verify=failed`);
 
+  await recordOrderWorkflowEvent({
+    shopId: order.shopId,
+    orderId: order.id,
+    type: "FULFILLMENT_UPDATED",
+    fromStatus: OrderStatus.READY,
+    toStatus: OrderStatus.COMPLETED,
+    note: "Delivery verified by the customer.",
+    metadata: { fulfillmentType: FulfillmentType.DELIVERY, deliveryStatus: DeliveryStatus.VERIFIED },
+  });
   await audit({
     shopId: order.shopId,
     action: "public.delivery_verified",
