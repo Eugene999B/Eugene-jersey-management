@@ -54,8 +54,8 @@ test("requires an exact available option before adding one grouped item to the P
   await expect(unavailable).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Add selected option" })).toBeDisabled();
 
-  await available.click();
-  await expect(available).toHaveAttribute("aria-checked", "true");
+  await available.check();
+  await expect(available).toBeChecked();
   await expect(dialog.getByRole("status")).toContainText("Size XL · Colour Black · Material Cotton · Sleeve Long");
   await dialog.getByRole("button", { name: "Add selected option" }).click();
 
