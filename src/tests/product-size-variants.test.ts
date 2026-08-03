@@ -101,8 +101,9 @@ describe("generic product options", () => {
     expect(actions).toContain("variantOptionsFromRow");
     expect(catalog).toContain("Each item can hold exact options");
     expect(catalog).toContain("GENERIC_ITEM_TYPES");
-    expect(posPage).toContain("products.map");
-    expect(posPage).not.toContain("products.flatMap");
+    expect(posPage).toContain("const posProducts = products.flatMap");
+    expect(posPage).toContain("id: product.id");
+    expect(posPage).toContain("variants: variants.map");
     expect(posTerminal).toContain("ProductOptionSelector");
     expect(posTerminal).toContain("choose exact option");
     expect(optionSelector).toContain("Exact option required");
