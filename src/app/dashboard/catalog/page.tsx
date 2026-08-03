@@ -9,19 +9,9 @@ import { currency, titleCase } from "@/lib/format";
 import { getTenantContext } from "@/lib/tenant";
 import { hasRole, permissions } from "@/lib/rbac";
 import { firstProductImage } from "@/lib/product-images";
-import { activeProductVariants, productVariantLabel, productVariantSize } from "@/lib/product-variants";
+import { activeProductVariants, productVariantFormValues, productVariantLabel } from "@/lib/product-variants";
+import { GENERIC_ITEM_TYPES } from "@/lib/catalog-options";
 import { requireRole } from "@/lib/auth";
-
-const productTypes = [
-  "Stocked product",
-  "Service",
-  "Custom production item",
-  "Rental asset",
-  "Bundle",
-  "Non-stock item",
-  "Garment",
-  "Equipment",
-];
 
 const sportsShopProductTypes = [
   "Plain jersey",
@@ -40,8 +30,8 @@ const sportsShopProductTypes = [
 const sportTypes = ["Football", "Basketball", "Volleyball", "Tennis", "Running", "Gym", "Boxing", "Swimming", "Cycling", "General"];
 
 const errorCopy: Record<string, string> = {
-  product: "Enter a product name, valid price and at least one size/stock row.",
-  "product-update": "Check the product details and size rows, then try again.",
+  product: "Enter an item name, valid price and at least one exact option row.",
+  "product-update": "Check the item details and exact option rows, then try again.",
   "category-not-found": "That category is not available in this shop.",
   "product-not-found": "That product or size record could not be found.",
   "sku-exists": "One of the SKUs is already being used. Leave SKU blank for automatic generation or enter a unique value.",
@@ -102,11 +92,14 @@ function AdvancedProductFields({
           </label>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <select className="field" name="productType" defaultValue={product?.productType ?? ""} disabled={disabled}>
-            <option value="">Item type (optional)</option>
-            <optgroup label="General business">{productTypes.map((type) => <option key={type} value={type}>{type}</option>)}</optgroup>
-            <optgroup label="Sports-shop template (optional)">{sportsShopProductTypes.map((type) => <option key={type} value={type}>{type}</option>)}</optgroup>
-          </select>
+          <label className="block text-xs font-semibold text-slate-600">
+            Item type
+            <select className="field mt-1" name="productType" defaultValue={product?.productType ?? "Stocked product"} disabled={disabled} required>
+              {product?.productType && !GENERIC_ITEM_TYPES.includes(product.productType as (typeof GENERIC_ITEM_TYPES)[number]) && !sportsShopProductTypes.includes(product.productType) ? <option value={product.productType}>{product.productType} (existing)</option> : null}
+              <optgroup label="General business">{GENERIC_ITEM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</optgroup>
+              <optgroup label="Sports-shop template (optional)">{sportsShopProductTypes.map((type) => <option key={type} value={type}>{type}</option>)}</optgroup>
+            </select>
+          </label>
           <input className="field" name="color" placeholder="Colour (optional)" disabled={disabled} />
         </div>
         <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -265,7 +258,7 @@ export default async function CatalogPage({ searchParams }: Props) {
                         <input type="hidden" name="productId" value={product.id} />
                         <label className="block text-xs font-semibold text-slate-600">Item name<input className="field mt-1" name="name" defaultValue={product.name} required /></label>
                         <label className="block text-xs font-semibold text-slate-600">Base price<input className="field mt-1" name="basePrice" type="number" min="0.01" step="0.01" defaultValue={product.basePrice.toString()} required /></label>
-                        <ProductVariantFields initialVariants={variants.map((variant) => ({ id: variant.id, size: productVariantSize(variant.attributes), stockQty: product.isService ? 0 : variant.stockQty, sku: variant.sku, priceOverride: variant.priceOverride?.toString() ?? "" }))} />
+                        <ProductVariantFields initialVariants={variants.map((variant) => ({ id: variant.id, ...productVariantFormValues(variant.attributes), stockQty: product.isService ? 0 : variant.stockQty, sku: variant.sku, priceOverride: variant.priceOverride?.toString() ?? "" }))} />
                         <label className="block rounded-lg border border-[#ded8cd] bg-white p-2 text-xs"><span className="mb-1 block font-semibold">Replace photo (optional)</span><input name="photo" type="file" accept="image/*,.heic,.heif,.tif,.tiff,.svg" /></label>
                         <AdvancedProductFields categories={categories} product={product} disabled={false} />
                         <Button className="w-full">Save item changes</Button>

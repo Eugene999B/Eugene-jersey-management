@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
+import { productVariantOptionLabel } from "@/lib/product-variants";
 
 type OrdersPageProps = { searchParams?: Promise<{ q?: string }> };
 
@@ -70,7 +71,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
           hasPendingOnlinePayment: order.payments.some((payment) => payment.method !== "CASH" && payment.status === "PENDING"),
           totalAmount: Number(order.totalAmount),
           items: order.items.map((item) => ({
-            name: item.productVariant.product.name,
+            name: `${item.productVariant.product.name} — ${productVariantOptionLabel(item.productVariant.attributes)}`,
             sku: item.productVariant.sku,
             quantity: item.quantity,
             personalizationData: item.personalizationData as Record<string, unknown> | null,

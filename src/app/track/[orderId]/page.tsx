@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { getBuyerSession } from "@/lib/buyer-session";
+import { productVariantOptionLabel } from "@/lib/product-variants";
 
 type Props = {
   params: Promise<{ orderId: string }>;
@@ -177,7 +178,7 @@ export default async function TrackOrderPage({ params, searchParams }: Props) {
               <div key={item.id} className="flex items-center justify-between gap-4 border-b border-[#ded8cd] p-4 last:border-0">
                 <div>
                   <p className="font-semibold">{item.quantity}x {item.productVariant.product.name}</p>
-                  <p className="text-sm text-slate-500">{item.productVariant.sku}</p>
+                  <p className="text-sm font-semibold text-cyan-700">{productVariantOptionLabel(item.productVariant.attributes)}</p><p className="text-xs text-slate-500">{item.productVariant.sku}</p>
                 </div>
                 <p className="font-semibold">{currency(Number(item.unitPrice) * item.quantity, order.shop.currency)}</p>
               </div>
