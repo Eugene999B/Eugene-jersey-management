@@ -77,7 +77,7 @@ test("configures, approves and advances one real order through the workflow cont
   expect(firstStaffValue).toBeTruthy();
   await assignee.selectOption(firstStaffValue!);
   await page.getByLabel("Priority").selectOption("HIGH");
-  await page.getByLabel("Due date").fill(futureDate(4));
+  await page.getByLabel("Due date", { exact: true }).fill(futureDate(4));
   await page.getByLabel("Approval status").selectOption("PENDING");
   await page.getByLabel("Approval evidence or requested changes").fill("Awaiting final customer confirmation in the shop.");
   await page.getByPlaceholder("Exact work instructions, quality checks, measurements, placement, service steps, or preparation notes").fill("Use the exact XL black cotton long-sleeve option and inspect all selected details before production.");
