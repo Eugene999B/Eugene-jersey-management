@@ -31,15 +31,24 @@ async function addExactOption(page: Page) {
   await expect(page.locator("#pos-cart").getByText("Phase 7 exact option item", { exact: true })).toBeVisible();
 }
 
-async function createPaidOrder(page: Page) {
+async function createPaidOrderJob(page: Page) {
   await addExactOption(page);
+  await page.getByRole("radio", { name: "Order or job", exact: true }).click();
+  await page.getByLabel("Customer name", { exact: true }).fill("Phase 9 Workflow Customer");
   const checkoutResponse = page.waitForResponse((response) => response.url().includes("/api/pos/checkout") && response.request().method() === "POST");
   const receiptPopup = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Complete sale & print" }).click();
+  await page.getByRole("button", { name: "Create order/job & print" }).click();
   const [response, popup] = await Promise.all([checkoutResponse, receiptPopup]);
   expect(response.ok()).toBeTruthy();
-  const payload = await response.json() as { orderId: string; receiptNumber: string };
-  await expect(page.getByText(new RegExp(`Sale complete\\. Receipt ${payload.receiptNumber}`))).toBeVisible();
+  const payload = await response.json() as {
+    orderId: string;
+    receiptNumber: string;
+    checkoutMode: "ORDER_JOB";
+    orderStatus: "PENDING";
+  };
+  expect(payload.checkoutMode).toBe("ORDER_JOB");
+  expect(payload.orderStatus).toBe("PENDING");
+  await expect(page.getByText(new RegExp(`Order/job created\\. Receipt ${payload.receiptNumber}`))).toBeVisible();
   await popup.close();
   return payload;
 }
@@ -64,13 +73,14 @@ test("configures, approves and advances one real order through the workflow cont
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
-  const order = await createPaidOrder(page);
+  const order = await createPaidOrderJob(page);
 
   await page.goto(`/dashboard/orders/${order.orderId}`);
   await expect(page.getByRole("heading", { name: order.receiptNumber })).toBeVisible();
   await expect(page.getByText("Order and job control room", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Items and exact options" })).toBeVisible();
   await expect(page.getByText(/Size XL.*Colour Black.*Material Cotton.*Sleeve Long/)).toBeVisible();
+  await expect(page.getByText("Pending", { exact: true }).first()).toBeVisible();
 
   const assignee = page.getByLabel("Assigned staff");
   const firstStaffValue = await assignee.locator("option").nth(1).getAttribute("value");
