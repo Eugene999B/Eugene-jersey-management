@@ -24,6 +24,7 @@ type Props = {
 const errors: Record<string, string> = {
   values: "Check the business, access type, plan, dates, price, features and written reason.",
   "end-required": "This temporary access type requires an end date.",
+  "future-start": "Access grants apply immediately; choose today or an earlier start date.",
   "date-order": "The end date must be later than the start date.",
   "free-forever-end": "Free-forever access must not have an end date.",
   extension: "Automatic extension requires an end date and an extension period.",
@@ -35,6 +36,13 @@ const errors: Record<string, string> = {
   revoke: "Enter a clear revocation reason.",
   "grant-missing": "That grant is no longer active.",
 };
+
+const sponsoredAccessTypes = new Set<SubscriptionAccessType>([
+  SubscriptionAccessType.SPONSORED,
+  SubscriptionAccessType.PROMOTIONAL,
+  SubscriptionAccessType.FREE_FOREVER,
+  SubscriptionAccessType.EMERGENCY,
+]);
 
 function isoDate(value = new Date()) {
   return value.toISOString().slice(0, 10);
@@ -70,7 +78,7 @@ export default async function AdminAccessPage({ searchParams }: Props) {
   const sortedPlans = sortSubscriptionPlans(plans);
   const paidPlans = sortedPlans.filter((plan) => plan.tier !== PlanTier.FREE);
   const active = grants.filter((grant) => grant.isActive);
-  const sponsored = active.filter((grant) => [SubscriptionAccessType.SPONSORED, SubscriptionAccessType.PROMOTIONAL, SubscriptionAccessType.FREE_FOREVER, SubscriptionAccessType.EMERGENCY].includes(grant.accessType));
+  const sponsored = active.filter((grant) => sponsoredAccessTypes.has(grant.accessType));
   const expiringSoon = active.filter((grant) => grant.endsAt && grant.endsAt.getTime() <= Date.now() + 30 * 86_400_000);
 
   return (
@@ -85,7 +93,7 @@ export default async function AdminAccessPage({ searchParams }: Props) {
 
       {params.error ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{errors[params.error] ?? "The access change was not applied."}</div> : null}
       {params.granted ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Access grant saved. The contract, invoices and business access now follow the recorded terms.</div> : null}
-      {params.revoked ? <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Access grant revoked. Assign or review the underlying subscription contract before relying on commercial access.</div> : null}
+      {params.revoked ? <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Access grant revoked. Commercial actions are suspended until a new grant or paid contract is assigned.</div> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active grants" value={String(active.length)} icon={<Gift size={20} />} />
@@ -138,7 +146,7 @@ export default async function AdminAccessPage({ searchParams }: Props) {
                   {grant.expiryOutcome ? <p className="mt-2 text-xs font-semibold text-amber-800">Expiry outcome: {grant.expiryOutcome.replaceAll("_", " ")}</p> : null}
                   {grant.revocationReason ? <p className="mt-2 text-xs font-semibold text-red-700">Revoked: {grant.revocationReason}</p> : null}
                 </div>
-                {grant.isActive ? <form action={revokeShopAccessAction} className="w-full max-w-sm space-y-2 rounded-xl border border-red-100 bg-red-50 p-3 sm:w-auto"><input type="hidden" name="grantId" value={grant.id} /><input className="field" name="reason" minLength={8} required placeholder="Reason for revocation" /><ConfirmActionButton variant="danger" confirmation={`Revoke ${accessTypeLabel(grant.accessType)} for ${shop?.name ?? "this business"}? The underlying contract will remain and must be reviewed.`}>Revoke grant</ConfirmActionButton></form> : null}
+                {grant.isActive ? <form action={revokeShopAccessAction} className="w-full max-w-sm space-y-2 rounded-xl border border-red-100 bg-red-50 p-3 sm:w-auto"><input type="hidden" name="grantId" value={grant.id} /><input className="field" name="reason" minLength={8} required placeholder="Reason for revocation" /><ConfirmActionButton variant="danger" confirmation={`Revoke ${accessTypeLabel(grant.accessType)} for ${shop?.name ?? "this business"}? Commercial access will be suspended until a new grant or paid contract is assigned.`}>Revoke grant</ConfirmActionButton></form> : null}
               </div>
             </article>;
           })}
