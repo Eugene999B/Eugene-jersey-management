@@ -22,6 +22,11 @@ const identities = {
     loginId: "EJM-E2E-ADMIN",
     name: "EJM Browser Administrator",
   },
+  accessAdministrator: {
+    email: "browser-access-admin@ejm.test",
+    loginId: "EJM-E2E-ACCESS",
+    name: "EJM Browser Access Administrator",
+  },
   supportWorker: {
     email: "browser-support@ejm.test",
     loginId: "EJM-E2E-SUPPORT",
@@ -161,6 +166,31 @@ async function main() {
       passwordHash,
       role: Role.SUPER_ADMIN,
       adminPermissions: [],
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: identities.accessAdministrator.email },
+    update: {
+      adminLoginId: identities.accessAdministrator.loginId,
+      name: identities.accessAdministrator.name,
+      passwordHash,
+      role: Role.SUPER_ADMIN,
+      shopId: null,
+      adminPermissions: ["billing"],
+      isActive: true,
+      failedLoginCount: 0,
+      lockUntil: null,
+      sessionVersion: 0,
+    },
+    create: {
+      adminLoginId: identities.accessAdministrator.loginId,
+      email: identities.accessAdministrator.email,
+      name: identities.accessAdministrator.name,
+      passwordHash,
+      role: Role.SUPER_ADMIN,
+      adminPermissions: ["billing"],
       isActive: true,
     },
   });
