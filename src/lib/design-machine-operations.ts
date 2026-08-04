@@ -1,5 +1,8 @@
 import type { DesignMachineProfile } from "@/lib/design-machine-profile";
 
+export const MACHINE_JOB_STATUSES = ["PREPARED", "SENDING", "SENT", "FAILED", "CANCELLED"] as const;
+export type MachineJobStatus = (typeof MACHINE_JOB_STATUSES)[number];
+
 export const CUTTER_CHECKLIST_ITEMS = [
   { key: "materialLoaded", label: "Material is loaded straight and covers the full production width." },
   { key: "pinchRollersLocked", label: "Pinch rollers are locked on the grit rollers, not outside them." },
