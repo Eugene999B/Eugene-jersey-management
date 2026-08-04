@@ -1,0 +1,40 @@
+name: Refresh Phase 10 security lock
+
+on:
+  push:
+    branches:
+      - phase-10/cutter-operations-device-bridge
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Regenerate package lock only
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Verify patched dependency
+        run: |
+          node -e "const lock=require('./package-lock.json'); const pkg=lock.packages['node_modules/fast-uri']; if (!pkg || pkg.version !== '4.1.1') throw new Error('fast-uri 4.1.1 was not locked'); console.log(pkg.version)"
+          npm audit --audit-level=high
+
+      - name: Upload regenerated lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase10-security-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 2
