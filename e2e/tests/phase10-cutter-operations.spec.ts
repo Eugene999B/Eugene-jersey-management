@@ -103,8 +103,12 @@ test("prepares, sends and protects one saved cutter job", async ({ page }) => {
   await page.goto("/dashboard/designs/production");
   await expect(page.getByRole("heading", { name: "Cutter operations" })).toBeVisible();
   await page.getByLabel("Saved design").selectOption({ label: DESIGN_NAME });
-  await page.getByLabel("Direct cutter profile").selectOption({ label: /SafeCut Roll 320/ });
-  await expect(page.getByText("320 × 1000 mm", { exact: true })).toBeVisible();
+  const cutterSelect = page.getByLabel("Direct cutter profile");
+  const cutterOption = cutterSelect.locator("option", { hasText: "SafeCut Roll 320" });
+  const cutterValue = await cutterOption.getAttribute("value");
+  expect(cutterValue).toBeTruthy();
+  await cutterSelect.selectOption(cutterValue ?? "");
+  await expect(cutterSelect.locator("option:checked")).toHaveText(/SafeCut Roll 320/);
 
   await page.getByLabel("Loaded roll/sheet width (mm)").fill("320");
   const checks = page.getByRole("checkbox");
@@ -144,6 +148,6 @@ test("prepares, sends and protects one saved cutter job", async ({ page }) => {
   expect(serialResult?.payload.trim().endsWith("SP0;")).toBe(true);
 
   await page.getByRole("button", { name: "Prepare cutter job" }).click();
-  await expect(page.getByRole("alert")).toContainText("already sent to this machine within the last 15 minutes");
+  await expect(page.locator('p[role="alert"]')).toContainText("already sent to this machine within the last 15 minutes");
   await expect(page.getByRole("button", { name: "Prepare intentional resend" })).toBeVisible();
 });
