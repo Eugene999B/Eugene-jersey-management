@@ -21,7 +21,7 @@ import {
 import type { DesignMachineProfile } from "@/lib/design-machine-profile";
 import { outlineDesignTextLayers } from "@/lib/design-text-outline";
 import { titleCase } from "@/lib/format";
-import type { MachineJobStatus } from "@/lib/machine-production-jobs";
+import type { MachineJobStatus } from "@/lib/design-machine-operations";
 
 type SavedDesign = {
   id: string;
@@ -361,7 +361,8 @@ export function CutterOperationsConsole({
       return;
     }
     const port = portRef.current;
-    if (deviceState !== "connected" || !port?.writable) {
+    const writable = port?.writable;
+    if (deviceState !== "connected" || !writable) {
       setMessage({ tone: "error", text: "Connect the configured cutter before sending this queue job." });
       return;
     }
@@ -391,7 +392,7 @@ export function CutterOperationsConsole({
         const hardware = compareDetectedHardware({ usbVendorId: claimedJob.usbVendorId, usbProductId: claimedJob.usbProductId }, detected);
         if (!hardware.matches) throw new Error(hardware.message);
 
-        const writer = port.writable.getWriter();
+        const writer = writable.getWriter();
         try {
           await writer.write(new TextEncoder().encode(claimedJob.payload));
         } finally {
