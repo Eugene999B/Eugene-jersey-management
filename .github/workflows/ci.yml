@@ -2,48 +2,228 @@ name: Validate Eugene Jersey Management
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - "agent/**"
 
 concurrency:
   group: ejm-validation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 35
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sports_shop_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sports_shop_platform"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sports_shop_platform?schema=public
+      SESSION_SECRET: github-actions-validation-secret-at-least-32-characters
+      TWO_FACTOR_ENCRYPTION_KEY: github-actions-two-factor-encryption-key-at-least-32-characters
+      APP_URL: http://localhost:3000
+      MEDIA_STORAGE_PROVIDER: local
+      SMS_PROVIDER: console
+      WHATSAPP_PROVIDER: console
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            e2e/package-lock.json
 
-      - name: Apply exact compiler corrections
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Verify dependency security policy
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('src/components/design/cutter-operations-console.tsx')
-          text = path.read_text()
-          replacements = {
-            'import type { MachineJobStatus } from "@/lib/machine-production-jobs";': 'import type { MachineJobStatus } from "@/lib/design-machine-operations";',
-            '    const port = portRef.current;\n    if (deviceState !== "connected" || !port?.writable) {': '    const port = portRef.current;\n    const writable = port?.writable;\n    if (deviceState !== "connected" || !writable) {',
-            '        const writer = port.writable.getWriter();': '        const writer = writable.getWriter();',
-          }
-          for old, new in replacements.items():
-            if old not in text:
-              raise SystemExit(f'Expected source text not found: {old}')
-            text = text.replace(old, new, 1)
-          path.write_text(text)
-          PY
+          set +e
+          npm audit --json > npm-audit.json
+          audit_exit=$?
+          set -e
+          node scripts/verify-dependency-security.mjs npm-audit.json
+          echo "Raw npm audit exit code: ${audit_exit}"
 
-      - name: Commit exact compiler corrections
+      - name: Upload dependency audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-diagnostics
+          path: npm-audit.json
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Reject retired demo credentials
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/components/design/cutter-operations-console.tsx
-          git commit -m "fix(phase10): preserve client-safe types and serial writer narrowing"
-          git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          forbidden='Ghana''123'
+          if grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude='package-lock.json' "$forbidden" .; then
+            echo "A retired demo credential was found in the repository."
+            exit 1
+          fi
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Validate guarded demo purge
+        env:
+          NODE_ENV: test
+          SEED_DEMO_PASSWORD: ci-demo-password-2026
+          ADMIN_EMAIL: ci-admin@example.test
+          ADMIN_LOGIN_ID: EJM-CI-ADMIN
+          ADMIN_NAME: CI Platform Admin
+          ADMIN_PASSWORD: ci-admin-password-2026
+          ADMIN_FORCE_RESET: "false"
+          PURGE_DEMO_DATA: PURGE-ACC-PRO-DEMO-2026
+          PURGE_DEMO_ALLOW_NON_PRODUCTION: "true"
+        run: |
+          npm run db:seed:demo
+          npm run production:activate
+          npm run production:purge-demo
+
+      - name: Lint
+        shell: bash
+        run: |
+          set +e
+          npm run lint 2>&1 | tee lint.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-diagnostics
+          path: lint.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Type-check application
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit --pretty false 2>&1 | tee typecheck.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload TypeScript diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-diagnostics
+          path: typecheck.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Test complete suite
+        shell: bash
+        run: |
+          set +e
+          npm test 2>&1 | tee test.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics
+          path: test.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Run two-shop tenant isolation verification
+        shell: bash
+        env:
+          NODE_ENV: test
+          TENANT_ISOLATION_TESTING: "true"
+        run: |
+          set +e
+          npm run test:tenant-isolation 2>&1 | tee tenant-isolation.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload tenant isolation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-isolation-diagnostics
+          path: tenant-isolation.log
+          if-no-files-found: ignore
+          retention-days: 5
+
+      - name: Generate documentation
+        run: npm run docs:generate
+
+      - name: Build production application without browser test dependencies
+        run: npm run build
+
+      - name: Verify standalone runtime dependencies
+        run: node scripts/verify-standalone-runtime-dependencies.mjs
+
+      - name: Install browser test dependencies
+        run: npm --prefix e2e ci
+
+      - name: Audit browser test dependencies
+        run: npm --prefix e2e audit --audit-level=high
+
+      - name: Install Chromium for browser acceptance
+        run: npm --prefix e2e run install:chromium
+
+      - name: Seed browser acceptance identities
+        env:
+          NODE_ENV: test
+          E2E_TESTING: "true"
+          E2E_PASSWORD: ci-browser-password-2026
+        run: npm run e2e:seed
+
+      - name: Run Chromium browser acceptance
+        shell: bash
+        env:
+          CI: "true"
+          E2E_PASSWORD: ci-browser-password-2026
+        run: |
+          set +e
+          npm run test:e2e 2>&1 | tee e2e.log
+          exit_code=${PIPESTATUS[0]}
+          exit "$exit_code"
+
+      - name: Upload browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-browser-acceptance
+          path: |
+            e2e.log
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 5
