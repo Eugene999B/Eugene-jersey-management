@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -58,6 +60,19 @@ jobs:
 
       - name: Regenerate patched security lock
         run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit patched security lock
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Security lock is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "security: lock patched fast-uri release"
+          git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
 
       - name: Upload patched security lock
         uses: actions/upload-artifact@v4
