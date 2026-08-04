@@ -6,9 +6,10 @@ import { finishMachineProductionJob } from "@/lib/machine-production-jobs";
 import { permissions } from "@/lib/rbac";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
+const deviceInfoValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const resultSchema = z.object({
   success: z.boolean(),
-  deviceInfo: z.record(z.string(), z.unknown()).default({}),
+  deviceInfo: z.record(z.string(), deviceInfoValueSchema).default({}),
   error: z.string().trim().max(1_000).nullable().optional(),
 });
 
