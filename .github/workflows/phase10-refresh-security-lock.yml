@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: phase10-security-lock
+  cancel-in-progress: true
+
 jobs:
   refresh-lock:
     runs-on: ubuntu-latest
