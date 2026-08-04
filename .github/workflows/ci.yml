@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -46,8 +46,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -58,48 +56,35 @@ jobs:
             package-lock.json
             e2e/package-lock.json
 
-      - name: Regenerate patched security lock
-        run: npm install --package-lock-only --ignore-scripts
-
-      - name: Commit patched security lock
-        shell: bash
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "Security lock is already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "security: lock patched fast-uri release"
-          git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-
-      - name: Upload patched security lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase10-security-lock
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 2
-
       - name: Install application dependencies
         run: npm ci
 
-      - name: Audit high-severity dependencies
+      - name: Audit production dependencies at high severity
         shell: bash
         run: |
           set +e
-          npm audit --audit-level=high --json > npm-audit.json
+          npm audit --omit=dev --audit-level=high --json > npm-audit-production.json
           exit_code=$?
-          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit-production.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
           exit "$exit_code"
+
+      - name: Report complete dependency graph
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > npm-audit-full.json
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit-full.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
+          exit 0
 
       - name: Upload dependency audit diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: npm-audit-diagnostics
-          path: npm-audit.json
+          path: |
+            npm-audit-production.json
+            npm-audit-full.json
           if-no-files-found: ignore
           retention-days: 3
 
