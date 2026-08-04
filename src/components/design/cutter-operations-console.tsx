@@ -209,7 +209,7 @@ export function CutterOperationsConsole({
     setMirror(booleanValue(selectedDesign.canvas.mirror, true));
     setChecklist(EMPTY_CUTTER_CHECKLIST);
     setDuplicateJobId(null);
-  }, [selectedDesignId, directProfiles, selectedDesign]);
+  }, [directProfiles, selectedDesign]);
 
   const areaError = machineProfile
     ? machineProductionAreaError({ profile: machineProfile, materialWidthMm, sheet: size })
