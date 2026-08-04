@@ -56,6 +56,17 @@ jobs:
             package-lock.json
             e2e/package-lock.json
 
+      - name: Regenerate patched security lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload patched security lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase10-security-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 2
+
       - name: Install application dependencies
         run: npm ci
 
