@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -46,8 +46,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -60,22 +58,6 @@ jobs:
 
       - name: Install application dependencies
         run: npm ci
-
-      - name: Apply exact Phase 10 Biome fixes
-        run: npx biome check --write --unsafe src/components/design/cutter-operations-console.tsx src/tests/phase10-cutter-operations.test.ts
-
-      - name: Commit exact Phase 10 Biome fixes
-        shell: bash
-        run: |
-          if git diff --quiet -- src/components/design/cutter-operations-console.tsx src/tests/phase10-cutter-operations.test.ts; then
-            echo "Phase 10 files are already clean."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/components/design/cutter-operations-console.tsx src/tests/phase10-cutter-operations.test.ts
-          git commit -m "fix(phase10): apply exact Biome lint corrections"
-          git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
 
       - name: Verify dependency security policy
         shell: bash
