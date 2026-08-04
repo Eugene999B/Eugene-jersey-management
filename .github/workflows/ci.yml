@@ -59,32 +59,22 @@ jobs:
       - name: Install application dependencies
         run: npm ci
 
-      - name: Audit production dependencies at high severity
+      - name: Verify dependency security policy
         shell: bash
         run: |
           set +e
-          npm audit --omit=dev --audit-level=high --json > npm-audit-production.json
-          exit_code=$?
-          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit-production.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
-          exit "$exit_code"
-
-      - name: Report complete dependency graph
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          npm audit --json > npm-audit-full.json
-          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit-full.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
-          exit 0
+          npm audit --json > npm-audit.json
+          audit_exit=$?
+          set -e
+          node scripts/verify-dependency-security.mjs npm-audit.json
+          echo "Raw npm audit exit code: ${audit_exit}"
 
       - name: Upload dependency audit diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: npm-audit-diagnostics
-          path: |
-            npm-audit-production.json
-            npm-audit-full.json
+          path: npm-audit.json
           if-no-files-found: ignore
           retention-days: 3
 
@@ -195,6 +185,9 @@ jobs:
 
       - name: Build production application without browser test dependencies
         run: npm run build
+
+      - name: Verify standalone runtime dependencies
+        run: node scripts/verify-standalone-runtime-dependencies.mjs
 
       - name: Install browser test dependencies
         run: npm --prefix e2e ci
