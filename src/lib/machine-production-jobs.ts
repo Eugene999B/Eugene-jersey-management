@@ -1,9 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { nanoid } from "nanoid";
+import type { MachineJobStatus } from "@/lib/design-machine-operations";
 import { platformDb } from "@/lib/platform-db";
-
-export const MACHINE_JOB_STATUSES = ["PREPARED", "SENDING", "SENT", "FAILED", "CANCELLED"] as const;
-export type MachineJobStatus = (typeof MACHINE_JOB_STATUSES)[number];
 
 export type MachineProductionJobView = {
   id: string;
@@ -218,7 +216,7 @@ export async function claimMachineProductionJob(input: {
         "claimedAt" = NOW(),
         "lastError" = NULL,
         "updatedAt" = NOW()
-      FROM "DesignJob" designs, "ShopMachineProfile" profiles, "User" users
+      FROM "DesignJob" designs, "ShopMachineProfile" profiles, "User" actors, "User" creators
       WHERE jobs."id" = ${input.jobId}
         AND jobs."shopId" = ${input.shopId}
         AND jobs."status" IN ('PREPARED', 'FAILED')
@@ -229,9 +227,11 @@ export async function claimMachineProductionJob(input: {
         AND profiles."isActive" = TRUE
         AND profiles."outputFormat" = 'HPGL'
         AND profiles."connectionMode" = 'WEB_SERIAL'
-        AND users."id" = ${input.actorId}
-        AND users."shopId" = jobs."shopId"
-        AND users."isActive" = TRUE
+        AND actors."id" = ${input.actorId}
+        AND actors."shopId" = jobs."shopId"
+        AND actors."isActive" = TRUE
+        AND creators."id" = jobs."createdById"
+        AND creators."shopId" = jobs."shopId"
       RETURNING
         jobs."id",
         jobs."shopId",
@@ -242,7 +242,7 @@ export async function claimMachineProductionJob(input: {
         profiles."manufacturer",
         profiles."model",
         jobs."createdById",
-        users."name" AS "createdByName",
+        creators."name" AS "createdByName",
         jobs."jobName",
         jobs."material",
         jobs."materialWidthMm",
@@ -311,7 +311,7 @@ export async function finishMachineProductionJob(input: {
   error?: string | null;
 }) {
   return platformDb.$transaction(async (transaction) => {
-    const status = input.success ? "SENT" : "FAILED";
+    const status: MachineJobStatus = input.success ? "SENT" : "FAILED";
     const error = input.success ? null : (input.error?.trim().slice(0, 1_000) || "The cutter did not accept the serial job.");
     const rows = await transaction.$queryRaw<Array<{ attemptCount: number }>>`
       UPDATE "MachineProductionJob"
@@ -330,23 +330,33 @@ export async function finishMachineProductionJob(input: {
         )
       RETURNING "attemptCount"
     `;
-    if (!rows[0]) throw new Error("MACHINE_JOB_NOT_SENDING");
 
-    await transaction.$executeRaw`
-      UPDATE "MachineProductionAttempt"
-      SET
-        "status" = ${status},
-        "deviceInfo" = ${JSON.stringify(input.deviceInfo)}::jsonb,
-        "error" = ${error},
-        "finishedAt" = NOW()
-      WHERE "jobId" = ${input.jobId}
-        AND "shopId" = ${input.shopId}
-        AND "attemptNumber" = ${rows[0].attemptCount}
-        AND "actorId" = ${input.actorId}
-        AND "status" = 'STARTED'
-    `;
+    if (rows[0]) {
+      await transaction.$executeRaw`
+        UPDATE "MachineProductionAttempt"
+        SET
+          "status" = ${status},
+          "deviceInfo" = ${JSON.stringify(input.deviceInfo)}::jsonb,
+          "error" = ${error},
+          "finishedAt" = NOW()
+        WHERE "jobId" = ${input.jobId}
+          AND "shopId" = ${input.shopId}
+          AND "attemptNumber" = ${rows[0].attemptCount}
+          AND "actorId" = ${input.actorId}
+          AND "status" = 'STARTED'
+      `;
+    } else {
+      const current = await transaction.$queryRaw<Array<{ status: MachineJobStatus }>>`
+        SELECT "status"
+        FROM "MachineProductionJob"
+        WHERE "id" = ${input.jobId} AND "shopId" = ${input.shopId}
+        LIMIT 1
+      `;
+      if (!current[0]) throw new Error("MACHINE_JOB_NOT_FOUND");
+      if (current[0].status !== status) throw new Error("MACHINE_JOB_NOT_SENDING");
+    }
 
-    const jobs = await platformDb.$queryRaw<MachineProductionJobRow[]>(Prisma.sql`
+    const jobs = await transaction.$queryRaw<MachineProductionJobRow[]>(Prisma.sql`
       ${selection}
       WHERE jobs."shopId" = ${input.shopId} AND jobs."id" = ${input.jobId}
       LIMIT 1
