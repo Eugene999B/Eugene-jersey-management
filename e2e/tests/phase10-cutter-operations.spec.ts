@@ -119,13 +119,13 @@ test("prepares, sends and protects one saved cutter job", async ({ page }) => {
   await expect(page.getByText(/SafeCut Roll 320 connected at 19200 baud/)).toBeVisible();
 
   await page.getByRole("button", { name: "Prepare cutter job" }).click();
-  await expect(page.getByRole("status")).toContainText(`${DESIGN_NAME} is prepared`);
+  await expect(page.locator('p[role="status"]').filter({ hasText: `${DESIGN_NAME} is prepared` })).toBeVisible();
   const queueCard = page.locator("article").filter({ hasText: DESIGN_NAME }).first();
   await expect(queueCard.getByText("Prepared", { exact: true })).toBeVisible();
 
   page.once("dialog", (dialog) => dialog.accept());
   await queueCard.getByRole("button", { name: "Send once to cutter" }).click();
-  await expect(page.getByRole("status")).toContainText("was written to the cutter once");
+  await expect(page.locator('p[role="status"]').filter({ hasText: "was written to the cutter once" })).toBeVisible();
   await expect(queueCard.getByText("Sent", { exact: true })).toBeVisible();
 
   const serialResult = await page.evaluate(() => {
