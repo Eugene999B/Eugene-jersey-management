@@ -145,7 +145,7 @@ test("prepares, sends and protects one saved cutter job", async ({ page }) => {
   expect(serialResult?.openOptions).toContainEqual({ baudRate: 19200 });
   expect(serialResult?.filters).toEqual([{ usbVendorId: 0x1a86, usbProductId: 0x7523 }]);
   expect(serialResult?.payload).toContain("IN;PA;SP1");
-  expect(serialResult?.payload.trim().endsWith("SP0;")).toBe(true);
+  expect(serialResult?.payload.trim().endsWith("SP0;IN;")).toBe(true);
 
   await page.getByRole("button", { name: "Prepare cutter job" }).click();
   await expect(page.locator('p[role="alert"]')).toContainText("already sent to this machine within the last 15 minutes");
