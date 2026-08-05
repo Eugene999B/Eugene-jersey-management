@@ -4,6 +4,7 @@ import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { validateHpglCutterPayload } from "@/lib/design-hpgl-validation";
 import {
   createMachineProductionJob,
   listMachineProductionJobs,
@@ -38,15 +39,6 @@ const createSchema = z.object({
   allowDuplicate: z.boolean().default(false),
 });
 
-function validHpgl(payload: string) {
-  const normalized = payload.trim();
-  return normalized.startsWith("IN;")
-    && normalized.includes("PA;")
-    && normalized.includes("SP1;")
-    && normalized.endsWith("SP0;")
-    && /^[A-Z0-9,;+.\-\s]+$/.test(normalized);
-}
-
 function jobError(error: unknown) {
   if (!(error instanceof Error)) throw error;
   if (error.message.startsWith("MACHINE_JOB_DUPLICATE:")) {
@@ -78,9 +70,6 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Complete every machine, material, test-cut and safety check before preparing the cutter job." }, { status: 400 });
   }
-  if (!validHpgl(parsed.data.payload)) {
-    return NextResponse.json({ error: "The prepared output is not a valid bounded HPGL cutter payload." }, { status: 400 });
-  }
   if (parsed.data.materialWidthMm + 0.01 < parsed.data.sheetWidthMm) {
     return NextResponse.json({ error: "The loaded material is narrower than the prepared production area." }, { status: 400 });
   }
@@ -98,7 +87,7 @@ export async function POST(request: NextRequest) {
         outputFormat: "HPGL",
         connectionMode: "WEB_SERIAL",
       },
-      select: { id: true, name: true, bedWidthMm: true, bedHeightMm: true },
+      select: { id: true, name: true, bedWidthMm: true, bedHeightMm: true, unitsPerMm: true },
     }),
   ]);
   if (!design) return NextResponse.json({ error: "Choose a saved design belonging to this shop." }, { status: 404 });
@@ -107,8 +96,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "The prepared production area exceeds the selected machine profile." }, { status: 400 });
   }
 
+  const hpgl = validateHpglCutterPayload({
+    payload: parsed.data.payload,
+    maxX: Math.ceil(parsed.data.sheetWidthMm * profile.unitsPerMm),
+    maxY: Math.ceil(parsed.data.sheetHeightMm * profile.unitsPerMm),
+  });
+  if (!hpgl.valid) {
+    return NextResponse.json({ error: hpgl.error ?? "The prepared output is not a valid bounded HPGL cutter payload." }, { status: 400 });
+  }
+
   const payloadHash = createHash("sha256")
-    .update(`${profile.id}\n${parsed.data.origin}\n${parsed.data.mirror}\n${parsed.data.payload}`, "utf8")
+    .update(`${profile.id}\n${parsed.data.origin}\n${parsed.data.mirror}\n${hpgl.normalized}`, "utf8")
     .digest("hex");
 
   try {
@@ -124,7 +122,7 @@ export async function POST(request: NextRequest) {
       sheetHeightMm: parsed.data.sheetHeightMm,
       mirror: parsed.data.mirror,
       origin: parsed.data.origin,
-      payload: parsed.data.payload.trim(),
+      payload: hpgl.normalized,
       payloadHash,
       pathCount: parsed.data.pathCount,
       checklist: parsed.data.checklist,
