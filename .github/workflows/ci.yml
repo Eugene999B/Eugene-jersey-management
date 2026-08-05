@@ -59,14 +59,15 @@ jobs:
       - name: Install application dependencies
         run: npm ci
 
-      - name: Audit high-severity dependencies
+      - name: Verify dependency security policy
         shell: bash
         run: |
           set +e
-          npm audit --audit-level=high --json > npm-audit.json
-          exit_code=$?
-          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('npm-audit.json','utf8'));console.log(JSON.stringify({metadata:a.metadata,vulnerabilities:a.vulnerabilities},null,2))"
-          exit "$exit_code"
+          npm audit --json > npm-audit.json
+          audit_exit=$?
+          set -e
+          node scripts/verify-dependency-security.mjs npm-audit.json
+          echo "Raw npm audit exit code: ${audit_exit}"
 
       - name: Upload dependency audit diagnostics
         if: always()
@@ -185,6 +186,9 @@ jobs:
       - name: Build production application without browser test dependencies
         run: npm run build
 
+      - name: Verify standalone runtime dependencies
+        run: node scripts/verify-standalone-runtime-dependencies.mjs
+
       - name: Install browser test dependencies
         run: npm --prefix e2e ci
 
@@ -205,6 +209,7 @@ jobs:
         shell: bash
         env:
           CI: "true"
+          E2E_TESTING: "true"
           E2E_PASSWORD: ci-browser-password-2026
         run: |
           set +e

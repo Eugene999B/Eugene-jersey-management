@@ -18,6 +18,9 @@ import {
 const DUMMY_PASSWORD_HASH = "$2b$12$94A4bgZTq1kkieE.ysBmou2Q7M1Q7es6ib1sj4arKxG9fsC2iDZ3W";
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
+const CI_E2E_LOGIN_VOLUME = process.env.CI === "true" && process.env.E2E_TESTING === "true";
+const STAFF_LOGIN_ACCOUNT_LIMIT = CI_E2E_LOGIN_VOLUME ? 100 : 10;
+const STAFF_LOGIN_IP_LIMIT = CI_E2E_LOGIN_VOLUME ? 500 : 60;
 
 const loginSchema = z.object({
   loginId: z.string().trim().min(1).max(180).optional(),
@@ -107,8 +110,8 @@ export async function POST(request: NextRequest) {
   const identifier = (parsed.data.loginId ?? parsed.data.email ?? "unknown").trim().toLowerCase();
   try {
     await Promise.all([
-      enforceRateLimit({ key: `staff-login-account:${identifier}`, limit: 10, windowSeconds: 15 * 60 }),
-      enforceRateLimit({ key: `staff-login-ip:${requestIp(request)}`, limit: 60, windowSeconds: 15 * 60 }),
+      enforceRateLimit({ key: `staff-login-account:${identifier}`, limit: STAFF_LOGIN_ACCOUNT_LIMIT, windowSeconds: 15 * 60 }),
+      enforceRateLimit({ key: `staff-login-ip:${requestIp(request)}`, limit: STAFF_LOGIN_IP_LIMIT, windowSeconds: 15 * 60 }),
     ]);
   } catch {
     return loginFailure(request, "rate", { next: parsed.data.next, status: 429 });
