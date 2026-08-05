@@ -209,6 +209,7 @@ jobs:
         shell: bash
         env:
           CI: "true"
+          E2E_TESTING: "true"
           E2E_PASSWORD: ci-browser-password-2026
         run: |
           set +e
