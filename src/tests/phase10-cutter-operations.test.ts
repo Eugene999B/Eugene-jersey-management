@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { validateHpglCutterPayload } from "@/lib/design-hpgl-validation";
 import {
   CUTTER_CHECKLIST_ITEMS,
   EMPTY_CUTTER_CHECKLIST,
@@ -33,6 +34,32 @@ describe("Phase 10 cutter operations and direct serial control", () => {
     expect(machineProductionAreaError({ profile, materialWidthMm: 610, sheet: { width: 305, height: 508 } })).toBeNull();
   });
 
+  it("accepts only the established bounded HPGL grammar and safe shutdown sequence", () => {
+    const valid = validateHpglCutterPayload({
+      payload: "IN;PA;SP1;PU120,120;PD120,400,400,400,400,120,120,120;PU;SP0;IN;\n",
+      maxX: 12_800,
+      maxY: 40_000,
+    });
+    expect(valid.valid).toBe(true);
+    expect(valid.normalized.endsWith("SP0;IN;")).toBe(true);
+
+    expect(validateHpglCutterPayload({
+      payload: "IN;PA;SP1;PU120,120;PD12900,400;PU;SP0;IN;",
+      maxX: 12_800,
+      maxY: 40_000,
+    }).error).toContain("outside");
+    expect(validateHpglCutterPayload({
+      payload: "IN;PA;SP1;LBUNSAFE;SP0;IN;",
+      maxX: 12_800,
+      maxY: 40_000,
+    }).valid).toBe(false);
+    expect(validateHpglCutterPayload({
+      payload: "IN;PA;SP1;PU120,120;PD120,400;PU;SP0;",
+      maxX: 12_800,
+      maxY: 40_000,
+    }).valid).toBe(false);
+  });
+
   it("uses additive queue tables without rewriting artwork or business records", () => {
     const migration = source("../../prisma/migrations/20260804231500_phase10_cutter_operations/migration.sql");
     expect(migration).toContain('CREATE TABLE "MachineProductionJob"');
@@ -64,6 +91,7 @@ describe("Phase 10 cutter operations and direct serial control", () => {
     expect(route).toContain('connectionMode: "WEB_SERIAL"');
     expect(route).toContain("The loaded material is narrower");
     expect(route).toContain("The prepared production area exceeds");
+    expect(route).toContain("validateHpglCutterPayload");
     expect(route).toContain("MACHINE_JOB_DUPLICATE");
     expect(route).toContain("createHash(\"sha256\")");
   });
