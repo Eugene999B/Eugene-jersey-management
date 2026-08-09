@@ -1,6 +1,6 @@
-import { PackageCheck, Plus, Truck } from "lucide-react";
+import { Boxes, PackageCheck, Plus, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { createSupplierAction, createSupplierOrderAction, receiveSupplierOrderAction } from "@/app/dashboard/suppliers/actions";
 import { prisma } from "@/lib/db";
@@ -14,23 +14,27 @@ export default async function SuppliersPage() {
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
-  const [suppliers, variants, orders] = await Promise.all([
+  const [suppliers, variants, orders, productionItems, accountEntries] = await Promise.all([
     prisma.supplier.findMany({ where: { shopId: shop.id }, include: { portalUser: true, supplierOrders: true }, orderBy: { name: "asc" } }),
     prisma.productVariant.findMany({ where: { product: { shopId: shop.id } }, include: { product: true }, orderBy: { sku: "asc" }, take: 200 }),
     prisma.supplierOrder.findMany({ where: { shopId: shop.id }, include: { supplier: true, items: true }, orderBy: { createdAt: "desc" }, take: 40 }),
+    prisma.productionInventoryItem.findMany({ where: { shopId: shop.id, isActive: true }, orderBy: [{ kind: "asc" }, { name: "asc" }], take: 300 }),
+    prisma.supplierAccountEntry.findMany({ where: { shopId: shop.id }, select: { supplierId: true, amount: true } }),
   ]);
 
   const openOrders = orders.filter((order) => order.status !== "RECEIVED" && order.status !== "CANCELLED");
   const incomingValue = openOrders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+  const supplierBalance = accountEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div><h1 className="text-2xl font-semibold">Suppliers</h1><p className="mt-2 text-sm text-slate-500">Manage supplier records, portal logins, purchase orders, receiving, and lead-time risk.</p></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">Suppliers</h1><p className="mt-2 text-sm text-slate-500">Manage supplier records, portal logins, purchase orders, receiving, cost history and production-stock replenishment.</p></div><LinkButton href="/dashboard/production-stock" variant="outline"><Boxes size={16} /> Production stock & costing</LinkButton></div>
 
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <StatCard label="Suppliers" value={String(suppliers.length)} icon={<Truck size={20} />} />
         <StatCard label="Open POs" value={String(openOrders.length)} />
         <StatCard label="Incoming value" value={currency(incomingValue, shop.currency)} />
+        <StatCard label="Supplier balance" value={currency(supplierBalance, shop.currency)} />
         <StatCard label="Portal logins" value={String(suppliers.filter((supplier) => supplier.portalUserId).length)} />
       </section>
 
@@ -52,11 +56,14 @@ export default async function SuppliersPage() {
 
           <div className="panel p-4 sm:p-5">
             <h2 className="text-lg font-semibold">Create purchase order</h2>
+            <p className="mt-1 text-xs text-slate-500">Link a line to catalogue stock, production stock, both, or neither. Receiving updates every linked ledger in one transaction.</p>
             <form action={createSupplierOrderAction} className="mt-4 space-y-3">
               <select className="field" name="supplierId" required><option value="">Select supplier</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select>
-              <select className="field" name="productVariantId"><option value="">No stock link</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.sku} - {variant.product.name}</option>)}</select>
+              <label className="block text-xs font-semibold text-slate-600">Catalogue variant<select className="field mt-1" name="productVariantId"><option value="">No catalogue stock link</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.sku} - {variant.product.name}</option>)}</select></label>
+              <label className="block text-xs font-semibold text-slate-600">Production stock item<select className="field mt-1" name="productionInventoryItemId"><option value="">No production stock link</option>{productionItems.map((item) => <option key={item.id} value={item.id}>{titleCase(item.kind)} · {item.name} · {[item.colour, item.size].filter(Boolean).join(" ") || "no option"}</option>)}</select></label>
+              {!productionItems.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Create exact garment/vinyl stock in Production stock & costing before linking a purchase order.</p> : null}
               <input className="field" name="description" placeholder="Item description" required />
-              <div className="grid gap-2 sm:grid-cols-3"><input className="field" name="quantity" type="number" min="1" placeholder="Qty" required /><input className="field" name="unitCost" type="number" min="0" step="0.01" placeholder="Unit cost" required /><input className="field" name="expectedAt" type="date" /></div>
+              <div className="grid gap-2 sm:grid-cols-3"><input className="field" name="quantity" type="number" min="1" placeholder="Qty" required /><input className="field" name="unitCost" type="number" min="0" step="0.0001" placeholder="Unit cost" required /><input className="field" name="expectedAt" type="date" /></div>
               <textarea className="field min-h-20" name="notes" placeholder="Sizes, colors, print specs, delivery notes" />
               <Button className="w-full">Send purchase order</Button>
             </form>
@@ -84,7 +91,7 @@ export default async function SuppliersPage() {
               {orders.map((order) => (
                 <article key={order.id} className="grid min-w-0 gap-3 p-3 sm:p-4 lg:grid-cols-[1fr_180px]">
                   <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{order.orderNumber}</p><Badge tone={order.status === "RECEIVED" ? "green" : "orange"}>{titleCase(order.status)}</Badge></div><p className="mt-1 text-sm text-slate-500">{order.supplier.name} · {currency(order.totalAmount.toString(), shop.currency)}</p><p className="mt-2 break-words text-sm text-slate-600">{order.items.map((item) => `${item.quantity}x ${item.description}`).join(", ")}</p><p className="mt-2 text-xs text-slate-400">Created {shortDate(order.createdAt)} {order.expectedAt ? `· expected ${shortDate(order.expectedAt)}` : ""}</p></div>
-                  <form action={receiveSupplierOrderAction} className="self-end"><input type="hidden" name="orderId" value={order.id} /><Button variant="outline" className="w-full" disabled={order.status === "RECEIVED"}><PackageCheck size={16} /> Receive</Button></form>
+                  <form action={receiveSupplierOrderAction} className="self-end"><input type="hidden" name="orderId" value={order.id} /><Button variant="outline" className="w-full" disabled={order.status === "RECEIVED"}><PackageCheck size={16} /> Receive & post stock</Button></form>
                 </article>
               ))}
               {!orders.length ? <p className="p-5 text-sm text-slate-500">No purchase orders yet.</p> : null}
