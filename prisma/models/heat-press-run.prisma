@@ -1,0 +1,96 @@
+enum HeatPressRunStatus {
+  READY
+  PRESSING
+  PAUSED
+  FIRST_PRESS_COMPLETE
+  PEEL_COMPLETE
+  REPRESSING
+  QUALITY_CHECK
+  PASSED
+  REWORK_REQUIRED
+}
+
+enum HeatPressTimerMode {
+  FIRST_PRESS
+  REPRESS
+}
+
+enum HeatPressEventType {
+  RUN_CREATED
+  TIMER_STARTED
+  TIMER_PAUSED
+  TIMER_RESET
+  FIRST_PRESS_COMPLETED
+  PEEL_COMPLETED
+  REPRESS_STARTED
+  REPRESS_COMPLETED
+  QUALITY_PASSED
+  REWORK_REQUIRED
+  PHOTO_ATTACHED
+}
+
+model HeatPressRun {
+  id                      String             @id @default(cuid())
+  shopId                  String
+  designProductionBriefId String
+  attemptNumber           Int                @default(1)
+  status                  HeatPressRunStatus @default(READY)
+  materialSnapshot        Json
+  garmentSnapshot         Json
+  placementSnapshot       Json
+  pressTemperatureC       Float
+  pressDurationSeconds    Float
+  pressure                String
+  peelType                String
+  repressSeconds          Float
+  timerMode               HeatPressTimerMode?
+  timerStartedAt          DateTime?
+  timerElapsedMs          Int                @default(0)
+  firstPressElapsedMs     Int?
+  repressElapsedMs        Int?
+  firstPressCompletedAt   DateTime?
+  peelCompletedAt         DateTime?
+  repressCompletedAt      DateTime?
+  qualityChecklist        Json?
+  qualityPassedAt         DateTime?
+  reworkReason            String?
+  createdById             String
+  updatedById             String
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  @@unique([shopId, designProductionBriefId, attemptNumber])
+  @@index([shopId, status, updatedAt])
+  @@index([designProductionBriefId, updatedAt])
+}
+
+model HeatPressEvent {
+  id             String             @id @default(cuid())
+  shopId         String
+  heatPressRunId String
+  type           HeatPressEventType
+  timerMode      HeatPressTimerMode?
+  elapsedMs      Int?
+  note           String?
+  metadata       Json?
+  createdById    String
+  createdAt      DateTime           @default(now())
+
+  @@index([shopId, heatPressRunId, createdAt])
+  @@index([heatPressRunId, createdAt])
+}
+
+model HeatPressEvidence {
+  id             String   @id @default(cuid())
+  shopId         String
+  heatPressRunId String
+  mimeType       String
+  byteLength     Int
+  sha256         String
+  data           Bytes
+  uploadedById   String
+  createdAt      DateTime @default(now())
+
+  @@index([shopId, heatPressRunId, createdAt])
+  @@index([heatPressRunId, createdAt])
+}
