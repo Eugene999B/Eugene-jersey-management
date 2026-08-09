@@ -241,7 +241,7 @@ export async function recordSupplierReturnAction(formData: FormData) {
   revalidatePath("/dashboard/suppliers");
 }
 
-const costingRoles = [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT];
+const costingRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT];
 const costSchema = z.object({
   designProductionBriefId: z.string().min(1).max(160),
   garmentInventoryItemId: z.string().min(1).max(160),
@@ -275,7 +275,7 @@ export async function saveProductionCostAction(formData: FormData) {
   if (!parsed.success) redirect("/dashboard/production-stock?error=cost");
 
   const [brief, garment, material] = await Promise.all([
-    prisma.designProductionBrief.findFirst({ where: { id: parsed.data.designProductionBriefId, shopId, status: "REVIEWED" }, select: { id: true, designJobId: true } }),
+    prisma.designProductionBrief.findFirst({ where: { id: parsed.data.designProductionBriefId, shopId, status: "REVIEWED" }, select: { id: true, designJobId: true, cutSheetWidthMm: true, cutSheetHeightMm: true } }),
     prisma.productionInventoryItem.findFirst({ where: { id: parsed.data.garmentInventoryItemId, shopId, kind: ProductionInventoryKind.GARMENT, isActive: true } }),
     prisma.productionInventoryItem.findFirst({ where: { id: parsed.data.materialInventoryItemId, shopId, kind: ProductionInventoryKind.VINYL, isActive: true } }),
   ]);
@@ -294,6 +294,7 @@ export async function saveProductionCostAction(formData: FormData) {
     additionalServicesCost: parsed.data.additionalServicesCost,
     revenue: parsed.data.revenue,
   });
+  const materialUsedAreaMm2 = Math.max(0, brief.cutSheetWidthMm * brief.cutSheetHeightMm);
   const existing = await prisma.productionCostSnapshot.findUnique({ where: { shopId_designProductionBriefId: { shopId, designProductionBriefId: brief.id } }, select: { inventoryPostedAt: true } });
   if (existing?.inventoryPostedAt) redirect("/dashboard/production-stock?error=cost-posted");
 
@@ -306,6 +307,7 @@ export async function saveProductionCostAction(formData: FormData) {
       orderId: design.orderId,
       garmentInventoryItemId: garment.id,
       materialInventoryItemId: material.id,
+      materialUsedAreaMm2,
       ...totals,
       createdById: session.id,
       updatedById: session.id,
@@ -313,16 +315,18 @@ export async function saveProductionCostAction(formData: FormData) {
     update: {
       garmentInventoryItemId: garment.id,
       materialInventoryItemId: material.id,
+      materialUsedAreaMm2,
       ...totals,
       updatedById: session.id,
     },
   });
-  await audit({ shopId, userId: session.id, action: "production.cost.saved", entityType: "ProductionCostSnapshot", entityId: cost.id, metadata: { designProductionBriefId: brief.id, totalCost: totals.totalCost, revenue: totals.revenue, profit: totals.profit, marginPercent: totals.marginPercent } });
+  await audit({ shopId, userId: session.id, action: "production.cost.saved", entityType: "ProductionCostSnapshot", entityId: cost.id, metadata: { designProductionBriefId: brief.id, materialUsedAreaMm2, totalCost: totals.totalCost, revenue: totals.revenue, profit: totals.profit, marginPercent: totals.marginPercent } });
   revalidatePath("/dashboard/production-stock");
 }
 
 export async function postProductionInventoryAction(formData: FormData) {
   const { session, shopId } = await stockSession();
+  await requireBusinessModuleAccess(shopId, "PRINTING_PRODUCTION");
   const costId = String(formData.get("costId") ?? "");
   if (!costId) redirect("/dashboard/production-stock?error=post");
   try {
