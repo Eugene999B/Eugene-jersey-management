@@ -1,7 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { CustomerProductionEventType, FulfillmentType } from "@prisma/client";
+import { CustomerProductionEventType, FulfillmentType, OrderChannel } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -14,8 +14,7 @@ import {
 } from "@/lib/customer-production";
 import { prisma } from "@/lib/db";
 import { readProductionLibrary } from "@/lib/production-specs";
-import { assertOrderCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
-import { OrderChannel } from "@prisma/client";
+import { assertOrderCreationAvailable, CommercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const requestSchema = z.object({
   shopSlug: z.string().trim().min(1).max(120),
@@ -65,7 +64,7 @@ export async function submitCustomerProductionRequestAction(formData: FormData) 
   try {
     await assertOrderCreationAvailable({ shopId: shop.id, channel: OrderChannel.ONLINE });
   } catch (error) {
-    if (commercialSubscriptionError(error)) redirect(`/shop/${shop.slug}/custom-production?error=subscription`);
+    if (error instanceof CommercialSubscriptionError) redirect(`/shop/${shop.slug}/custom-production?error=subscription`);
     throw error;
   }
 
