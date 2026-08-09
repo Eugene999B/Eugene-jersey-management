@@ -15,6 +15,14 @@ export type InventoryIdentity = {
   productVariantId?: string | null;
 };
 
+const OUTBOUND_MOVEMENT_TYPES: ReadonlySet<ProductionInventoryMovementType> = new Set([
+  ProductionInventoryMovementType.PRODUCTION_USE,
+  ProductionInventoryMovementType.WASTE,
+  ProductionInventoryMovementType.DAMAGE,
+  ProductionInventoryMovementType.ADJUSTMENT_OUT,
+  ProductionInventoryMovementType.SUPPLIER_RETURN,
+]);
+
 function keyPart(value: string | null | undefined) {
   return (value ?? "-").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "-";
 }
@@ -32,14 +40,7 @@ export function productionInventoryKey(input: InventoryIdentity) {
 
 export function inventoryMovementDelta(type: ProductionInventoryMovementType, quantity: number) {
   const safe = Math.max(0, quantity);
-  if ([
-    ProductionInventoryMovementType.PRODUCTION_USE,
-    ProductionInventoryMovementType.WASTE,
-    ProductionInventoryMovementType.DAMAGE,
-    ProductionInventoryMovementType.ADJUSTMENT_OUT,
-    ProductionInventoryMovementType.SUPPLIER_RETURN,
-  ].includes(type)) return -safe;
-  return safe;
+  return OUTBOUND_MOVEMENT_TYPES.has(type) ? -safe : safe;
 }
 
 export function weightedUnitCost(input: {
