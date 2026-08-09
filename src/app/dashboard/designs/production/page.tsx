@@ -1,4 +1,4 @@
-import { ArrowLeft, Layers3, ShieldCheck, Shirt, Usb } from "lucide-react";
+import { ArrowLeft, Flame, Layers3, ShieldCheck, Shirt, Usb } from "lucide-react";
 import { CutterOperationsConsole } from "@/components/design/cutter-operations-console";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export default async function CutterProductionPage({
     listMachineProductionJobs(shop.id, 60),
     prisma.designProductionBrief.findMany({
       where: { shopId: shop.id, status: "REVIEWED" },
-      select: { designJobId: true },
+      select: { id: true, designJobId: true },
       take: 100,
     }),
   ]);
@@ -53,8 +53,8 @@ export default async function CutterProductionPage({
   const savedDesigns = requestedDesignId
     ? [...mappedDesigns].sort((left, right) => Number(right.id === requestedDesignId) - Number(left.id === requestedDesignId))
     : mappedDesigns;
-  const reviewedIds = new Set(reviewedBriefs.map((brief) => brief.designJobId));
-  const requestedReviewed = requestedDesignId ? reviewedIds.has(requestedDesignId) : false;
+  const requestedBrief = requestedDesignId ? reviewedBriefs.find((brief) => brief.designJobId === requestedDesignId) ?? null : null;
+  const requestedReviewed = Boolean(requestedBrief);
   const directProfiles = profiles.filter((profile) => profile.isActive && profile.outputFormat === "HPGL" && profile.connectionMode === "WEB_SERIAL");
 
   return (
@@ -63,7 +63,7 @@ export default async function CutterProductionPage({
         eyebrow="Design Studio production"
         title="Cutter operations"
         description="Turn saved artwork into one controlled HPGL queue job, verify the photographed roll-fed cutter setup, connect the exact serial device, and retain every send attempt for recovery and audit."
-        actions={<><LinkButton href="/dashboard/designs" variant="outline"><ArrowLeft size={16} /> Back to studio</LinkButton><LinkButton href="/dashboard/designs/workflow" variant="outline"><Shirt size={16} /> Guided production</LinkButton><LinkButton href="/dashboard/designs/materials" variant="outline"><Layers3 size={16} /> Materials & press recipes</LinkButton><Badge tone="blue"><ShieldCheck size={14} /> Saved artwork only</Badge></>}
+        actions={<><LinkButton href="/dashboard/designs" variant="outline"><ArrowLeft size={16} /> Back to studio</LinkButton><LinkButton href="/dashboard/designs/workflow" variant="outline"><Shirt size={16} /> Guided production</LinkButton><LinkButton href="/dashboard/designs/heat-press" variant="outline"><Flame size={16} /> Heat press</LinkButton><LinkButton href="/dashboard/designs/materials" variant="outline"><Layers3 size={16} /> Materials & press recipes</LinkButton><Badge tone="blue"><ShieldCheck size={14} /> Saved artwork only</Badge></>}
       />
 
       <FeedbackState
@@ -73,7 +73,7 @@ export default async function CutterProductionPage({
       />
 
       {requestedDesignId ? (
-        requestedReviewed ? <FeedbackState state="success" title="Reviewed guided-production job selected" description="The design passed the garment, exact-size, placement, material and fit review. Cutter operations still requires its independent physical machine checklist and test cut." />
+        requestedReviewed && requestedBrief ? <FeedbackState state="success" title="Reviewed guided-production job selected" description="The design passed the garment, exact-size, placement, material and fit review. Cutter operations still requires its independent physical machine checklist and test cut. After cutting and weeding, continue to the manual heat-press workflow." action={<LinkButton href={`/dashboard/designs/heat-press?brief=${encodeURIComponent(requestedBrief.id)}`} variant="outline"><Flame size={16} /> After cutting & weeding: Heat press</LinkButton>} />
           : <FeedbackState state="warning" title="This design has no current guided-production review" description="Direct cutter controls remain backward-compatible, but the recommended workflow is to approve the garment/material production review before sending physical work." action={<LinkButton href={`/dashboard/designs/workflow?design=${encodeURIComponent(requestedDesignId)}`} variant="outline">Review this design</LinkButton>} />
       ) : null}
 
