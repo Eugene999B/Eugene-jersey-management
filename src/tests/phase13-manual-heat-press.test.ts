@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_HEAT_PRESS_QUALITY,
   MAX_HEAT_PRESS_EVIDENCE_BYTES,
+  heatPressPhotoBytesMatchMime,
   heatPressPhotoMimeAllowed,
   heatPressQualityComplete,
   heatPressRecipeFromBrief,
@@ -86,6 +87,16 @@ describe("Phase 13 manual heat press workflow", () => {
     expect(MAX_HEAT_PRESS_EVIDENCE_BYTES).toBe(5 * 1024 * 1024);
   });
 
+  it("verifies evidence file signatures against the declared image type", () => {
+    expect(heatPressPhotoBytesMatchMime(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), "image/jpeg")).toBe(true);
+    expect(heatPressPhotoBytesMatchMime(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "image/png")).toBe(true);
+    expect(heatPressPhotoBytesMatchMime(new Uint8Array([
+      0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+    ]), "image/webp")).toBe(true);
+    expect(heatPressPhotoBytesMatchMime(new TextEncoder().encode("<script>alert(1)</script>"), "image/png")).toBe(false);
+    expect(heatPressPhotoBytesMatchMime(new Uint8Array([0xff, 0xd8, 0xff]), "image/png")).toBe(false);
+  });
+
   it("adds execution, events and durable photo evidence without rewriting production briefs", () => {
     const migration = source("../../prisma/migrations/20260809100000_phase13_manual_heat_press_workflow/migration.sql");
     expect(migration).toContain('CREATE TABLE "HeatPressRun"');
@@ -114,11 +125,12 @@ describe("Phase 13 manual heat press workflow", () => {
     expect(actionRoute).toContain("heatPressQualityComplete(checklist)");
   });
 
-  it("keeps photo evidence tenant-scoped, hashed, size-limited and non-cacheable", () => {
+  it("keeps photo evidence tenant-scoped, hashed, signature-checked, size-limited and non-cacheable", () => {
     const upload = source("../app/api/heat-press-runs/[runId]/evidence/route.ts");
     const read = source("../app/api/heat-press-evidence/[evidenceId]/route.ts");
     expect(upload).toContain("MAX_HEAT_PRESS_EVIDENCE_BYTES");
     expect(upload).toContain("heatPressPhotoMimeAllowed(photo.type)");
+    expect(upload).toContain("heatPressPhotoBytesMatchMime(bytes, photo.type)");
     expect(upload).toContain('createHash("sha256")');
     expect(upload).toContain("where: { id: runId, shopId }");
     expect(read).toContain("where: { id: evidenceId, shopId: session.shopId }");
