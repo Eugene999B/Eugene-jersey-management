@@ -27,7 +27,7 @@ function formForButton(page: import("@playwright/test").Page, buttonName: string
 }
 
 async function resourceId(page: import("@playwright/test").Page, heading: string) {
-  const article = page.getByRole("article").filter({ has: page.getByRole("heading", { name: heading }) });
+  const article = page.getByRole("article").filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
   await expect(article).toBeVisible();
   return article.locator('input[name="id"]').first().inputValue();
 }
@@ -143,33 +143,33 @@ test("operator executes a reviewed manual heat press job with persistent timer, 
 
   await page.goto(`/dashboard/designs/heat-press?brief=${encodeURIComponent(fixture.briefId)}`);
   await expect(page.getByRole("heading", { name: "Heat press", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: designName })).toBeVisible();
-  await expect(page.getByText(`${garmentName} · M`)).toBeVisible();
-  await expect(page.getByText("150 °C · 1s")).toBeVisible();
+  await expect(page.getByRole("heading", { name: designName, exact: true })).toBeVisible();
+  await expect(page.getByText(`${garmentName} · M`, { exact: true })).toBeVisible();
+  await expect(page.getByText("150 °C · 1s", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Create heat press attempt" }).click();
-  await expect(page.getByText("Attempt 1 · Ready")).toBeVisible();
+  await page.getByRole("button", { name: "Create heat press attempt", exact: true }).click();
+  await expect(page.getByText("Attempt 1 · Ready", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Start first press" }).click();
-  await expect(page.getByText("First-press timer started.")).toBeVisible();
+  await page.getByRole("button", { name: "Start first press", exact: true }).click();
+  await expect(page.getByText("First-press timer started.", { exact: true })).toBeVisible();
   await page.waitForTimeout(300);
-  await page.getByRole("button", { name: "Pause" }).click();
-  await expect(page.getByText("First-press timer paused.")).toBeVisible();
-  await page.getByRole("button", { name: "Resume first press" }).click();
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.getByText("First-press timer paused.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Resume first press", exact: true }).click();
   await page.waitForTimeout(800);
-  await page.getByRole("button", { name: "Mark first press complete" }).click();
-  await expect(page.getByText("First press recorded. Follow the saved peel method next.")).toBeVisible();
+  await page.getByRole("button", { name: "Mark first press complete", exact: true }).click();
+  await expect(page.getByText("First press recorded. Follow the saved peel method next.", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Record peel completed" }).click();
-  await expect(page.getByText("Peel recorded. Repress is now ready.")).toBeVisible();
-  await page.getByRole("button", { name: "Start repress" }).click();
+  await page.getByRole("button", { name: "Record peel completed", exact: true }).click();
+  await expect(page.getByText("Peel recorded. Repress is now ready.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Start repress", exact: true }).click();
   await page.waitForTimeout(1_050);
-  await page.getByRole("button", { name: "Mark repress complete" }).click();
-  await expect(page.getByText("Repress recorded. Continue to quality inspection.")).toBeVisible();
+  await page.getByRole("button", { name: "Mark repress complete", exact: true }).click();
+  await expect(page.getByText("Repress recorded. Continue to quality inspection.", { exact: true })).toBeVisible();
 
   const onePixelPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   await page.locator('input[type="file"][accept="image/jpeg,image/png,image/webp"]').setInputFiles({ name: "finished.png", mimeType: "image/png", buffer: onePixelPng });
-  await expect(page.getByText("Finished-product photo attached to this heat press attempt.")).toBeVisible();
+  await expect(page.getByText("Finished-product photo attached to this heat press attempt.", { exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: /Finished garment evidence uploaded/ })).toBeVisible();
 
   for (const label of [
@@ -182,11 +182,11 @@ test("operator executes a reviewed manual heat press job with persistent timer, 
     "Carrier was removed using the correct peel method",
     "Customer instructions and placement were satisfied",
   ]) {
-    await page.getByRole("checkbox", { name: label }).check();
+    await page.getByRole("checkbox", { name: label, exact: true }).check();
   }
-  await expect(page.getByText("All required quality checks pass.")).toBeVisible();
-  await page.getByRole("button", { name: "Mark quality passed" }).click();
-  await expect(page.getByText("Quality passed. This heat press attempt is complete.")).toBeVisible();
-  await expect(page.getByText("Attempt 1 · Passed")).toBeVisible();
+  await expect(page.getByText("All required quality checks pass.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mark quality passed", exact: true }).click();
+  await expect(page.getByText("Quality passed. This heat press attempt is complete.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Attempt 1 · Passed", { exact: true })).toBeVisible();
   await expect(page.getByText("Quality passed", { exact: true }).last()).toBeVisible();
 });
