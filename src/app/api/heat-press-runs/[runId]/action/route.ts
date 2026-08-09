@@ -33,6 +33,10 @@ function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
+function statusIn(status: HeatPressRunStatus, allowed: readonly HeatPressRunStatus[]) {
+  return allowed.includes(status);
+}
+
 function serialize(run: {
   id: string;
   attemptNumber: number;
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
     const run = await prisma.$transaction(async (tx) => {
       const current = await tx.heatPressRun.findFirst({ where: { id: runId, shopId } });
       if (!current) throw new Error("Heat press run not found in this shop.");
-      if ([HeatPressRunStatus.PASSED, HeatPressRunStatus.REWORK_REQUIRED].includes(current.status)) {
+      if (statusIn(current.status, [HeatPressRunStatus.PASSED, HeatPressRunStatus.REWORK_REQUIRED])) {
         throw new Error("This heat press attempt is closed. Start a rework attempt if more pressing is required.");
       }
 
@@ -90,14 +94,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
       if (parsed.data.action === "START_TIMER") {
         const mode = parsed.data.mode === "FIRST_PRESS" ? HeatPressTimerMode.FIRST_PRESS : HeatPressTimerMode.REPRESS;
         if (mode === HeatPressTimerMode.FIRST_PRESS) {
-          if (![HeatPressRunStatus.READY, HeatPressRunStatus.PAUSED].includes(current.status) || (current.timerMode && current.timerMode !== mode)) {
+          if (!statusIn(current.status, [HeatPressRunStatus.READY, HeatPressRunStatus.PAUSED]) || (current.timerMode && current.timerMode !== mode)) {
             throw new Error("The first-press timer can only start or resume before the first press is completed.");
           }
           data = { ...data, status: HeatPressRunStatus.PRESSING, timerMode: mode, timerStartedAt: now };
           eventNote = current.status === HeatPressRunStatus.PAUSED ? "First-press timer resumed." : "First-press timer started.";
         } else {
           if (current.repressSeconds <= 0) throw new Error("This material recipe does not require a repress timer.");
-          if (![HeatPressRunStatus.PEEL_COMPLETE, HeatPressRunStatus.PAUSED].includes(current.status) || (current.status === HeatPressRunStatus.PAUSED && current.timerMode !== mode)) {
+          if (!statusIn(current.status, [HeatPressRunStatus.PEEL_COMPLETE, HeatPressRunStatus.PAUSED]) || (current.status === HeatPressRunStatus.PAUSED && current.timerMode !== mode)) {
             throw new Error("Repress can start only after the peel step is complete.");
           }
           data = { ...data, status: HeatPressRunStatus.REPRESSING, timerMode: mode, timerStartedAt: now };
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
         eventType = mode === HeatPressTimerMode.REPRESS ? HeatPressEventType.REPRESS_STARTED : HeatPressEventType.TIMER_STARTED;
         eventMode = mode;
       } else if (parsed.data.action === "PAUSE_TIMER") {
-        if (![HeatPressRunStatus.PRESSING, HeatPressRunStatus.REPRESSING].includes(current.status) || !current.timerStartedAt || !current.timerMode) {
+        if (!statusIn(current.status, [HeatPressRunStatus.PRESSING, HeatPressRunStatus.REPRESSING]) || !current.timerStartedAt || !current.timerMode) {
           throw new Error("There is no running heat press timer to pause.");
         }
         data = { ...data, status: HeatPressRunStatus.PAUSED, timerStartedAt: null, timerElapsedMs: elapsedMs };
@@ -114,7 +118,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
         eventNote = "Heat press timer paused.";
         eventElapsed = elapsedMs;
       } else if (parsed.data.action === "RESET_TIMER") {
-        if (![HeatPressRunStatus.READY, HeatPressRunStatus.PRESSING, HeatPressRunStatus.PAUSED, HeatPressRunStatus.PEEL_COMPLETE, HeatPressRunStatus.REPRESSING].includes(current.status)) {
+        if (!statusIn(current.status, [HeatPressRunStatus.READY, HeatPressRunStatus.PRESSING, HeatPressRunStatus.PAUSED, HeatPressRunStatus.PEEL_COMPLETE, HeatPressRunStatus.REPRESSING])) {
           throw new Error("The current production step cannot reset a timer.");
         }
         const mode = current.timerMode ?? HeatPressTimerMode.FIRST_PRESS;
@@ -130,7 +134,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
         eventMode = mode;
         eventElapsed = 0;
       } else if (parsed.data.action === "COMPLETE_FIRST_PRESS") {
-        if (![HeatPressRunStatus.PRESSING, HeatPressRunStatus.PAUSED].includes(current.status) || current.timerMode !== HeatPressTimerMode.FIRST_PRESS) {
+        if (!statusIn(current.status, [HeatPressRunStatus.PRESSING, HeatPressRunStatus.PAUSED]) || current.timerMode !== HeatPressTimerMode.FIRST_PRESS) {
           throw new Error("Start the first-press timer before completing the first press.");
         }
         data = {
@@ -164,7 +168,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
         eventNote = "Repress timer started.";
         eventMode = HeatPressTimerMode.REPRESS;
       } else if (parsed.data.action === "COMPLETE_REPRESS") {
-        if (![HeatPressRunStatus.REPRESSING, HeatPressRunStatus.PAUSED].includes(current.status) || current.timerMode !== HeatPressTimerMode.REPRESS) {
+        if (!statusIn(current.status, [HeatPressRunStatus.REPRESSING, HeatPressRunStatus.PAUSED]) || current.timerMode !== HeatPressTimerMode.REPRESS) {
           throw new Error("Start the repress timer before completing the repress.");
         }
         data = {
