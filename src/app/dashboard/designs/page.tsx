@@ -1,4 +1,4 @@
-import { Download, Layers3, Palette, ShieldCheck, Usb } from "lucide-react";
+import { Download, Layers3, Palette, ShieldCheck, Shirt, Usb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FeedbackState } from "@/components/ui/feedback-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -30,14 +30,14 @@ export default async function DesignsPage() {
       <PageHeader
         eyebrow="Printing and production"
         title="Design Studio"
-        description="Create layered production artwork in exact millimetres, preserve immutable shop versions, and route each machine honestly through system printing, RIP/vendor file export, or direct serial HPGL cutting."
-        actions={<><a href="/dashboard/designs/production" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--shop-primary)] px-3 text-sm font-semibold text-white"><Usb size={16} /> Cutter operations</a><a href="/dashboard/designs/materials" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Layers3 size={16} /> Materials & press recipes</a><a href="/api/guides/design-studio" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Download size={16} /> Download quick guide</a><Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge></>}
+        description="Create layered production artwork in exact millimetres, preserve immutable shop versions, then use Guided production to attach the exact garment, size, placement and material before the physical cutter workflow."
+        actions={<><a href="/dashboard/designs/workflow" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--shop-primary)] px-3 text-sm font-semibold text-white"><Shirt size={16} /> Guided production</a><a href="/dashboard/designs/production" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Usb size={16} /> Cutter operations</a><a href="/dashboard/designs/materials" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Layers3 size={16} /> Materials & press recipes</a><a href="/api/guides/design-studio" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--shop-primary)] bg-white px-3 text-sm font-semibold text-[var(--shop-primary)]"><Download size={16} /> Quick guide</a><Badge tone="blue"><ShieldCheck size={14} /> Shop-scoped production workflow</Badge></>}
       />
 
       <FeedbackState
         state="info"
-        title="Universal workflow coverage without unsafe protocol claims"
-        description="Installed printers use the computer print dialog; RIP-managed printers receive full-colour SVG; SVG, DXF and PLT files open in vendor software; compatible HPGL cutters receive only validated paths through a user-approved serial port."
+        title="Artwork stays precise; physical production becomes guided"
+        description="Design Studio remains the exact millimetre artwork editor. After saving, Guided production requires explicit garment, size, placement and material choices, checks fit and roll width, freezes the reviewed recipe, then hands the job to the existing controlled cutter queue."
       />
 
       <div className="mobile-design-studio">
@@ -71,6 +71,7 @@ export default async function DesignsPage() {
                 <p className="break-words text-slate-500">{job.customer?.name ?? "No customer"} - {job.machineProfile ?? "Generic SVG cutter"}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <a href={`/dashboard/designs/workflow?design=${encodeURIComponent(job.id)}`} className="inline-flex min-h-10 items-center rounded-xl border border-[#ded8cd] bg-white px-3 font-semibold">Prepare production</a>
                 <Badge>{titleCase(job.status)}</Badge>
                 <span className="text-slate-500">{shortDate(job.updatedAt)}</span>
               </div>
