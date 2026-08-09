@@ -78,6 +78,17 @@ model ProductionInventoryMovement {
   @@index([referenceType, referenceId])
 }
 
+model ProductionPurchaseLink {
+  id                        String   @id @default(cuid())
+  shopId                    String
+  supplierOrderItemId       String
+  productionInventoryItemId String
+  createdAt                 DateTime @default(now())
+
+  @@unique([shopId, supplierOrderItemId])
+  @@index([shopId, productionInventoryItemId])
+}
+
 model SupplierGoodsReceipt {
   id              String   @id @default(cuid())
   shopId          String
@@ -95,17 +106,17 @@ model SupplierGoodsReceipt {
 }
 
 model SupplierCostRecord {
-  id                      String   @id @default(cuid())
-  shopId                  String
-  supplierId              String
-  supplierOrderId         String?
-  supplierOrderItemId     String?
+  id                        String   @id @default(cuid())
+  shopId                    String
+  supplierId                String
+  supplierOrderId           String?
+  supplierOrderItemId       String?
   productionInventoryItemId String?
-  productVariantId        String?
-  description             String
-  quantity                Decimal  @db.Decimal(14, 3)
-  unitCost                Decimal  @db.Decimal(14, 4)
-  recordedAt              DateTime @default(now())
+  productVariantId          String?
+  description               String
+  quantity                  Decimal  @db.Decimal(14, 3)
+  unitCost                  Decimal  @db.Decimal(14, 4)
+  recordedAt                DateTime @default(now())
 
   @@index([shopId, supplierId, recordedAt])
   @@index([shopId, productionInventoryItemId, recordedAt])
@@ -146,31 +157,31 @@ model SupplierStockReturn {
 }
 
 model ProductionCostSnapshot {
-  id                        String   @id @default(cuid())
-  shopId                    String
-  designProductionBriefId   String
-  designJobId               String
-  orderId                   String?
-  garmentInventoryItemId    String?
-  materialInventoryItemId   String?
-  garmentCost               Decimal  @default(0) @db.Decimal(14, 2)
-  materialUsedMetres        Decimal  @default(0) @db.Decimal(14, 3)
-  materialWasteMetres       Decimal  @default(0) @db.Decimal(14, 3)
-  materialCost              Decimal  @default(0) @db.Decimal(14, 2)
-  wasteCost                 Decimal  @default(0) @db.Decimal(14, 2)
-  labourCost                Decimal  @default(0) @db.Decimal(14, 2)
-  designCharge              Decimal  @default(0) @db.Decimal(14, 2)
-  pressingCharge            Decimal  @default(0) @db.Decimal(14, 2)
-  additionalServicesCost    Decimal  @default(0) @db.Decimal(14, 2)
-  totalCost                 Decimal  @default(0) @db.Decimal(14, 2)
-  revenue                   Decimal  @default(0) @db.Decimal(14, 2)
-  profit                    Decimal  @default(0) @db.Decimal(14, 2)
-  marginPercent             Decimal  @default(0) @db.Decimal(7, 2)
-  inventoryPostedAt         DateTime?
-  createdById               String
-  updatedById               String
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  shopId                  String
+  designProductionBriefId String
+  designJobId             String
+  orderId                 String?
+  garmentInventoryItemId  String?
+  materialInventoryItemId String?
+  garmentCost             Decimal  @default(0) @db.Decimal(14, 2)
+  materialUsedMetres      Decimal  @default(0) @db.Decimal(14, 3)
+  materialWasteMetres     Decimal  @default(0) @db.Decimal(14, 3)
+  materialCost            Decimal  @default(0) @db.Decimal(14, 2)
+  wasteCost               Decimal  @default(0) @db.Decimal(14, 2)
+  labourCost              Decimal  @default(0) @db.Decimal(14, 2)
+  designCharge            Decimal  @default(0) @db.Decimal(14, 2)
+  pressingCharge          Decimal  @default(0) @db.Decimal(14, 2)
+  additionalServicesCost  Decimal  @default(0) @db.Decimal(14, 2)
+  totalCost               Decimal  @default(0) @db.Decimal(14, 2)
+  revenue                 Decimal  @default(0) @db.Decimal(14, 2)
+  profit                  Decimal  @default(0) @db.Decimal(14, 2)
+  marginPercent           Decimal  @default(0) @db.Decimal(7, 2)
+  inventoryPostedAt       DateTime?
+  createdById             String
+  updatedById             String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   @@unique([shopId, designProductionBriefId])
   @@index([shopId, designJobId])
