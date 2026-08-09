@@ -13,6 +13,11 @@ const inputSchema = z.object({
   designProductionBriefId: z.string().min(1).max(120),
 });
 
+function writableSnapshot(value: Prisma.JsonValue, label: string): Prisma.InputJsonValue {
+  if (value === null) throw new Error(`${label} snapshot is unavailable.`);
+  return value as Prisma.InputJsonValue;
+}
+
 function serializeRun(run: {
   id: string;
   designProductionBriefId: string;
@@ -76,6 +81,9 @@ export async function POST(request: NextRequest) {
   if (!brief) return NextResponse.json({ error: "The reviewed production brief is unavailable in this shop." }, { status: 404 });
 
   const recipe = heatPressRecipeFromBrief(brief);
+  const materialSnapshot = writableSnapshot(brief.materialSnapshot, "Material");
+  const garmentSnapshot = writableSnapshot(brief.garmentSnapshot, "Garment");
+  const placementSnapshot = writableSnapshot(brief.placementSnapshot, "Placement");
   const run = await prisma.$transaction(async (tx) => {
     const latest = await tx.heatPressRun.findFirst({
       where: { shopId, designProductionBriefId: brief.id },
@@ -89,9 +97,9 @@ export async function POST(request: NextRequest) {
         designProductionBriefId: brief.id,
         attemptNumber: (latest?.attemptNumber ?? 0) + 1,
         status: HeatPressRunStatus.READY,
-        materialSnapshot: brief.materialSnapshot,
-        garmentSnapshot: brief.garmentSnapshot,
-        placementSnapshot: brief.placementSnapshot,
+        materialSnapshot,
+        garmentSnapshot,
+        placementSnapshot,
         pressTemperatureC: recipe.pressTemperatureC,
         pressDurationSeconds: recipe.pressDurationSeconds,
         pressure: recipe.pressure,
