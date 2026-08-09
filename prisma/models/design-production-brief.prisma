@@ -1,0 +1,35 @@
+enum DesignProductionBriefStatus {
+  DRAFT
+  REVIEWED
+}
+
+model DesignProductionBrief {
+  id                String                      @id @default(cuid())
+  shopId            String
+  designJobId       String
+  garmentId         String
+  garmentSize       String
+  placementId       String
+  materialId        String
+  garmentSnapshot   Json
+  placementSnapshot Json
+  materialSnapshot  Json
+  cutSheetWidthMm   Float
+  cutSheetHeightMm  Float
+  artworkWidthMm    Float
+  artworkHeightMm   Float
+  placementWidthMm  Float
+  placementHeightMm Float
+  materialWidthMm   Float
+  mirror            Boolean
+  status            DesignProductionBriefStatus @default(DRAFT)
+  reviewedAt        DateTime?
+  reviewedById      String?
+  createdById       String
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  @@unique([shopId, designJobId])
+  @@index([shopId, status, updatedAt])
+  @@index([designJobId])
+}
