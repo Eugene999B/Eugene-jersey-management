@@ -1,4 +1,4 @@
-import { ArrowLeft, ShieldCheck, Usb } from "lucide-react";
+import { ArrowLeft, Layers3, ShieldCheck, Usb } from "lucide-react";
 import { CutterOperationsConsole } from "@/components/design/cutter-operations-console";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/auth";
 import { ensureShopMachineProfiles } from "@/lib/design-machine-profile-server";
 import { prisma } from "@/lib/db";
 import { listMachineProductionJobs } from "@/lib/machine-production-jobs";
+import { readProductionLibrary } from "@/lib/production-specs";
 import { permissions } from "@/lib/rbac";
 import { getTenantContext } from "@/lib/tenant";
 
@@ -27,6 +28,8 @@ export default async function CutterProductionPage() {
     listMachineProductionJobs(shop.id, 60),
   ]);
 
+  const library = readProductionLibrary(shop.productionSetup);
+  const activeMaterials = library.materials.filter((material) => material.isActive);
   const savedDesigns = designs.flatMap((design) => {
     if (!design.canvasJson || typeof design.canvasJson !== "object" || Array.isArray(design.canvasJson)) return [];
     return [{
@@ -44,7 +47,7 @@ export default async function CutterProductionPage() {
         eyebrow="Design Studio production"
         title="Cutter operations"
         description="Turn saved artwork into one controlled HPGL queue job, verify the photographed roll-fed cutter setup, connect the exact serial device, and retain every send attempt for recovery and audit."
-        actions={<><LinkButton href="/dashboard/designs" variant="outline"><ArrowLeft size={16} /> Back to studio</LinkButton><Badge tone="blue"><ShieldCheck size={14} /> Saved artwork only</Badge></>}
+        actions={<><LinkButton href="/dashboard/designs" variant="outline"><ArrowLeft size={16} /> Back to studio</LinkButton><LinkButton href="/dashboard/designs/materials" variant="outline"><Layers3 size={16} /> Materials & press recipes</LinkButton><Badge tone="blue"><ShieldCheck size={14} /> Saved artwork only</Badge></>}
       />
 
       <FeedbackState
@@ -52,6 +55,15 @@ export default async function CutterProductionPage() {
         title="Direct machine communication with human safety gates"
         description="Compatible HPGL cutters connect directly through Chrome or Edge Web Serial. The operator must load and align material, set blade and origin, run the cutter-panel test cut, prepare a durable job, and confirm the final transmission. Printers and non-HPGL devices continue through their honest system, RIP or vendor-software routes."
       />
+
+      {!activeMaterials.length ? (
+        <FeedbackState state="warning" title="No verified material recipe is saved yet" description="Cutter operations can still use the existing manual material selector, but owners should record the actual vinyl roll width, blade/force/speed and heat-press recipe before relying on repeat production." />
+      ) : (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <p className="font-bold">{activeMaterials.length} verified material recipe{activeMaterials.length === 1 ? "" : "s"} available</p>
+          <p className="mt-1 leading-6">Use Materials & press recipes to confirm the exact roll, cutter settings, temperature, time, pressure and peel method before starting a physical job.</p>
+        </div>
+      )}
 
       {!savedDesigns.length || !directProfiles.length ? (
         <div className="grid gap-4 lg:grid-cols-2">
