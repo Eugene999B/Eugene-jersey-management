@@ -84,8 +84,11 @@ test("owner configures real production material, garment, placement and heat pre
   await placement.getByLabel("Default height (mm)").fill("100");
   await placement.getByLabel("Size-specific dimensions").fill("S: 90x90\nM: 100x100\nL: 110x110");
   await placement.getByRole("button", { name: "Add placement template" }).click();
-  await expect(page.getByRole("heading", { name: "Phase 11 left chest" })).toBeVisible();
-  await expect(page.getByText(/S: 90×90.*M: 100×100.*L: 110×110/)).toBeVisible();
+  const savedPlacement = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Phase 11 left chest" }) });
+  await expect(savedPlacement.getByRole("heading", { name: "Phase 11 left chest" })).toBeVisible();
+  await expect(savedPlacement.getByText(/S: 90×90/)).toBeVisible();
+  await expect(savedPlacement.getByText(/M: 100×100/)).toBeVisible();
+  await expect(savedPlacement.getByText(/L: 110×110/)).toBeVisible();
 
   await page.getByRole("link", { name: "Cutter operations" }).first().click();
   await expect(page.getByRole("heading", { name: "Cutter operations" })).toBeVisible();
