@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
@@ -47,7 +48,7 @@ async function saveLibrary(input: {
   library: ReturnType<typeof readProductionLibrary>;
   action: string;
   entityId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonValue;
 }) {
   await prisma.shop.update({
     where: { id: input.shopId },
