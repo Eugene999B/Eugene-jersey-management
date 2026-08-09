@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
 import process from "node:process";
 
+const prismaReviewDeadline = new Date("2026-09-04T00:00:00.000Z");
+const nanoidReviewDeadline = new Date("2026-08-16T00:00:00.000Z");
+const fastUriAdvisorySource = 1130719;
+const fastUriAdvisoryUrl = "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7";
+const nanoidAdvisorySource = 1138813;
+const nanoidAdvisoryUrl = "https://github.com/advisories/GHSA-2v37-7h3g-55p8";
 const auditPath = process.argv[2] ?? "npm-audit.json";
-const reviewDeadline = new Date("2026-09-04T00:00:00.000Z");
-const allowedAdvisorySource = 1130719;
-const allowedAdvisoryUrl = "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7";
 
 function fail(message) {
   console.error(`Dependency security verification failed: ${message}`);
@@ -19,6 +22,12 @@ function loadJson(path) {
   }
 }
 
+function advisoryBySource(entry, source) {
+  return Array.isArray(entry?.via)
+    ? entry.via.find((item) => item && typeof item === "object" && item.source === source)
+    : null;
+}
+
 const audit = loadJson(auditPath);
 const lock = loadJson("package-lock.json");
 const vulnerabilities = audit?.vulnerabilities ?? {};
@@ -29,11 +38,7 @@ if (!blocking.length) {
   process.exit(0);
 }
 
-if (Date.now() >= reviewDeadline.getTime()) {
-  fail(`the temporary Prisma streams-local exception expired on ${reviewDeadline.toISOString().slice(0, 10)}. Re-check for a published fast-uri or Prisma fix.`);
-}
-
-const allowedNames = new Set(["fast-uri", "ajv"]);
+const allowedNames = new Set(["fast-uri", "ajv", "nanoid"]);
 const unexpected = blocking.filter((entry) => !allowedNames.has(entry.name));
 if (unexpected.length) {
   fail(`unexpected high/critical advisories: ${unexpected.map((entry) => `${entry.name} (${entry.severity})`).join(", ")}`);
@@ -41,17 +46,17 @@ if (unexpected.length) {
 
 const fastUri = vulnerabilities["fast-uri"];
 const ajv = vulnerabilities.ajv;
-if (!fastUri || !ajv || blocking.length !== 2) {
-  fail("the reported high-severity set no longer matches the reviewed fast-uri/Ajv chain.");
+if (!fastUri || !ajv) {
+  fail("the reviewed Prisma fast-uri/Ajv advisory chain is no longer reported as expected.");
+}
+if (Date.now() >= prismaReviewDeadline.getTime()) {
+  fail(`the temporary Prisma streams-local exception expired on ${prismaReviewDeadline.toISOString().slice(0, 10)}. Re-check for a published fast-uri or Prisma fix.`);
 }
 
-const advisory = Array.isArray(fastUri.via)
-  ? fastUri.via.find((entry) => entry && typeof entry === "object" && entry.source === allowedAdvisorySource)
-  : null;
-if (!advisory || advisory.url !== allowedAdvisoryUrl || advisory.severity !== "high") {
+const fastUriAdvisory = advisoryBySource(fastUri, fastUriAdvisorySource);
+if (!fastUriAdvisory || fastUriAdvisory.url !== fastUriAdvisoryUrl || fastUriAdvisory.severity !== "high") {
   fail("fast-uri advisory identity or severity changed.");
 }
-
 if (JSON.stringify(fastUri.nodes) !== JSON.stringify(["node_modules/fast-uri"])) {
   fail(`fast-uri now appears at an unreviewed installation path: ${JSON.stringify(fastUri.nodes)}`);
 }
@@ -73,11 +78,40 @@ if (installedFastUri?.version !== "4.1.1") {
   fail(`expected the newest published reviewed fast-uri release 4.1.1, found ${installedFastUri?.version ?? "missing"}.`);
 }
 
+const nanoid = vulnerabilities.nanoid;
+if (nanoid) {
+  if (Date.now() >= nanoidReviewDeadline.getTime()) {
+    fail(`the temporary PostCSS Nano ID exception expired on ${nanoidReviewDeadline.toISOString().slice(0, 10)}. Re-check for Nano ID 3.3.17+ or an updated PostCSS/Next dependency chain.`);
+  }
+  const nanoidAdvisory = advisoryBySource(nanoid, nanoidAdvisorySource);
+  if (!nanoidAdvisory || nanoidAdvisory.url !== nanoidAdvisoryUrl || nanoidAdvisory.severity !== "high") {
+    fail("Nano ID advisory identity or severity changed.");
+  }
+  if (JSON.stringify(nanoid.nodes) !== JSON.stringify(["node_modules/postcss/node_modules/nanoid"])) {
+    fail(`Nano ID now appears at an unreviewed installation path: ${JSON.stringify(nanoid.nodes)}`);
+  }
+  const installedNanoid = packages["node_modules/postcss/node_modules/nanoid"];
+  if (installedNanoid?.version !== "3.3.16") {
+    fail(`expected the newest published reviewed Nano ID 3.x release 3.3.16, found ${installedNanoid?.version ?? "missing"}.`);
+  }
+}
+
+const expectedBlockingCount = nanoid ? 3 : 2;
+if (blocking.length !== expectedBlockingCount) {
+  fail(`the reviewed high-severity set changed unexpectedly: ${blocking.map((entry) => entry.name).join(", ")}`);
+}
+
 console.warn([
-  "TEMPORARY SECURITY EXCEPTION ACCEPTED",
-  `- advisory: ${allowedAdvisoryUrl}`,
+  "TEMPORARY SECURITY EXCEPTIONS ACCEPTED",
+  `- Prisma advisory: ${fastUriAdvisoryUrl}`,
   "- affected path: devOptional @prisma/streams-local -> Ajv -> fast-uri",
-  "- installed fast-uri: 4.1.1 (newer fixed release is not yet published)",
-  `- mandatory review deadline: ${reviewDeadline.toISOString().slice(0, 10)}`,
+  "- installed fast-uri: 4.1.1 (fixed release not yet published)",
+  `- Prisma mandatory review deadline: ${prismaReviewDeadline.toISOString().slice(0, 10)}`,
+  ...(nanoid ? [
+    `- Nano ID advisory: ${nanoidAdvisoryUrl}`,
+    "- affected path: Next/PostCSS -> nested Nano ID 3.x only",
+    "- installed nested Nano ID: 3.3.16 (advisory requires 3.3.17+, which is not yet published)",
+    `- Nano ID mandatory review deadline: ${nanoidReviewDeadline.toISOString().slice(0, 10)}`,
+  ] : []),
   "- every other high/critical advisory remains blocking",
 ].join("\n"));
