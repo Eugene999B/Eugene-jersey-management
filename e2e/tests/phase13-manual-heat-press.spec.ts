@@ -142,7 +142,7 @@ test("operator executes a reviewed manual heat press job with persistent timer, 
   }, { title: designName, garmentId, placementId, materialId });
 
   await page.goto(`/dashboard/designs/heat-press?brief=${encodeURIComponent(fixture.briefId)}`);
-  await expect(page.getByRole("heading", { name: "Heat press" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Heat press", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: designName })).toBeVisible();
   await expect(page.getByText(`${garmentName} · M`)).toBeVisible();
   await expect(page.getByText("150 °C · 1s")).toBeVisible();
