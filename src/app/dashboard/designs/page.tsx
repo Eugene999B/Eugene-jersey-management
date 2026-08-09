@@ -36,8 +36,8 @@ export default async function DesignsPage() {
 
       <FeedbackState
         state="info"
-        title="Artwork stays precise; physical production becomes guided"
-        description="Design Studio remains the exact millimetre artwork editor. After saving, Guided production requires explicit garment, size, placement and material choices, checks fit and roll width, freezes the reviewed recipe, then hands the job to the existing controlled cutter queue."
+        title="Universal workflow coverage without unsafe protocol claims"
+        description="Design Studio remains the exact millimetre artwork editor. Guided production adds explicit garment, size, placement and material checks before the existing machine-specific routes. Installed printers still use the computer print dialog, RIP/vendor workflows keep their documented route, and direct serial cutting remains limited to validated compatible HPGL profiles."
       />
 
       <div className="mobile-design-studio">
