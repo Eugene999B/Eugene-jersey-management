@@ -168,7 +168,7 @@ test("operator executes a reviewed manual heat press job with persistent timer, 
   await expect(page.getByText("Repress recorded. Continue to quality inspection.", { exact: true })).toBeVisible();
 
   const onePixelPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
-  await page.locator('input[type="file"][accept="image/jpeg,image/png,image/webp"]').setInputFiles({ name: "finished.png", mimeType: "image/png", buffer: onePixelPng });
+  await page.getByLabel("Attach finished photo", { exact: true }).setInputFiles({ name: "finished.png", mimeType: "image/png", buffer: onePixelPng });
   await expect(page.getByText("Finished-product photo attached to this heat press attempt.", { exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: /Finished garment evidence uploaded/ })).toBeVisible();
 
