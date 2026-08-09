@@ -1,0 +1,179 @@
+enum ProductionInventoryKind {
+  GARMENT
+  VINYL
+  TRANSFER_SHEET
+  PACKAGING
+  CONSUMABLE
+  FINISHED_GOOD
+}
+
+enum ProductionInventoryUnit {
+  PIECE
+  METRE
+  SHEET
+  PACK
+}
+
+enum ProductionInventoryMovementType {
+  OPENING_BALANCE
+  PURCHASE_RECEIPT
+  PRODUCTION_USE
+  WASTE
+  DAMAGE
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  SUPPLIER_RETURN
+  FINISHED_GOOD_IN
+}
+
+enum SupplierAccountEntryType {
+  PURCHASE
+  PAYMENT
+  RETURN_CREDIT
+  ADJUSTMENT
+}
+
+model ProductionInventoryItem {
+  id               String                  @id @default(cuid())
+  shopId           String
+  inventoryKey     String
+  kind             ProductionInventoryKind
+  name             String
+  colour           String?
+  size             String?
+  unit             ProductionInventoryUnit
+  sourceResourceId String?
+  productVariantId String?
+  quantity         Decimal                 @default(0) @db.Decimal(14, 3)
+  unitCost         Decimal                 @default(0) @db.Decimal(14, 4)
+  lowStockLevel    Decimal                 @default(0) @db.Decimal(14, 3)
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@unique([shopId, inventoryKey])
+  @@index([shopId, kind, isActive])
+  @@index([shopId, sourceResourceId])
+  @@index([shopId, productVariantId])
+}
+
+model ProductionInventoryMovement {
+  id               String                          @id @default(cuid())
+  shopId           String
+  inventoryItemId  String
+  type             ProductionInventoryMovementType
+  quantityDelta    Decimal                         @db.Decimal(14, 3)
+  balanceAfter     Decimal                         @db.Decimal(14, 3)
+  unitCostSnapshot Decimal                         @default(0) @db.Decimal(14, 4)
+  referenceType    String?
+  referenceId      String?
+  note             String?
+  idempotencyKey   String?
+  createdById      String
+  createdAt        DateTime                        @default(now())
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, inventoryItemId, createdAt])
+  @@index([shopId, type, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model SupplierGoodsReceipt {
+  id              String   @id @default(cuid())
+  shopId          String
+  supplierId      String
+  supplierOrderId String
+  receiptNumber   String
+  receivedById    String
+  totalAmount     Decimal  @default(0) @db.Decimal(14, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@unique([shopId, receiptNumber])
+  @@index([shopId, supplierId, createdAt])
+  @@index([supplierOrderId, createdAt])
+}
+
+model SupplierCostRecord {
+  id                      String   @id @default(cuid())
+  shopId                  String
+  supplierId              String
+  supplierOrderId         String?
+  supplierOrderItemId     String?
+  productionInventoryItemId String?
+  productVariantId        String?
+  description             String
+  quantity                Decimal  @db.Decimal(14, 3)
+  unitCost                Decimal  @db.Decimal(14, 4)
+  recordedAt              DateTime @default(now())
+
+  @@index([shopId, supplierId, recordedAt])
+  @@index([shopId, productionInventoryItemId, recordedAt])
+  @@index([shopId, productVariantId, recordedAt])
+}
+
+model SupplierAccountEntry {
+  id              String                   @id @default(cuid())
+  shopId          String
+  supplierId      String
+  type            SupplierAccountEntryType
+  amount          Decimal                  @db.Decimal(14, 2)
+  supplierOrderId String?
+  reference       String?
+  note            String?
+  createdById     String
+  createdAt       DateTime                 @default(now())
+
+  @@index([shopId, supplierId, createdAt])
+  @@index([shopId, type, createdAt])
+  @@index([supplierOrderId])
+}
+
+model SupplierStockReturn {
+  id                        String   @id @default(cuid())
+  shopId                    String
+  supplierId                String
+  productionInventoryItemId String
+  quantity                  Decimal  @db.Decimal(14, 3)
+  unitCost                  Decimal  @db.Decimal(14, 4)
+  reason                    String
+  reference                 String?
+  createdById               String
+  createdAt                 DateTime @default(now())
+
+  @@index([shopId, supplierId, createdAt])
+  @@index([shopId, productionInventoryItemId, createdAt])
+}
+
+model ProductionCostSnapshot {
+  id                        String   @id @default(cuid())
+  shopId                    String
+  designProductionBriefId   String
+  designJobId               String
+  orderId                   String?
+  garmentInventoryItemId    String?
+  materialInventoryItemId   String?
+  garmentCost               Decimal  @default(0) @db.Decimal(14, 2)
+  materialUsedMetres        Decimal  @default(0) @db.Decimal(14, 3)
+  materialWasteMetres       Decimal  @default(0) @db.Decimal(14, 3)
+  materialCost              Decimal  @default(0) @db.Decimal(14, 2)
+  wasteCost                 Decimal  @default(0) @db.Decimal(14, 2)
+  labourCost                Decimal  @default(0) @db.Decimal(14, 2)
+  designCharge              Decimal  @default(0) @db.Decimal(14, 2)
+  pressingCharge            Decimal  @default(0) @db.Decimal(14, 2)
+  additionalServicesCost    Decimal  @default(0) @db.Decimal(14, 2)
+  totalCost                 Decimal  @default(0) @db.Decimal(14, 2)
+  revenue                   Decimal  @default(0) @db.Decimal(14, 2)
+  profit                    Decimal  @default(0) @db.Decimal(14, 2)
+  marginPercent             Decimal  @default(0) @db.Decimal(7, 2)
+  inventoryPostedAt         DateTime?
+  createdById               String
+  updatedById               String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@unique([shopId, designProductionBriefId])
+  @@index([shopId, designJobId])
+  @@index([shopId, orderId])
+  @@index([shopId, inventoryPostedAt])
+}
