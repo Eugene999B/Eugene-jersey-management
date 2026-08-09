@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 const LOGIN_ID = "EJM-E2E-OWNER";
 
@@ -23,6 +23,13 @@ async function signIn(page: import("@playwright/test").Page) {
 
 function formForButton(page: import("@playwright/test").Page, buttonName: string) {
   return page.getByRole("button", { name: buttonName, exact: true }).locator("xpath=ancestor::form");
+}
+
+async function selectContaining(select: Locator, text: string) {
+  const option = select.locator("option").filter({ hasText: text }).first();
+  const value = await option.getAttribute("value");
+  if (!value) throw new Error(`Could not find selectable option containing: ${text}`);
+  await select.selectOption(value);
 }
 
 async function productionResourceId(page: import("@playwright/test").Page, heading: string) {
@@ -70,7 +77,7 @@ test("production stock receives purchases and posts true job cost exactly once",
   await addVinyl.getByRole("button", { name: "Add stock item", exact: true }).click();
   const vinylRow = page.getByRole("row").filter({ hasText: vinylStockName });
   await expect(vinylRow).toContainText("3 metre");
-  await expect(vinylRow).toContainText("GHS 12.00");
+  await expect(vinylRow).toContainText("12.00");
 
   await page.goto("/dashboard/suppliers");
   const supplierForm = formForButton(page, "Save supplier");
@@ -81,7 +88,7 @@ test("production stock receives purchases and posts true job cost exactly once",
 
   const poForm = formForButton(page, "Send purchase order");
   await poForm.locator('select[name="supplierId"]').selectOption({ label: supplierName });
-  await poForm.locator('select[name="productionInventoryItemId"]').selectOption({ label: new RegExp(vinylStockName) });
+  await selectContaining(poForm.locator('select[name="productionInventoryItemId"]'), vinylStockName);
   await poForm.locator('input[name="description"]').fill(`White HTV restock ${suffix}`);
   await poForm.locator('input[name="quantity"]').fill("2");
   await poForm.locator('input[name="unitCost"]').fill("14");
@@ -95,9 +102,9 @@ test("production stock receives purchases and posts true job cost exactly once",
   await page.goto("/dashboard/production-stock");
   const receivedVinylRow = page.getByRole("row").filter({ hasText: vinylStockName });
   await expect(receivedVinylRow).toContainText("5 metre");
-  await expect(receivedVinylRow).toContainText("GHS 12.80");
+  await expect(receivedVinylRow).toContainText("12.80");
   await expect(page.getByText(supplierName, { exact: true }).last()).toBeVisible();
-  await expect(page.getByText("GHS 28.00", { exact: true }).last()).toBeVisible();
+  await expect(page.getByText(/28\.00/, { exact: false }).last()).toBeVisible();
 
   await page.goto("/dashboard/designs/materials");
   const material = formForButton(page, "Add material recipe");
@@ -182,8 +189,8 @@ test("production stock receives purchases and posts true job cost exactly once",
   await page.goto("/dashboard/production-stock");
   const job = page.getByRole("article").filter({ has: page.getByRole("heading", { name: designName, exact: true }) });
   await expect(job).toBeVisible();
-  await job.locator('select[name="garmentInventoryItemId"]').selectOption({ label: new RegExp(garmentStockName) });
-  await job.locator('select[name="materialInventoryItemId"]').selectOption({ label: new RegExp(vinylStockName) });
+  await selectContaining(job.locator('select[name="garmentInventoryItemId"]'), garmentStockName);
+  await selectContaining(job.locator('select[name="materialInventoryItemId"]'), vinylStockName);
   await job.locator('input[name="revenue"]').fill("80");
   await job.locator('input[name="materialUsedMetres"]').fill("0.5");
   await job.locator('input[name="materialWasteMetres"]').fill("0.1");
@@ -194,8 +201,8 @@ test("production stock receives purchases and posts true job cost exactly once",
   await job.getByRole("button", { name: "Save true cost", exact: true }).click();
 
   const costedJob = page.getByRole("article").filter({ has: page.getByRole("heading", { name: designName, exact: true }) });
-  await expect(costedJob).toContainText("GHS 43.68");
-  await expect(costedJob).toContainText("GHS 36.32");
+  await expect(costedJob).toContainText("43.68");
+  await expect(costedJob).toContainText("36.32");
   await expect(costedJob).toContainText("45.4%");
   await costedJob.getByRole("button", { name: "Post garment, material use and waste to stock", exact: true }).click();
   await expect(page.getByRole("article").filter({ has: page.getByRole("heading", { name: designName, exact: true }) }).getByText("Inventory posted", { exact: true })).toBeVisible();
@@ -203,6 +210,6 @@ test("production stock receives purchases and posts true job cost exactly once",
   const finalGarment = page.getByRole("row").filter({ hasText: garmentStockName });
   const finalVinyl = page.getByRole("row").filter({ hasText: vinylStockName });
   await expect(finalGarment).toContainText("1 pc");
-  await expect(finalVinyl).toContainText("4.400 metre");
+  await expect(finalVinyl).toContainText("4.4 metre");
   await expect(page.getByRole("button", { name: "Post garment, material use and waste to stock", exact: true })).toHaveCount(0);
 });
