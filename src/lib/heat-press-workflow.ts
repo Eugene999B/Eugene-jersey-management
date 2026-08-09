@@ -130,4 +130,21 @@ export function heatPressPhotoMimeAllowed(mimeType: string) {
   return ["image/jpeg", "image/png", "image/webp"].includes(mimeType.toLowerCase());
 }
 
+function startsWithBytes(bytes: Uint8Array, signature: readonly number[]) {
+  if (bytes.length < signature.length) return false;
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+export function heatPressPhotoBytesMatchMime(bytes: Uint8Array, mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+  if (normalized === "image/jpeg") return startsWithBytes(bytes, [0xff, 0xd8, 0xff]);
+  if (normalized === "image/png") return startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (normalized === "image/webp") {
+    return startsWithBytes(bytes, [0x52, 0x49, 0x46, 0x46])
+      && bytes.length >= 12
+      && startsWithBytes(bytes.slice(8), [0x57, 0x45, 0x42, 0x50]);
+  }
+  return false;
+}
+
 export const MAX_HEAT_PRESS_EVIDENCE_BYTES = 5 * 1024 * 1024;
