@@ -165,6 +165,7 @@ model ProductionCostSnapshot {
   garmentInventoryItemId  String?
   materialInventoryItemId String?
   garmentCost             Decimal  @default(0) @db.Decimal(14, 2)
+  materialUsedAreaMm2     Decimal  @default(0) @db.Decimal(16, 2)
   materialUsedMetres      Decimal  @default(0) @db.Decimal(14, 3)
   materialWasteMetres     Decimal  @default(0) @db.Decimal(14, 3)
   materialCost            Decimal  @default(0) @db.Decimal(14, 2)
