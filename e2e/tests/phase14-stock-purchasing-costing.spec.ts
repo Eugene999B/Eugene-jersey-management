@@ -103,8 +103,9 @@ test("production stock receives purchases and posts true job cost exactly once",
   const receivedVinylRow = page.getByRole("row").filter({ hasText: vinylStockName });
   await expect(receivedVinylRow).toContainText("5 metre");
   await expect(receivedVinylRow).toContainText("12.80");
-  await expect(page.getByText(supplierName, { exact: true }).last()).toBeVisible();
-  await expect(page.getByText(/28\.00/, { exact: false }).last()).toBeVisible();
+  const supplierBalancePanel = page.getByRole("heading", { name: "Supplier balances & payments", exact: true }).locator("xpath=ancestor::section");
+  await expect(supplierBalancePanel).toContainText(supplierName);
+  await expect(supplierBalancePanel).toContainText("28.00");
 
   await page.goto("/dashboard/designs/materials");
   const material = formForButton(page, "Add material recipe");
