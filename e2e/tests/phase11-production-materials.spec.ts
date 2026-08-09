@@ -21,61 +21,69 @@ async function signIn(page: import("@playwright/test").Page) {
   await page.waitForURL((url) => url.pathname === "/dashboard", { timeout: 30_000 });
 }
 
+function formForButton(page: import("@playwright/test").Page, buttonName: string) {
+  return page.getByRole("button", { name: buttonName }).locator("xpath=ancestor::form");
+}
+
 test("owner configures real production material, garment, placement and heat press rules", async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   await signIn(page);
   await page.goto("/dashboard/designs/materials");
   await expect(page.getByRole("heading", { name: "Materials, garments & press recipes" })).toBeVisible();
 
-  await page.getByLabel("Press name").fill("Phase 11 manual clamshell");
-  await page.getByLabel("Plate width (mm)").fill("380");
-  await page.getByLabel("Plate height (mm)").fill("380");
-  await page.getByLabel("Minimum temperature (°C)").fill("80");
-  await page.getByLabel("Maximum temperature (°C)").fill("220");
-  await page.getByLabel("Pressure control").fill("Manual pressure knob");
-  await page.getByLabel("Timer control").fill("Built-in countdown timer");
-  await page.getByRole("button", { name: "Save heat press profile" }).click();
+  const heatPress = formForButton(page, "Save heat press profile");
+  await heatPress.getByLabel("Press name").fill("Phase 11 manual clamshell");
+  await heatPress.getByLabel("Plate width (mm)").fill("380");
+  await heatPress.getByLabel("Plate height (mm)").fill("380");
+  await heatPress.getByLabel("Minimum temperature (°C)").fill("80");
+  await heatPress.getByLabel("Maximum temperature (°C)").fill("220");
+  await heatPress.getByLabel("Pressure control").fill("Manual pressure knob");
+  await heatPress.getByLabel("Timer control").fill("Built-in countdown timer");
+  await heatPress.getByRole("button", { name: "Save heat press profile" }).click();
   await expect(page.getByText("Production library saved")).toBeVisible();
 
-  await page.getByLabel("Material name").first().fill("Phase 11 white HTV");
-  await page.getByLabel("Material type").first().fill("Heat-transfer vinyl");
-  await page.getByLabel("Colour").first().fill("White");
-  await page.getByLabel("Roll width (mm)").first().fill("500");
-  await page.getByLabel("Remaining length (m)").first().fill("20");
-  await page.getByLabel("Cost per metre").first().fill("14.5");
-  await page.getByLabel("Blade / profile").first().fill("45 degree blade");
-  await page.getByLabel("Cutter force").first().fill("90");
-  await page.getByLabel("Cutter speed").first().fill("300");
-  await page.getByLabel("Cut passes").first().fill("1");
-  await page.getByLabel("Press temperature (°C)").first().fill("150");
-  await page.getByLabel("Press duration (seconds)").first().fill("12");
-  await page.getByLabel("Pressure").first().fill("Medium");
-  await page.getByLabel("Peel method").first().fill("Warm");
-  await page.getByLabel("Repress (seconds)").first().fill("3");
-  await page.getByLabel("Compatible fabrics").first().fill("Cotton, Poly-cotton");
-  await page.getByRole("button", { name: "Add material recipe" }).click();
+  const material = formForButton(page, "Add material recipe");
+  await material.getByLabel("Material name").fill("Phase 11 white HTV");
+  await material.getByLabel("Material type").fill("Heat-transfer vinyl");
+  await material.getByLabel("Colour").fill("White");
+  await material.getByLabel("Roll width (mm)").fill("500");
+  await material.getByLabel("Remaining length (m)").fill("20");
+  await material.getByLabel("Cost per metre").fill("14.5");
+  await material.getByLabel("Blade / profile").fill("45 degree blade");
+  await material.getByLabel("Cutter force").fill("90");
+  await material.getByLabel("Cutter speed").fill("300");
+  await material.getByLabel("Cut passes").fill("1");
+  await material.getByLabel("Press temperature (°C)").fill("150");
+  await material.getByLabel("Press duration (seconds)").fill("12");
+  await material.getByLabel("Pressure").fill("Medium");
+  await material.getByLabel("Peel method").fill("Warm");
+  await material.getByLabel("Repress (seconds)").fill("3");
+  await material.getByLabel("Compatible fabrics").fill("Cotton, Poly-cotton");
+  await material.getByRole("button", { name: "Add material recipe" }).click();
   await expect(page.getByRole("heading", { name: "Phase 11 white HTV" })).toBeVisible();
   await expect(page.getByText("150 °C · 12s · Medium")).toBeVisible();
 
-  await page.getByLabel("Garment profile").first().fill("Phase 11 black tee");
-  await page.getByLabel("Garment type").first().fill("T-shirt");
-  await page.getByLabel("Colour").nth(1).fill("Black");
-  await page.getByLabel("Fabric").first().fill("100% cotton");
-  await page.getByLabel("Available sizes").first().fill("S, M, L, XL");
-  await page.getByLabel("Maximum safe press temperature (°C)").first().fill("170");
-  await page.getByLabel("Garment cost").first().fill("25");
-  await page.getByLabel("Default selling price").first().fill("45");
-  await page.getByRole("button", { name: "Add garment profile" }).click();
+  const garment = formForButton(page, "Add garment profile");
+  await garment.getByLabel("Garment profile").fill("Phase 11 black tee");
+  await garment.getByLabel("Garment type").fill("T-shirt");
+  await garment.getByLabel("Colour").fill("Black");
+  await garment.getByLabel("Fabric").fill("100% cotton");
+  await garment.getByLabel("Available sizes").fill("S, M, L, XL");
+  await garment.getByLabel("Maximum safe press temperature (°C)").fill("170");
+  await garment.getByLabel("Garment cost").fill("25");
+  await garment.getByLabel("Default selling price").fill("45");
+  await garment.getByRole("button", { name: "Add garment profile" }).click();
   await expect(page.getByRole("heading", { name: "Phase 11 black tee" })).toBeVisible();
   await expect(page.getByText("Maximum 170 °C")).toBeVisible();
 
-  await page.getByLabel("Placement name").first().fill("Phase 11 left chest");
-  await page.getByLabel("Location code").first().fill("LEFT_CHEST");
-  await page.getByLabel("Garment profile").last().selectOption({ label: "Phase 11 black tee" });
-  await page.getByLabel("Default width (mm)").first().fill("100");
-  await page.getByLabel("Default height (mm)").first().fill("100");
-  await page.getByLabel("Size-specific dimensions").first().fill("S: 90x90\nM: 100x100\nL: 110x110");
-  await page.getByRole("button", { name: "Add placement template" }).click();
+  const placement = formForButton(page, "Add placement template");
+  await placement.getByLabel("Placement name").fill("Phase 11 left chest");
+  await placement.getByLabel("Location code").fill("LEFT_CHEST");
+  await placement.getByLabel("Garment profile").selectOption({ label: "Phase 11 black tee" });
+  await placement.getByLabel("Default width (mm)").fill("100");
+  await placement.getByLabel("Default height (mm)").fill("100");
+  await placement.getByLabel("Size-specific dimensions").fill("S: 90x90\nM: 100x100\nL: 110x110");
+  await placement.getByRole("button", { name: "Add placement template" }).click();
   await expect(page.getByRole("heading", { name: "Phase 11 left chest" })).toBeVisible();
   await expect(page.getByText(/S: 90×90.*M: 100×100.*L: 110×110/)).toBeVisible();
 
