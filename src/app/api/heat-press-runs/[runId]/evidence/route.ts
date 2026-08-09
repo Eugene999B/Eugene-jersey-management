@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { heatPressPhotoMimeAllowed, MAX_HEAT_PRESS_EVIDENCE_BYTES } from "@/lib/heat-press-workflow";
+import {
+  heatPressPhotoBytesMatchMime,
+  heatPressPhotoMimeAllowed,
+  MAX_HEAT_PRESS_EVIDENCE_BYTES,
+} from "@/lib/heat-press-workflow";
 import { permissions } from "@/lib/rbac";
 import { isTrustedApplicationOrigin } from "@/lib/request-origin";
 
@@ -26,10 +30,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
     return NextResponse.json({ error: "Finished-product evidence must be larger than 0 bytes and no more than 5 MB." }, { status: 400 });
   }
 
+  const bytes = new Uint8Array(await photo.arrayBuffer());
+  if (!heatPressPhotoBytesMatchMime(bytes, photo.type)) {
+    return NextResponse.json({ error: "The uploaded file contents do not match the declared image type." }, { status: 400 });
+  }
+
   const existingCount = await prisma.heatPressEvidence.count({ where: { shopId, heatPressRunId: run.id } });
   if (existingCount >= 6) return NextResponse.json({ error: "This heat press attempt already has the maximum of 6 evidence photos." }, { status: 400 });
 
-  const bytes = new Uint8Array(await photo.arrayBuffer());
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const evidence = await prisma.$transaction(async (tx) => {
     const created = await tx.heatPressEvidence.create({
