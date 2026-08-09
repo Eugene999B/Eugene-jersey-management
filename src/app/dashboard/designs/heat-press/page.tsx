@@ -55,15 +55,16 @@ export default async function HeatPressPage({
   const selectedBrief = reviewedBriefs.find((brief) => brief.id === requestedBrief)
     ?? reviewedBriefs.find((brief) => brief.designJobId === requestedDesign)
     ?? reviewedBriefs[0];
+  const designIds = reviewedBriefs.map((brief) => brief.designJobId);
 
-  const [design, runs] = await Promise.all([
-    prisma.designJob.findFirst({
-      where: { id: selectedBrief.designJobId, shopId: shop.id },
+  const [reviewedDesigns, runs] = await Promise.all([
+    prisma.designJob.findMany({
+      where: { id: { in: designIds }, shopId: shop.id },
       select: {
         id: true,
         title: true,
         customer: { select: { name: true } },
-        order: { select: { id: true, receiptNumber: true } },
+        order: { select: { id: true } },
       },
     }),
     prisma.heatPressRun.findMany({
@@ -73,6 +74,8 @@ export default async function HeatPressPage({
     }),
   ]);
 
+  const designById = new Map(reviewedDesigns.map((design) => [design.id, design]));
+  const design = designById.get(selectedBrief.designJobId) ?? null;
   if (!design) {
     return <FeedbackState state="error" title="Reviewed production artwork is unavailable" description="The production brief exists, but its saved Design Studio job could not be found in this shop." />;
   }
@@ -101,10 +104,10 @@ export default async function HeatPressPage({
       />
 
       <section className="panel p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <label className="grid flex-1 gap-1.5 text-sm font-semibold text-slate-700">Reviewed production job<select className="field max-w-2xl" defaultValue={selectedBrief.id} onChange={undefined}>{reviewedBriefs.map((brief) => <option key={brief.id} value={brief.id}>{brief.id === selectedBrief.id ? `${design.title} — reviewed ${dateTime(brief.reviewedAt)}` : `Reviewed job ${brief.designJobId.slice(0, 10)}… — ${dateTime(brief.reviewedAt)}`}</option>)}</select></label>
-          <div className="flex flex-wrap gap-2">{reviewedBriefs.slice(0, 8).map((brief, index) => <a key={brief.id} href={`/dashboard/designs/heat-press?brief=${encodeURIComponent(brief.id)}`} className={`inline-flex min-h-10 items-center rounded-xl border px-3 text-sm font-semibold ${brief.id === selectedBrief.id ? "border-[var(--shop-primary)] bg-[color:var(--shop-primary)]/10 text-[var(--shop-primary)]" : "border-[#ded8cd] bg-white"}`}>{brief.id === selectedBrief.id ? "Current" : `Job ${index + 1}`}</a>)}</div>
-        </div>
+        <form action="/dashboard/designs/heat-press" method="get" className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <label className="grid flex-1 gap-1.5 text-sm font-semibold text-slate-700">Reviewed production job<select className="field max-w-2xl" name="brief" defaultValue={selectedBrief.id}>{reviewedBriefs.map((brief) => { const optionDesign = designById.get(brief.designJobId); return <option key={brief.id} value={brief.id}>{optionDesign?.title ?? `Design ${brief.designJobId.slice(0, 10)}…`}{optionDesign?.customer?.name ? ` — ${optionDesign.customer.name}` : ""} — reviewed {dateTime(brief.reviewedAt)}</option>; })}</select></label>
+          <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--shop-primary)] px-4 text-sm font-semibold text-white">Open press job</button>
+        </form>
       </section>
 
       <HeatPressWorkflowConsole
