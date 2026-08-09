@@ -74,10 +74,27 @@ export async function applyProductionInventoryMovement(
 ) {
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Inventory movement quantity must be greater than zero.");
   if (input.idempotencyKey) {
-    const existing = await tx.productionInventoryMovement.findUnique({
-      where: { shopId_idempotencyKey: { shopId: input.shopId, idempotencyKey: input.idempotencyKey } },
+    const existing = await tx.productionInventoryMovement.findFirst({
+      where: { shopId: input.shopId, idempotencyKey: input.idempotencyKey },
     });
     if (existing) return existing;
+  }
+
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id"
+    FROM "ProductionInventoryItem"
+    WHERE "id" = ${input.inventoryItemId}
+      AND "shopId" = ${input.shopId}
+      AND "isActive" = true
+    FOR UPDATE
+  `);
+  if (!locked.length) throw new Error("Production inventory item was not found in this shop.");
+
+  if (input.idempotencyKey) {
+    const existingAfterLock = await tx.productionInventoryMovement.findFirst({
+      where: { shopId: input.shopId, idempotencyKey: input.idempotencyKey },
+    });
+    if (existingAfterLock) return existingAfterLock;
   }
 
   const item = await tx.productionInventoryItem.findFirst({ where: { id: input.inventoryItemId, shopId: input.shopId, isActive: true } });
