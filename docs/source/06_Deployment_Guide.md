@@ -105,12 +105,15 @@ After an exact candidate commit is deployed to Railway staging, run the GitHub w
 
 **Verify Railway Staging Release**
 
-Provide the Railway staging HTTPS URL. The GitHub `staging` environment must contain:
+Configure a protected GitHub environment named `staging` with:
 
 ```text
-STAGING_ADMIN_LOGIN_ID
-STAGING_ADMIN_PASSWORD
+Variable: STAGING_BASE_URL=https://your-railway-staging-host
+Secret:   STAGING_ADMIN_LOGIN_ID
+Secret:   STAGING_ADMIN_PASSWORD
 ```
+
+The URL is pinned in the protected environment rather than supplied as a free-form workflow input, preventing staging credentials from being sent to a manually mistyped host.
 
 The workflow verifies health, staging administrator login, platform reports, production integration health and the public marketplace against the real staging service.
 
