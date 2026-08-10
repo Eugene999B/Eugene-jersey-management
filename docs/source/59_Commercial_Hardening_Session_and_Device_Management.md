@@ -4,90 +4,50 @@ Updated: 2026-08-10
 
 ## Objective
 
-This hardening release closes the remaining account-security roadmap gap for session history, device visibility and per-session forced logout. It applies the same security model to workforce accounts (platform administrators, shop owners, managers, workers and suppliers) and buyer accounts.
+This release adds durable session history, device visibility, and per-session sign-out for workforce and buyer accounts.
 
 ## Durable session model
 
-Every successful authenticated login now creates an `AccountSession` record before the signed browser cookie is issued. The record stores:
+Every successful authenticated sign-in creates an `AccountSession` record before the browser cookie is issued. It stores the account kind, exact account ID, authentication version, user-agent when available, request IP when available, creation time, last-seen time, expiry time, and any revocation time/reason.
 
-- account kind (`USER` or `BUYER`);
-- exact account ID;
-- browser user-agent text when supplied by the request;
-- request IP address when supplied through the trusted deployment request headers;
-- creation time;
-- last-seen time;
-- expiry time;
-- revocation time and reason when the session is ended.
+The signed token carries the durable session ID as both `sessionId` and JWT ID. A valid signature alone is no longer sufficient. Authenticated requests also require the durable row to belong to the account, match the account's current authentication version, remain unrevoked, and remain unexpired.
 
-The signed JWT contains the durable session ID as both the `sessionId` claim and JWT ID. A valid signature by itself is no longer enough: authenticated requests also require the matching durable record to exist, belong to the exact account, remain unrevoked and remain unexpired.
+Workforce sessions keep the existing seven-day lifetime. Buyer sessions keep the existing thirty-day lifetime. Last-seen writes are throttled to avoid unnecessary database writes.
 
-Workforce sessions retain the existing seven-day cookie lifetime. Buyer sessions retain the existing thirty-day lifetime. Last-seen writes are throttled to avoid a database update on every page request while still providing useful recent-activity evidence.
+## Global security-version reconciliation
 
-## Existing global revocation remains authoritative
+The per-device registry is an additional layer over the existing global account-version checks.
 
-The new per-device registry is an additional security layer, not a replacement for the existing global guards.
+For workforce accounts, `User.sessionVersion` remains authoritative. For buyer accounts, the existing buyer record version remains authoritative. Each `AccountSession` stores the version under which it was issued, and authenticated requests require that stored version to match the current account version.
 
-For workforce accounts, `User.sessionVersion` remains embedded in the signed token and checked against the current database user. Password changes, password recovery and two-factor enable/disable continue to invalidate all old tokens by advancing that version.
+When device history is loaded, any still-unrevoked row whose stored version is stale is recorded as revoked with reason `account-security-version-changed`. This means existing administrator and account-state operations that already invalidate sessions through the global version also reconcile correctly into device history without every caller needing direct access to the session table.
 
-For buyer accounts, the existing buyer record version check remains in place. Credential/security changes that mutate the protected buyer record invalidate existing signed buyer tokens.
-
-Those high-risk operations now also mark every durable `AccountSession` record for that account as revoked so the device-history view reflects what actually happened instead of showing invalid tokens as active sessions.
+Credential and two-factor security changes also revoke all durable rows immediately as part of their existing all-session invalidation behavior.
 
 ## Device management experience
 
-`/account/security` and `/buyer/security` now include a **Your devices** panel.
+`/account/security` and `/buyer/security` include a **Your devices** panel. It shows a friendly browser/device label, current/active/signed-out/expired state, last activity, sign-in time, expiry or sign-out time, and source IP when deployment headers provide it.
 
-For each recent session the account holder can see:
+The twenty most recent rows are shown. Revoked and expired rows remain available as security history.
 
-- a friendly browser and device label derived from the user-agent;
-- whether it is the current device, another active device, signed out or expired;
-- last activity;
-- sign-in time;
-- expiry or sign-out time;
-- source IP when available from deployment request headers.
-
-The panel displays the twenty most recent session records. Historical revoked/expired records are retained as security evidence rather than silently deleted by the normal account UI.
-
-An account holder may:
-
-1. sign out one exact device;
-2. sign out the current device;
-3. sign out every other currently active device while preserving the current session.
-
-Every mutation is constrained server-side by the authenticated account kind and exact account ID. A submitted session ID cannot be used to revoke another user or buyer session. The account type posted by the UI only selects which authenticated cookie surface is being managed; it never supplies an account ID.
+An account holder can sign out one exact device, sign out the current device, or sign out every other active device while retaining the current session. The server derives the exact account ID from the authenticated account surface; the browser never submits an account ID for these operations.
 
 ## Logout and audit behavior
 
-Normal workforce and buyer logout now revoke the exact current `AccountSession` before clearing the cookie.
-
-Manual per-device revocation writes `auth.session_revoked` to the audit trail. Signing out all other devices writes `auth.other_sessions_revoked` with the number of sessions affected. Password and two-factor audit behavior remains intact.
+Normal workforce and buyer logout revokes the exact current `AccountSession` before clearing the cookie. Manual single-device revocation writes `auth.session_revoked`; signing out other devices writes `auth.other_sessions_revoked` with the affected count.
 
 ## Tenant isolation
 
-`AccountSession` is platform-global security data. It is intentionally not registered in the tenant-scoped Prisma model map. Shop tenant clients and interactive tenant transactions therefore cannot use the generic tenant database client to browse or mutate session records. Session access goes only through the reviewed account-session repository after authentication resolves the exact account.
+`AccountSession` is platform-global security data and is intentionally absent from the tenant-scoped Prisma model registry. Tenant database clients cannot use the generic tenant access path to browse or mutate these rows. Session access goes through the reviewed account-session service after authentication identifies the exact account.
 
 ## Deployment compatibility
 
-This migration is additive and does not rewrite shops, users, buyers, orders, payments, stock, production data or subscription records.
+The migration is additive and does not rewrite shop business records. Existing pre-release browser cookies do not contain a durable `sessionId`, so they intentionally require a one-time sign-in after deployment instead of being accepted as untracked sessions.
 
-Existing pre-release browser cookies do not contain a durable `sessionId`. They intentionally fail the new token validation after deployment and require a one-time sign-in. This is safer than accepting untracked legacy sessions that could not be individually revoked or displayed in device history.
-
-No `prisma db push` is required or permitted for production rollout. Railway continues to apply the checked-in migration through `prisma migrate deploy` before application activation and startup.
+Production rollout continues to use the checked-in migration through `prisma migrate deploy`; `prisma db push` is not part of the release path.
 
 ## Permanent validation
 
-Validation covers:
+Validation covers the Prisma model and migration, authentication-version binding, JWT session IDs, session creation after authentication, active/version/revoked/expiry checks, stale-version reconciliation, exact logout revocation, all-session security revocation, account-scoped device actions, workforce and buyer device pages, tenant-client denial, a two-browser workforce revocation journey, and buyer mobile rendering at 390 × 844.
 
-- Prisma model and migration shape;
-- staff and buyer JWT session-ID binding;
-- durable-session creation after password and two-factor authentication;
-- active/revoked/expired checks during authenticated requests;
-- exact-session revocation on normal logout;
-- durable global revocation after password changes, recovery and two-factor changes;
-- authenticated account scoping for device actions;
-- device history on workforce and buyer security pages;
-- tenant-client denial for platform-global session data;
-- browser acceptance using two simultaneous workforce contexts, revoking the second session while retaining the first;
-- buyer mobile security rendering at 390 × 844 without horizontal overflow.
-
-The release is eligible to merge only after migrations, lint, TypeScript, unit tests, tenant isolation, production build and Chromium acceptance pass on the exact pull-request head.
+Merge eligibility still requires migrations, lint, TypeScript, unit tests, tenant isolation, the Phase 17 backup/restore rehearsal, documentation generation, production build, standalone runtime checks, and Chromium acceptance on the exact pull-request head.
