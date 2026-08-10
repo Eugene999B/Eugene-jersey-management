@@ -20,3 +20,19 @@ model AccountTwoFactor {
   @@unique([accountKind, accountId])
   @@index([enabled, updatedAt])
 }
+
+model AccountSession {
+  id            String      @id @default(cuid())
+  accountKind   AccountKind
+  accountId     String
+  userAgent     String?
+  ipAddress     String?
+  createdAt     DateTime    @default(now())
+  lastSeenAt    DateTime    @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+
+  @@index([accountKind, accountId, revokedAt, expiresAt])
+  @@index([expiresAt])
+}
