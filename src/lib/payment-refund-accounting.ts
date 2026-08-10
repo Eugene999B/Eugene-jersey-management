@@ -14,7 +14,7 @@ export async function syncPaymentRefundAccounting(shopId: string, paymentId: str
     where: { id: paymentId, order: { shopId } },
     select: { id: true, amount: true, status: true, metadata: true },
   });
-  if (!payment || ![PaymentStatus.SUCCESS, PaymentStatus.REFUNDED].includes(payment.status)) return null;
+  if (!payment || (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED)) return null;
 
   const refunds = await platformDb.paymentRefund.findMany({
     where: { shopId, paymentId, status: PaymentRefundStatus.PROCESSED },
