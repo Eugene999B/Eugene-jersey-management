@@ -124,7 +124,7 @@ describe("Phase 16 reporting and management", () => {
     expect(page).toContain("enabledModules");
     expect(page).toContain("platformDeviceBridgeReport(from, to)");
     expect(page).toContain("browser-mediated Web Serial cutter control");
-    expect(page).toContain("does not invent");
+    expect(page).toContain("durable send/failure job evidence");
   });
 
   it("derives direct-device health from durable machine production jobs without claiming a server USB heartbeat", () => {
