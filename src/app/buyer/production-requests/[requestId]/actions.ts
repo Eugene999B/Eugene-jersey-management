@@ -22,6 +22,15 @@ import {
 } from "@/lib/customer-production";
 import { prisma } from "@/lib/db";
 
+const CHANGEABLE_REQUEST_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.PREVIEW_READY,
+  CustomerProductionRequestStatus.QUOTED,
+]);
+const CLOSED_REQUEST_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.COMPLETED,
+  CustomerProductionRequestStatus.CANCELLED,
+]);
+
 async function buyerRequest(requestId: string) {
   const buyer = await getBuyerSession();
   if (!buyer) redirect(`/buyer/login?next=${encodeURIComponent(`/buyer/production-requests/${requestId}`)}`);
@@ -55,6 +64,9 @@ export async function approveCustomerProductionPreviewAction(formData: FormData)
       ? await tx.customer.update({ where: { id: existingCustomer.id }, data: { name: buyerAccount.name, phone: buyerAccount.phone, email: buyerAccount.email } })
       : await tx.customer.create({ data: { shopId: locked.shopId, name: buyerAccount.name, phone: buyerAccount.phone, email: buyerAccount.email, group: "Custom production" } });
     const total = Number(locked.quotedTotal);
+    const deposit = Number(locked.depositAmount);
+    const approvedAt = new Date();
+    const zeroDeposit = deposit <= 0.005;
     const created = await tx.order.create({
       data: {
         shopId: locked.shopId,
@@ -91,11 +103,23 @@ export async function approveCustomerProductionPreviewAction(formData: FormData)
         },
       },
     });
-    await tx.customerProductionRequest.update({ where: { id: locked.id }, data: { status: CustomerProductionRequestStatus.APPROVED, approvedAt: new Date(), orderId: created.id } });
-    await tx.customerProductionEvent.createMany({ data: [
+    await tx.customerProductionRequest.update({
+      where: { id: locked.id },
+      data: {
+        status: zeroDeposit ? CustomerProductionRequestStatus.DEPOSIT_PAID : CustomerProductionRequestStatus.APPROVED,
+        approvedAt,
+        depositPaidAt: zeroDeposit ? approvedAt : null,
+        orderId: created.id,
+      },
+    });
+    const events = [
       { shopId: locked.shopId, requestId: locked.id, type: CustomerProductionEventType.APPROVED, note: `Buyer approved preview version ${locked.previewVersion}.`, actorBuyerId: buyer.id },
-      { shopId: locked.shopId, requestId: locked.id, type: CustomerProductionEventType.ORDER_CREATED, note: `Order ${created.receiptNumber} created after preview approval.`, metadata: { orderId: created.id, quotedTotal: total, depositAmount: Number(locked.depositAmount) }, actorBuyerId: buyer.id },
-    ] });
+      { shopId: locked.shopId, requestId: locked.id, type: CustomerProductionEventType.ORDER_CREATED, note: `Order ${created.receiptNumber} created after preview approval.`, metadata: { orderId: created.id, quotedTotal: total, depositAmount: deposit }, actorBuyerId: buyer.id },
+    ];
+    if (zeroDeposit) {
+      events.push({ shopId: locked.shopId, requestId: locked.id, type: CustomerProductionEventType.DEPOSIT_PAID, note: "No deposit was required, so the deposit milestone was satisfied at approval.", metadata: { zeroDeposit: true }, actorBuyerId: buyer.id });
+    }
+    await tx.customerProductionEvent.createMany({ data: events });
     return created;
   }).catch(() => null);
   if (!order) redirect(`/buyer/production-requests/${request.id}?error=changed`);
@@ -109,7 +133,7 @@ export async function requestCustomerProductionChangesAction(formData: FormData)
   const parsed = changesSchema.safeParse({ requestId: formData.get("requestId"), note: formData.get("note") });
   if (!parsed.success) redirect(`/buyer/production-requests/${String(formData.get("requestId") ?? "")}?error=changes`);
   const { buyer, request } = await buyerRequest(parsed.data.requestId);
-  if (![CustomerProductionRequestStatus.PREVIEW_READY, CustomerProductionRequestStatus.QUOTED].includes(request.status)) redirect(`/buyer/production-requests/${request.id}?error=not-ready`);
+  if (!CHANGEABLE_REQUEST_STATUSES.has(request.status)) redirect(`/buyer/production-requests/${request.id}?error=not-ready`);
   await prisma.$transaction(async (tx) => {
     const changed = await tx.customerProductionRequest.updateMany({
       where: { id: request.id, buyerId: buyer.id, status: { in: [CustomerProductionRequestStatus.PREVIEW_READY, CustomerProductionRequestStatus.QUOTED] } },
@@ -125,7 +149,7 @@ export async function attachCustomerProductionArtworkAction(formData: FormData) 
   const requestId = String(formData.get("requestId") ?? "");
   if (!requestId) redirect("/shops?error=request");
   const { buyer, request } = await buyerRequest(requestId);
-  if ([CustomerProductionRequestStatus.COMPLETED, CustomerProductionRequestStatus.CANCELLED].includes(request.status)) redirect(`/buyer/production-requests/${request.id}?error=closed`);
+  if (CLOSED_REQUEST_STATUSES.has(request.status)) redirect(`/buyer/production-requests/${request.id}?error=closed`);
   const artwork = formData.get("artwork");
   if (!(artwork instanceof File) || artwork.size <= 0 || artwork.size > MAX_CUSTOMER_ARTWORK_BYTES || !customerArtworkMimeAllowed(artwork.type)) redirect(`/buyer/production-requests/${request.id}?error=artwork`);
   const bytes = new Uint8Array(await artwork.arrayBuffer());
