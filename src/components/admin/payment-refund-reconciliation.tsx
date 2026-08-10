@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3, RotateCcw } from "lucide-react";
-import { PaymentRefundStatus } from "@prisma/client";
+import { PaymentProviderEventStatus, PaymentRefundStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { platformDb } from "@/lib/platform-db";
@@ -29,7 +29,7 @@ export async function PaymentRefundReconciliation() {
       take: 12,
     }),
     platformDb.paymentProviderEvent.count({
-      where: { provider: "paystack", status: "FAILED" },
+      where: { provider: "paystack", status: PaymentProviderEventStatus.FAILED },
     }),
   ]);
 
