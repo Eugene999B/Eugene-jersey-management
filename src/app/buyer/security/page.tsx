@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { AccountKind } from "@prisma/client";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
 import { ChangePasswordPanel } from "@/components/account/change-password-panel";
+import { SessionSecurityPanel } from "@/components/account/session-security-panel";
 import { TwoFactorSecurityPanel } from "@/components/account/two-factor-security-panel";
+import { listAccountSessions } from "@/lib/account-sessions";
 import { getBuyerSession } from "@/lib/buyer-session";
 import { getTwoFactorStatus } from "@/lib/two-factor-account";
 
@@ -15,7 +17,10 @@ export default async function BuyerSecurityPage() {
   const buyer = await getBuyerSession();
   if (!buyer) redirect("/buyer/login?error=login-required&next=/buyer/security");
 
-  const status = await getTwoFactorStatus({ accountKind: AccountKind.BUYER, accountId: buyer.id });
+  const [status, sessions] = await Promise.all([
+    getTwoFactorStatus({ accountKind: AccountKind.BUYER, accountId: buyer.id }),
+    listAccountSessions({ accountKind: AccountKind.BUYER, accountId: buyer.id }),
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-100 px-3 py-4 sm:px-6 sm:py-8">
@@ -24,7 +29,7 @@ export default async function BuyerSecurityPage() {
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-cyan-300/10 text-cyan-300"><LockKeyhole size={23} /></span>
-              <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{buyer.name}</p><h1 className="mt-1 text-3xl font-semibold tracking-[-0.03em]">Buyer account security</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Change your password and manage optional two-factor authentication. These settings protect ordering, messaging, pickup, delivery and account activity.</p></div>
+              <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{buyer.name}</p><h1 className="mt-1 text-3xl font-semibold tracking-[-0.03em]">Buyer account security</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Change your password, manage optional two-factor authentication, and review signed-in devices protecting ordering, messaging, pickup, delivery and account activity.</p></div>
             </div>
             <Link href="/shops" className="inline-flex min-h-11 w-fit items-center gap-2 rounded-xl border border-white/15 px-4 text-sm font-bold text-white transition hover:bg-white/10"><ArrowLeft size={17} />Back to marketplace</Link>
           </div>
@@ -40,6 +45,7 @@ export default async function BuyerSecurityPage() {
               setupPending: status.setupPending,
             }}
           />
+          <SessionSecurityPanel currentSessionId={buyer.sessionId} sessions={sessions} />
         </div>
       </div>
     </main>
