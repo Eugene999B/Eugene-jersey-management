@@ -25,11 +25,19 @@ type SessionActor = {
   loginPath: string;
 };
 
-async function sessionActor(): Promise<SessionActor | null> {
-  const workforce = await getSession();
-  if (workforce) {
+function requestedAccountKind(formData: FormData) {
+  const value = String(formData.get("accountKind") ?? "");
+  if (value === AccountKind.USER) return AccountKind.USER;
+  if (value === AccountKind.BUYER) return AccountKind.BUYER;
+  return null;
+}
+
+async function sessionActor(accountKind: AccountKind): Promise<SessionActor | null> {
+  if (accountKind === AccountKind.USER) {
+    const workforce = await getSession();
+    if (!workforce) return null;
     return {
-      accountKind: AccountKind.USER,
+      accountKind,
       accountId: workforce.id,
       currentSessionId: workforce.sessionId,
       shopId: workforce.shopId,
@@ -43,7 +51,7 @@ async function sessionActor(): Promise<SessionActor | null> {
   const buyer = await getBuyerSession();
   if (!buyer) return null;
   return {
-    accountKind: AccountKind.BUYER,
+    accountKind,
     accountId: buyer.id,
     currentSessionId: buyer.sessionId,
     shopId: null,
@@ -55,8 +63,10 @@ async function sessionActor(): Promise<SessionActor | null> {
 }
 
 export async function revokeAccountSessionAction(formData: FormData) {
-  const actor = await sessionActor();
-  if (!actor) redirect("/login");
+  const accountKind = requestedAccountKind(formData);
+  if (!accountKind) redirect("/login");
+  const actor = await sessionActor(accountKind);
+  if (!actor) redirect(accountKind === AccountKind.BUYER ? "/buyer/login" : "/login");
   const parsed = sessionIdSchema.safeParse(formData.get("sessionId"));
   if (!parsed.success) redirect(`${actor.securityPath}?sessionError=invalid`);
 
@@ -92,9 +102,11 @@ export async function revokeAccountSessionAction(formData: FormData) {
   redirect(`${actor.securityPath}?sessionsUpdated=1`);
 }
 
-export async function revokeOtherAccountSessionsAction() {
-  const actor = await sessionActor();
-  if (!actor) redirect("/login");
+export async function revokeOtherAccountSessionsAction(formData: FormData) {
+  const accountKind = requestedAccountKind(formData);
+  if (!accountKind) redirect("/login");
+  const actor = await sessionActor(accountKind);
+  if (!actor) redirect(accountKind === AccountKind.BUYER ? "/buyer/login" : "/login");
 
   const result = await revokeOtherAccountSessions({
     accountKind: actor.accountKind,
