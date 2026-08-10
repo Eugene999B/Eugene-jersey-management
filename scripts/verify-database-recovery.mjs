@@ -91,6 +91,7 @@ async function main() {
   const backupDir = mkdtempSync(join(tmpdir(), "esm-release-recovery-"));
   const backupPath = join(backupDir, "release.dump");
   const admin = new Client({ connectionString: sourceUrl.toString() });
+  let adminConnected = false;
   let recoveryCreated = false;
 
   try {
@@ -109,6 +110,7 @@ async function main() {
     if (statSync(backupPath).size < 1) throw new Error("PostgreSQL backup rehearsal produced an empty archive.");
 
     await admin.connect();
+    adminConnected = true;
     await admin.query(`CREATE DATABASE ${quoteIdentifier(databaseName)}`);
     recoveryCreated = true;
 
@@ -133,11 +135,14 @@ async function main() {
     console.log(`Database recovery rehearsal passed for ${Object.keys(sourceCounts).length} public table(s) and ${sourceMigrations.length} Prisma migration record(s).`);
   } finally {
     if (recoveryCreated) {
-      if (!admin._connected) await admin.connect();
+      if (!adminConnected) {
+        await admin.connect();
+        adminConnected = true;
+      }
       await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1", [databaseName]).catch(() => undefined);
       await admin.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`).catch(() => undefined);
     }
-    await admin.end().catch(() => undefined);
+    if (adminConnected) await admin.end().catch(() => undefined);
     rmSync(backupDir, { recursive: true, force: true });
   }
 }
