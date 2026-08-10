@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       const events: Array<{ shopId: string; requestId: string; type: CustomerProductionEventType; note: string; actorBuyerId: string }> = [];
       if (amounts.depositSatisfied && !current.depositPaidAt) {
         data.depositPaidAt = new Date();
-        if ([CustomerProductionRequestStatus.APPROVED].includes(current.status)) data.status = CustomerProductionRequestStatus.DEPOSIT_PAID;
+        if (current.status === CustomerProductionRequestStatus.APPROVED) data.status = CustomerProductionRequestStatus.DEPOSIT_PAID;
         events.push({ shopId: current.shopId, requestId: current.id, type: CustomerProductionEventType.DEPOSIT_PAID, note: `Deposit milestone reached. Paid ${paidAmount.toFixed(2)} against the order.`, actorBuyerId: current.buyerId });
       }
       if (amounts.fullyPaid && !current.balancePaidAt) {
