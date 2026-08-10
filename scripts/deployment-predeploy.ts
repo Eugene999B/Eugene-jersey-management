@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 export type DeploymentTier = "production" | "staging";
 
@@ -62,7 +63,8 @@ async function main() {
   console.log(`ESM release predeploy complete for ${tier}.`);
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) {
+const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (invokedPath && import.meta.url === invokedPath) {
   main().catch((error) => {
     console.error(error);
     process.exit(1);
