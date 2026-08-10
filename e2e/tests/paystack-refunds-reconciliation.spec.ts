@@ -38,8 +38,8 @@ test("owner sees partial refund truth and remaining refundable capacity", async 
 
   const refunds = page.getByRole("region", { name: "Paystack refunds and reconciliation" });
   await expect(refunds).toBeVisible();
-  await expect(refunds.locator("p").filter({ hasText: "Processed refunds" })).toContainText(money(20));
-  await expect(refunds.locator("p").filter({ hasText: "Still refundable" })).toContainText(money(60));
+  await expect(refunds.locator("p").filter({ hasText: /^Processed refunds/ })).toContainText(money(20));
+  await expect(refunds.locator("p").filter({ hasText: /^Still refundable/ })).toContainText(money(60));
   await expect(refunds.getByText("Browser acceptance partial refund", { exact: true })).toBeVisible();
   await expect(refunds.getByRole("button", { name: "Issue refund" })).toBeVisible();
 });
