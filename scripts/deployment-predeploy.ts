@@ -4,12 +4,18 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 export type DeploymentTier = "production" | "staging";
+export type DeploymentEnvironment = {
+  ESM_DEPLOYMENT_TIER?: string;
+  RAILWAY_ENVIRONMENT_NAME?: string;
+  CI?: string;
+  RELEASE_PREDEPLOY_ALLOW_LOCAL?: string;
+};
 
 function normalized(value: string | undefined) {
   return value?.trim().toLowerCase() ?? "";
 }
 
-export function resolveDeploymentTier(env: NodeJS.ProcessEnv = process.env): DeploymentTier {
+export function resolveDeploymentTier(env: DeploymentEnvironment = process.env): DeploymentTier {
   const explicit = normalized(env.ESM_DEPLOYMENT_TIER);
   if (explicit === "production" || explicit === "staging") return explicit;
   if (explicit) throw new Error("ESM_DEPLOYMENT_TIER must be production or staging when set.");
