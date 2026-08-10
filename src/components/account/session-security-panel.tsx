@@ -1,3 +1,4 @@
+import { AccountKind } from "@prisma/client";
 import { Clock3, Laptop, LogOut, MapPin, ShieldCheck, Smartphone } from "lucide-react";
 import {
   revokeAccountSessionAction,
@@ -17,6 +18,7 @@ type SessionRecord = {
 };
 
 type Props = {
+  accountKind: AccountKind;
   currentSessionId: string;
   sessions: SessionRecord[];
 };
@@ -40,7 +42,7 @@ function stateLabel(state: ReturnType<typeof sessionState>, isCurrent: boolean) 
   return "Expired";
 }
 
-export function SessionSecurityPanel({ currentSessionId, sessions }: Props) {
+export function SessionSecurityPanel({ accountKind, currentSessionId, sessions }: Props) {
   const now = new Date();
   const activeOtherSessions = sessions.filter((session) => (
     session.id !== currentSessionId && sessionState(session, now) === "active"
@@ -63,6 +65,7 @@ export function SessionSecurityPanel({ currentSessionId, sessions }: Props) {
           </div>
           {activeOtherSessions.length > 0 ? (
             <form action={revokeOtherAccountSessionsAction}>
+              <input type="hidden" name="accountKind" value={accountKind} />
               <button
                 type="submit"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-700 transition hover:bg-rose-100"
@@ -123,6 +126,7 @@ export function SessionSecurityPanel({ currentSessionId, sessions }: Props) {
 
                 {active ? (
                   <form action={revokeAccountSessionAction} className="shrink-0">
+                    <input type="hidden" name="accountKind" value={accountKind} />
                     <input type="hidden" name="sessionId" value={session.id} />
                     <button
                       type="submit"
