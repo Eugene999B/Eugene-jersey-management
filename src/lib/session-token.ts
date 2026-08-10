@@ -1,10 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { Role } from "@prisma/client";
-import type { SessionUser } from "@/lib/rbac";
+import type { AuthenticatedSessionUser, SessionUser } from "@/lib/rbac";
 
 export const SESSION_COOKIE = "sports_shop_session";
 // Keep staff signed in across a normal work week. Database-backed sessionVersion
-// checks revoke this token when a password, user, or tenant access state changes.
+// checks revoke all tokens when a password, user, or tenant access state changes;
+// the durable AccountSession id additionally supports one-device revocation.
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getSecret() {
@@ -15,7 +16,7 @@ function getSecret() {
   return new TextEncoder().encode(secret);
 }
 
-export async function signSession(user: SessionUser) {
+export async function signSession(user: SessionUser & { sessionId: string }) {
   return new SignJWT({
     id: user.id,
     shopId: user.shopId,
@@ -23,18 +24,28 @@ export async function signSession(user: SessionUser) {
     name: user.name,
     role: user.role,
     sessionVersion: user.sessionVersion,
+    sessionId: user.sessionId,
     type: "staff",
   })
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(user.sessionId)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_TTL_SECONDS}s`)
     .sign(getSecret());
 }
 
-export async function verifySessionToken(token: string): Promise<SessionUser | null> {
+export async function verifySessionToken(token: string): Promise<AuthenticatedSessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
-    if (payload.type !== "staff" || !payload.id || !payload.email || !payload.name || !payload.role || typeof payload.sessionVersion !== "number") return null;
+    if (
+      payload.type !== "staff"
+      || !payload.id
+      || !payload.email
+      || !payload.name
+      || !payload.role
+      || typeof payload.sessionVersion !== "number"
+      || !payload.sessionId
+    ) return null;
 
     return {
       id: String(payload.id),
@@ -43,6 +54,7 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
       name: String(payload.name),
       role: payload.role as Role,
       sessionVersion: payload.sessionVersion,
+      sessionId: String(payload.sessionId),
     };
   } catch {
     return null;

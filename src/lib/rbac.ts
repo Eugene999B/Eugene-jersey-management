@@ -54,7 +54,10 @@ export type SessionUser = {
   name: string;
   role: Role;
   sessionVersion: number;
+  sessionId?: string;
 };
+
+export type AuthenticatedSessionUser = SessionUser & { sessionId: string };
 
 export function hasRole(user: Pick<SessionUser, "role"> | null | undefined, allowedRoles: Role[]) {
   if (!user) return false;

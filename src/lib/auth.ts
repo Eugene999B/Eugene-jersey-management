@@ -1,13 +1,18 @@
 import "server-only";
 
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Role } from "@prisma/client";
+import { AccountKind, Role } from "@prisma/client";
+import {
+  accountSessionMetadataFromHeaders,
+  createAccountSession,
+  isAccountSessionActive,
+} from "@/lib/account-sessions";
 import { prisma } from "@/lib/db";
 import { platformDb } from "@/lib/platform-db";
 import { strongPasswordSchema } from "@/lib/password-policy";
-import { hasRole, type SessionUser } from "@/lib/rbac";
+import { hasRole, type AuthenticatedSessionUser, type SessionUser } from "@/lib/rbac";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySessionToken } from "@/lib/session-token";
 import { persistentSessionCookieOptions } from "@/lib/session-cookie";
 import { bindTenantRequestContext } from "@/lib/tenant-context";
@@ -23,9 +28,18 @@ export async function verifyPassword(password: string, hash: string) {
 }
 
 export async function setSessionCookie(user: SessionUser) {
+  const requestHeaders = await headers();
+  const accountSession = await createAccountSession({
+    accountKind: AccountKind.USER,
+    accountId: user.id,
+    authVersion: user.sessionVersion,
+    ttlSeconds: SESSION_TTL_SECONDS,
+    metadata: accountSessionMetadataFromHeaders(requestHeaders),
+  });
   const cookieStore = await cookies();
-  const token = await signSession(user);
+  const token = await signSession({ ...user, sessionId: accountSession.id });
   cookieStore.set(SESSION_COOKIE, token, persistentSessionCookieOptions(SESSION_TTL_SECONDS));
+  return accountSession.id;
 }
 
 export async function clearSessionCookie() {
@@ -33,7 +47,7 @@ export async function clearSessionCookie() {
   cookieStore.delete(SESSION_COOKIE);
 }
 
-export async function getSession(): Promise<SessionUser | null> {
+export async function getSession(): Promise<AuthenticatedSessionUser | null> {
   bindTenantRequestContext(null);
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
@@ -57,14 +71,22 @@ export async function getSession(): Promise<SessionUser | null> {
 
   if (!user?.isActive || user.sessionVersion !== tokenSession.sessionVersion) return null;
   if (user.shopId && !user.shop?.isActive) return null;
+  const activeSession = await isAccountSessionActive({
+    accountKind: AccountKind.USER,
+    accountId: user.id,
+    authVersion: user.sessionVersion,
+    sessionId: tokenSession.sessionId,
+  });
+  if (!activeSession) return null;
 
-  const session = {
+  const session: AuthenticatedSessionUser = {
     id: user.id,
     shopId: user.shopId,
     email: user.email,
     name: user.name,
     role: user.role,
     sessionVersion: user.sessionVersion,
+    sessionId: tokenSession.sessionId,
   };
   bindTenantRequestContext(session.shopId);
   return session;

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { AccountKind, PasswordRecoveryChannel } from "@prisma/client";
 import { z } from "zod";
+import { revokeAllAccountSessions } from "@/lib/account-sessions";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth";
 import { clearBuyerSessionCookie } from "@/lib/buyer-session";
@@ -71,6 +72,11 @@ export async function resetBuyerPasswordAction(formData: FormData) {
   await prisma.buyerAccount.update({
     where: { id: buyer.id },
     data: { passwordHash: await hashPassword(parsed.data.password) },
+  });
+  await revokeAllAccountSessions({
+    accountKind: AccountKind.BUYER,
+    accountId: buyer.id,
+    reason: "password-reset",
   });
   await clearBuyerSessionCookie();
   await audit({

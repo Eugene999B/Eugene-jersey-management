@@ -1,6 +1,10 @@
 import { AccountKind } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  accountSessionMetadataFromHeaders,
+  createAccountSession,
+} from "@/lib/account-sessions";
 import { audit } from "@/lib/audit";
 import {
   BUYER_SESSION_COOKIE,
@@ -110,6 +114,13 @@ export async function POST(request: NextRequest) {
       metadata: { twoFactor: true },
     });
 
+    const accountSession = await createAccountSession({
+      accountKind: AccountKind.USER,
+      accountId: user.id,
+      authVersion: user.sessionVersion,
+      ttlSeconds: SESSION_TTL_SECONDS,
+      metadata: accountSessionMetadataFromHeaders(request.headers),
+    });
     const sessionToken = await signSession({
       id: user.id,
       shopId: user.shopId,
@@ -117,6 +128,7 @@ export async function POST(request: NextRequest) {
       name: user.name,
       role: user.role,
       sessionVersion: user.sessionVersion,
+      sessionId: accountSession.id,
     });
     const redirectPath = safeRedirectPath(challenge.redirectPath, "/dashboard");
     const response = wantsJson
@@ -159,12 +171,20 @@ export async function POST(request: NextRequest) {
     metadata: { twoFactor: true },
   });
 
+  const accountSession = await createAccountSession({
+    accountKind: AccountKind.BUYER,
+    accountId: updatedBuyer.id,
+    authVersion: updatedBuyer.updatedAt.getTime(),
+    ttlSeconds: BUYER_SESSION_TTL_SECONDS,
+    metadata: accountSessionMetadataFromHeaders(request.headers),
+  });
   const buyerToken = await signBuyerSession({
     id: updatedBuyer.id,
     phone: updatedBuyer.phone,
     email: updatedBuyer.email,
     name: updatedBuyer.name,
     sessionVersion: updatedBuyer.updatedAt.getTime(),
+    sessionId: accountSession.id,
   });
   const redirectPath = safeRedirectPath(challenge.redirectPath, "/shops");
   const response = wantsJson

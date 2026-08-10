@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { AccountKind, PasswordRecoveryChannel } from "@prisma/client";
 import { z } from "zod";
+import { revokeAllAccountSessions } from "@/lib/account-sessions";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -70,6 +71,11 @@ export async function resetPasswordAction(formData: FormData) {
       lockUntil: null,
       sessionVersion: { increment: 1 },
     },
+  });
+  await revokeAllAccountSessions({
+    accountKind: AccountKind.USER,
+    accountId: user.id,
+    reason: "password-reset",
   });
   await audit({
     shopId: user.shopId,

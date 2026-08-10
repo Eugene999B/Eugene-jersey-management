@@ -1,6 +1,7 @@
 import { AccountKind } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revokeAllAccountSessions } from "@/lib/account-sessions";
 import { getSession, verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { BUYER_SESSION_COOKIE, getBuyerSession } from "@/lib/buyer-session";
@@ -105,17 +106,22 @@ async function recordSecurityAction(actor: SecurityActor, action: string) {
   });
 }
 
-async function revokeAllSessions(actor: SecurityActor) {
+async function revokeAllSessions(actor: SecurityActor, reason: string) {
   if (actor.account.accountKind === AccountKind.USER) {
     await platformDb.user.update({
       where: { id: actor.id },
       data: { sessionVersion: { increment: 1 } },
     });
-    return;
+  } else {
+    await platformDb.buyerAccount.update({
+      where: { id: actor.id },
+      data: { lastLoginAt: new Date() },
+    });
   }
-  await platformDb.buyerAccount.update({
-    where: { id: actor.id },
-    data: { lastLoginAt: new Date() },
+  await revokeAllAccountSessions({
+    accountKind: actor.account.accountKind,
+    accountId: actor.id,
+    reason,
   });
 }
 
@@ -186,7 +192,7 @@ export async function POST(request: NextRequest) {
   if (parsed.action === "confirm") {
     const confirmed = await confirmTwoFactorSetup(actor.account, parsed.code);
     if (!confirmed) return json({ ok: false, error: "code" }, 401);
-    await revokeAllSessions(actor);
+    await revokeAllSessions(actor, "two-factor-enabled");
     await recordSecurityAction(actor, "auth.two_factor_enabled");
     return signedOutResponse(actor, "Two-factor authentication was enabled and every existing session was revoked.");
   }
@@ -212,7 +218,7 @@ export async function POST(request: NextRequest) {
   }
 
   await disableTwoFactor(actor.account);
-  await revokeAllSessions(actor);
+  await revokeAllSessions(actor, "two-factor-disabled");
   await recordSecurityAction(actor, "auth.two_factor_disabled");
   return signedOutResponse(actor, "Two-factor authentication was disabled and every existing session was revoked.");
 }

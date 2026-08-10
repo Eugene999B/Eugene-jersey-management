@@ -1,6 +1,7 @@
 import { AccountKind } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { revokeAllAccountSessions } from "@/lib/account-sessions";
 import { audit } from "@/lib/audit";
 import { getSession, hashPassword, verifyPassword } from "@/lib/auth";
 import { BUYER_SESSION_COOKIE, getBuyerSession } from "@/lib/buyer-session";
@@ -123,6 +124,12 @@ export async function POST(request: NextRequest) {
       data: { passwordHash, lastLoginAt: new Date() },
     });
   }
+
+  await revokeAllAccountSessions({
+    accountKind: actor.accountKind,
+    accountId: actor.id,
+    reason: "password-changed",
+  });
 
   await audit({
     shopId: actor.shopId,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Role } from "@prisma/client";
+import { AccountKind, Role } from "@prisma/client";
+import { revokeAccountSession } from "@/lib/account-sessions";
 import { getSession } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/session-token";
 import { TWO_FACTOR_CHALLENGE_COOKIE } from "@/lib/two-factor-challenge";
@@ -22,6 +23,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!isTrustedApplicationOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  }
+
+  const session = await getSession();
+  if (session) {
+    await revokeAccountSession({
+      accountKind: AccountKind.USER,
+      accountId: session.id,
+      sessionId: session.sessionId,
+      reason: "logout",
+    });
   }
 
   const response = NextResponse.redirect(new URL("/login?loggedOut=1", publicRequestOrigin(request)), 303);
