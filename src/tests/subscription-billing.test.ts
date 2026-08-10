@@ -1,38 +1,37 @@
 import { readFileSync } from "node:fs";
+import { BillingCycle, SubscriptionInvoiceStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import {
-  addBillingMonths,
-  billingInvoiceStatusAt,
-  subscriptionPeriodEnd,
-} from "@/lib/subscription-billing-rules";
+import { addBillingPeriod, subscriptionInvoiceStatus } from "@/lib/subscription-billing";
 
-function source(path: string) {
-  return readFileSync(new URL(`../../src/${path}`, import.meta.url), "utf8");
-}
-
-function repoSource(path: string) {
-  return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+function source(relativePath: string) {
+  return readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 }
 
 describe("subscription billing operations", () => {
   it("advances monthly and yearly renewal periods in UTC without skipping short months", () => {
-    expect(addBillingMonths(new Date("2026-01-31T10:00:00.000Z"), 1).toISOString()).toBe("2026-02-28T10:00:00.000Z");
-    expect(addBillingMonths(new Date("2024-01-31T10:00:00.000Z"), 1).toISOString()).toBe("2024-02-29T10:00:00.000Z");
-    expect(subscriptionPeriodEnd(new Date("2026-01-31T10:00:00.000Z"), "MONTHLY").toISOString()).toBe("2026-02-28T10:00:00.000Z");
-    expect(subscriptionPeriodEnd(new Date("2024-02-29T10:00:00.000Z"), "YEARLY").toISOString()).toBe("2025-02-28T10:00:00.000Z");
+    expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-08-15T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2026-07-15T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2027-07-15T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2026-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2026-02-28T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2024-01-31T12:00:00.000Z"), BillingCycle.MONTHLY).toISOString()).toBe("2024-02-29T12:00:00.000Z");
+    expect(addBillingPeriod(new Date("2024-02-29T12:00:00.000Z"), BillingCycle.YEARLY).toISOString()).toBe("2025-02-28T12:00:00.000Z");
   });
 
   it("marks unpaid invoices overdue only after the due instant", () => {
-    expect(billingInvoiceStatusAt({ status: "OPEN", dueAt: new Date("2026-07-10T12:00:00.000Z") }, new Date("2026-07-10T11:59:59.000Z"))).toBe("OPEN");
-    expect(billingInvoiceStatusAt({ status: "OPEN", dueAt: new Date("2026-07-10T12:00:00.000Z") }, new Date("2026-07-10T12:00:01.000Z"))).toBe("OVERDUE");
-    expect(billingInvoiceStatusAt({ status: "PAID", dueAt: new Date("2026-07-01T00:00:00.000Z") }, new Date("2026-07-10T00:00:00.000Z"))).toBe("PAID");
+    const due = new Date("2026-07-29T12:00:00.000Z");
+    expect(subscriptionInvoiceStatus(due, new Date("2026-07-29T11:59:59.000Z"))).toBe(SubscriptionInvoiceStatus.OPEN);
+    expect(subscriptionInvoiceStatus(due, due)).toBe(SubscriptionInvoiceStatus.OPEN);
+    expect(subscriptionInvoiceStatus(due, new Date("2026-07-29T12:00:01.000Z"))).toBe(SubscriptionInvoiceStatus.OVERDUE);
   });
 
   it("keeps billing records immutable, platform-owned, and idempotent", () => {
+    const model = source("../prisma/models/subscription-billing.prisma");
     const billing = source("lib/subscription-billing.ts");
+    const terminalGuard = source("../prisma/migrations/20260729112500_release38_invoice_terminal_state_guard/migration.sql");
+    const dashboardActions = source("app/dashboard/subscription/actions.ts");
     const webhook = source("app/api/paystack/webhook/route.ts");
-    const dashboardActions = source("app/dashboard/settings/actions.ts");
-    const terminalGuard = repoSource("prisma/migrations/20260712130000_subscription_billing_operations/migration.sql");
+
+    expect(model).toContain("@@unique([shopId, periodStart, periodEnd])");
+    expect(model).toContain("reference             String              @unique");
     expect(billing).toContain("shopId_periodStart_periodEnd");
     expect(billing).toContain("isolationLevel: Prisma.TransactionIsolationLevel.Serializable");
     expect(billing).toContain("subscription.payment_verified");
@@ -44,6 +43,7 @@ describe("subscription billing operations", () => {
     expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_PAID_AT_IMMUTABLE");
     expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_VOID_AUDIT_REQUIRED");
     expect(dashboardActions).not.toContain("@/lib/platform-db");
+
     const communicationCall = webhook.indexOf("settleCommunicationCreditPurchase(transactionData)");
     const subscriptionCall = webhook.indexOf("settleSubscriptionInvoicePayment(transactionData)");
     const shopPaymentCall = webhook.indexOf("settlePaystackTransaction(transactionData)");
