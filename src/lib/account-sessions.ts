@@ -27,6 +27,22 @@ function cleanHeader(value: string | null | undefined, maxLength: number) {
   return normalized.slice(0, maxLength);
 }
 
+async function currentAccountAuthVersion(identity: AccountSessionIdentity) {
+  if (identity.accountKind === AccountKind.USER) {
+    const user = await platformDb.user.findUnique({
+      where: { id: identity.accountId },
+      select: { sessionVersion: true },
+    });
+    return user ? String(user.sessionVersion) : null;
+  }
+
+  const buyer = await platformDb.buyerAccount.findUnique({
+    where: { id: identity.accountId },
+    select: { updatedAt: true },
+  });
+  return buyer ? String(buyer.updatedAt.getTime()) : null;
+}
+
 export function accountSessionMetadataFromHeaders(headers: SessionHeaderSource): AccountSessionMetadata {
   const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return {
@@ -36,6 +52,7 @@ export function accountSessionMetadataFromHeaders(headers: SessionHeaderSource):
 }
 
 export async function createAccountSession(input: AccountSessionIdentity & {
+  authVersion: string | number;
   ttlSeconds: number;
   metadata?: Partial<AccountSessionMetadata> | null;
 }) {
@@ -45,6 +62,7 @@ export async function createAccountSession(input: AccountSessionIdentity & {
     data: {
       accountKind: input.accountKind,
       accountId: input.accountId,
+      authVersion: String(input.authVersion),
       userAgent: cleanHeader(input.metadata?.userAgent, MAX_USER_AGENT_LENGTH),
       ipAddress: cleanHeader(input.metadata?.ipAddress, MAX_IP_LENGTH),
       createdAt: now,
@@ -54,13 +72,18 @@ export async function createAccountSession(input: AccountSessionIdentity & {
   });
 }
 
-export async function isAccountSessionActive(input: AccountSessionIdentity & { sessionId: string }) {
+export async function isAccountSessionActive(input: AccountSessionIdentity & {
+  authVersion: string | number;
+  sessionId: string;
+}) {
   const now = new Date();
+  const authVersion = String(input.authVersion);
   const session = await platformDb.accountSession.findFirst({
     where: {
       id: input.sessionId,
       accountKind: input.accountKind,
       accountId: input.accountId,
+      authVersion,
     },
     select: {
       id: true,
@@ -78,6 +101,7 @@ export async function isAccountSessionActive(input: AccountSessionIdentity & { s
         id: session.id,
         accountKind: input.accountKind,
         accountId: input.accountId,
+        authVersion,
         revokedAt: null,
         expiresAt: { gt: now },
         lastSeenAt: { lte: new Date(now.getTime() - LAST_SEEN_TOUCH_INTERVAL_MS) },
@@ -90,6 +114,22 @@ export async function isAccountSessionActive(input: AccountSessionIdentity & { s
 }
 
 export async function listAccountSessions(identity: AccountSessionIdentity) {
+  const currentAuthVersion = await currentAccountAuthVersion(identity);
+  if (currentAuthVersion) {
+    await platformDb.accountSession.updateMany({
+      where: {
+        accountKind: identity.accountKind,
+        accountId: identity.accountId,
+        authVersion: { not: currentAuthVersion },
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: "account-security-version-changed",
+      },
+    });
+  }
+
   return platformDb.accountSession.findMany({
     where: {
       accountKind: identity.accountKind,
