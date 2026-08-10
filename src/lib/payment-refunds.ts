@@ -8,7 +8,7 @@ import {
   type PaymentRefund,
 } from "@prisma/client";
 import { platformDb as prisma } from "@/lib/platform-db";
-import { amountToSubunit } from "@/lib/payments";
+import { amountToSubunit, verifyPaystackTransaction } from "@/lib/payments";
 
 const PAYSTACK_TIMEOUT_MS = Math.max(5_000, Math.min(30_000, Number(process.env.PAYSTACK_TIMEOUT_MS ?? 15_000)));
 
@@ -165,23 +165,34 @@ export async function requestPaymentRefund(input: {
 }) {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("REFUND_AMOUNT_INVALID");
 
+  const candidate = await prisma.payment.findFirst({
+    where: { id: input.paymentId, order: { shopId: input.shopId } },
+    select: { id: true, method: true, amount: true, status: true, providerReference: true },
+  });
+  if (!candidate) throw new Error("PAYMENT_NOT_FOUND");
+  if (candidate.method !== PaymentMethod.CARD && candidate.method !== PaymentMethod.MOMO) throw new Error("PAYMENT_NOT_PAYSTACK");
+  if (candidate.status !== PaymentStatus.SUCCESS && candidate.status !== PaymentStatus.REFUNDED) throw new Error("PAYMENT_NOT_CAPTURED");
+  if (!candidate.providerReference) throw new Error("PAYMENT_PROVIDER_REFERENCE_MISSING");
+
+  const verified = await verifyPaystackTransaction(candidate.providerReference);
+  if (!verified || verified.status !== "success" || typeof verified.amount !== "number" || !verified.currency) {
+    throw new Error("PAYMENT_PROVIDER_VERIFY_FAILED");
+  }
+  if (verified.amount !== amountToSubunit(money(candidate.amount))) throw new Error("PAYMENT_PROVIDER_AMOUNT_MISMATCH");
+  const providerCurrency = verified.currency.toUpperCase();
+
   const reserved = await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findFirst({
       where: { id: input.paymentId, order: { shopId: input.shopId } },
-      include: {
-        order: {
-          select: {
-            id: true,
-            receiptNumber: true,
-            shop: { select: { currency: true } },
-          },
-        },
-      },
+      include: { order: { select: { id: true, receiptNumber: true } } },
     });
     if (!payment) throw new Error("PAYMENT_NOT_FOUND");
     if (payment.method !== PaymentMethod.CARD && payment.method !== PaymentMethod.MOMO) throw new Error("PAYMENT_NOT_PAYSTACK");
     if (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED) throw new Error("PAYMENT_NOT_CAPTURED");
     if (!payment.providerReference) throw new Error("PAYMENT_PROVIDER_REFERENCE_MISSING");
+    if (payment.providerReference !== candidate.providerReference || amountToSubunit(money(payment.amount)) !== verified.amount) {
+      throw new Error("PAYMENT_CHANGED_DURING_REFUND");
+    }
 
     const existing = await tx.paymentRefund.findMany({
       where: { shopId: input.shopId, paymentId: payment.id },
@@ -205,7 +216,7 @@ export async function requestPaymentRefund(input: {
         paymentId: payment.id,
         transactionReference: payment.providerReference,
         amount: new Prisma.Decimal(input.amount.toFixed(2)),
-        currency: payment.order.shop.currency.toUpperCase(),
+        currency: providerCurrency,
         requestedById: input.requestedById,
         reason,
         customerNote,
