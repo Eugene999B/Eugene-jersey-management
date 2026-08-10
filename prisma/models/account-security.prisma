@@ -25,6 +25,7 @@ model AccountSession {
   id            String      @id @default(cuid())
   accountKind   AccountKind
   accountId     String
+  authVersion   String
   userAgent     String?
   ipAddress     String?
   createdAt     DateTime    @default(now())
@@ -34,5 +35,6 @@ model AccountSession {
   revokedReason String?
 
   @@index([accountKind, accountId, revokedAt, expiresAt])
+  @@index([accountKind, accountId, authVersion])
   @@index([expiresAt])
 }
