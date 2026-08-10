@@ -5,6 +5,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { closeDayAction } from "@/app/dashboard/closing/actions";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
+import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
 import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
@@ -57,16 +58,17 @@ export default async function ClosingPage({ searchParams }: Props) {
   const debtCard = debtPayments.filter((payment) => payment.method === "CARD").reduce((sum, payment) => sum + Number(payment.amount), 0);
   const debtMomo = debtPayments.filter((payment) => payment.method === "MOMO").reduce((sum, payment) => sum + Number(payment.amount), 0);
   const debtCollections = debtCash + debtCard + debtMomo;
-  const cash = orders.flatMap((order) => order.payments).filter((payment) => payment.method === "CASH" && payment.status === "SUCCESS").reduce((sum, payment) => sum + Number(payment.amount), 0) + debtCash;
-  const card = orders.flatMap((order) => order.payments).filter((payment) => payment.method === "CARD" && payment.status === "SUCCESS").reduce((sum, payment) => sum + Number(payment.amount), 0) + debtCard;
-  const momo = orders.flatMap((order) => order.payments).filter((payment) => payment.method === "MOMO" && payment.status === "SUCCESS").reduce((sum, payment) => sum + Number(payment.amount), 0) + debtMomo;
-  const credit = orders.flatMap((order) => order.payments).filter((payment) => payment.method === "STORE_CREDIT").reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const tenderPayments = orders.flatMap((order) => order.payments);
+  const cash = tenderPayments.filter((payment) => payment.method === "CASH").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0) + debtCash;
+  const card = tenderPayments.filter((payment) => payment.method === "CARD").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0) + debtCard;
+  const momo = tenderPayments.filter((payment) => payment.method === "MOMO").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0) + debtMomo;
+  const credit = tenderPayments.filter((payment) => payment.method === "STORE_CREDIT").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0);
   const total = orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><h1 className="text-2xl font-semibold">Daily closing</h1><p className="mt-2 text-sm text-slate-500">Compare the system expectation with the money counted by staff.</p></div>
+        <div><h1 className="text-2xl font-semibold">Daily closing</h1><p className="mt-2 text-sm text-slate-500">Compare the system expectation with the money counted by staff. Processed Paystack refunds are already netted from card and MoMo totals.</p></div>
         <div className="grid w-full grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {["pdf", "word", "excel"].map((format) => (
             <a key={format} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#ded8cd] bg-white px-2 py-2 text-xs font-semibold sm:gap-2 sm:px-3 sm:text-sm" href={`/api/exports?module=closing&format=${format}&from=${selectedDate}&to=${selectedDate}`}><FileDown size={15} /> {format.toUpperCase()}</a>
@@ -77,8 +79,8 @@ export default async function ClosingPage({ searchParams }: Props) {
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Total sales" value={currency(total, shop.currency)} icon={<ReceiptText size={20} />} />
         <StatCard label="Expected cash" value={currency(cash, shop.currency)} />
-        <StatCard label="Card" value={currency(card, shop.currency)} />
-        <StatCard label="Momo" value={currency(momo, shop.currency)} />
+        <StatCard label="Card net" value={currency(card, shop.currency)} />
+        <StatCard label="Momo net" value={currency(momo, shop.currency)} />
         <StatCard label="Credit sales" value={currency(credit, shop.currency)} icon={<Scale size={20} />} />
         <StatCard label="Debt collected" value={currency(debtCollections, shop.currency)} helper="Assigned by tender" />
       </section>
@@ -90,7 +92,8 @@ export default async function ClosingPage({ searchParams }: Props) {
             <input className="field" name="businessDate" type="date" defaultValue={selectedDate} required />
             <input className="field" name="openingFloat" type="number" min="0" step="0.01" placeholder="Opening float" defaultValue="0" />
             <input className="field" name="manualCash" type="number" min="0" step="0.01" placeholder="Cash counted manually" required />
-            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2"><input className="field" name="expenses" type="number" min="0" step="0.01" placeholder="Expenses" defaultValue="0" /><input className="field" name="refunds" type="number" min="0" step="0.01" placeholder="Refunds" defaultValue="0" /></div>
+            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2"><input className="field" name="expenses" type="number" min="0" step="0.01" placeholder="Expenses" defaultValue="0" /><input className="field" name="refunds" type="number" min="0" step="0.01" placeholder="Cash/manual refunds only" defaultValue="0" /></div>
+            <p className="text-xs leading-5 text-slate-500">Do not enter Paystack card or MoMo refunds here. Processed provider refunds are already deducted from their tender totals automatically.</p>
             <textarea className="field min-h-24" name="notes" placeholder="Variance reason, manager notes, cash bag code" />
             <Button className="w-full">Save closing</Button>
           </form>
