@@ -21,8 +21,12 @@ async function selectContaining(select: Locator, text: string) {
 async function signInStaff(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
-  await page.getByPlaceholder("Click, then enter Login ID or email").fill(STAFF_LOGIN_ID);
-  await page.getByPlaceholder("Click, then enter password").fill(password());
+  const login = page.getByPlaceholder("Click, then enter Login ID or email");
+  const secret = page.getByPlaceholder("Click, then enter password");
+  await login.click();
+  await login.fill(STAFF_LOGIN_ID);
+  await secret.click();
+  await secret.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await page.waitForURL((url) => url.pathname === "/dashboard", { timeout: 30_000 });
 }
@@ -117,7 +121,7 @@ test("buyer approves a quoted custom job and staff cannot complete before verifi
     await expect(buyerPage.getByText("Production Started", { exact: true })).toBeVisible();
     await expect(buyerPage.getByText("Ready", { exact: true }).last()).toBeVisible();
   } finally {
-    await buyerContext.close();
-    await staffContext.close();
+    await buyerContext.close().catch(() => undefined);
+    await staffContext.close().catch(() => undefined);
   }
 });
