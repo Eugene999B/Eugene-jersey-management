@@ -5,6 +5,7 @@ import {
   OrderChannel,
   OrderStatus,
   PaymentMethod,
+  PaymentRefundStatus,
   PaymentStatus,
   PrismaClient,
   ProductionInventoryKind,
@@ -26,6 +27,7 @@ const IDS = {
   order: "phase17-canary-order",
   orderItem: "phase17-canary-order-item",
   payment: "phase17-canary-payment",
+  refund: "phase17-canary-refund",
   inventory: "phase17-canary-inventory",
   movement: "phase17-canary-movement",
 } as const;
@@ -144,8 +146,67 @@ async function seed() {
 
   await prisma.payment.upsert({
     where: { id: IDS.payment },
-    update: { orderId: IDS.order, method: PaymentMethod.CASH, amount: 80, status: PaymentStatus.SUCCESS, verifiedAt: new Date("2026-08-10T00:00:00.000Z"), providerReference: "PHASE17-CANARY-PAYMENT" },
-    create: { id: IDS.payment, orderId: IDS.order, method: PaymentMethod.CASH, amount: 80, status: PaymentStatus.SUCCESS, verifiedAt: new Date("2026-08-10T00:00:00.000Z"), providerReference: "PHASE17-CANARY-PAYMENT" },
+    update: {
+      orderId: IDS.order,
+      method: PaymentMethod.CARD,
+      amount: 80,
+      status: PaymentStatus.SUCCESS,
+      verifiedAt: new Date("2026-08-10T00:00:00.000Z"),
+      providerReference: "PHASE17-CANARY-PAYMENT",
+      providerChannel: "card",
+      metadata: { refundProcessedAmount: 20, refundLastProcessedAt: "2026-08-10T00:05:00.000Z" },
+    },
+    create: {
+      id: IDS.payment,
+      orderId: IDS.order,
+      method: PaymentMethod.CARD,
+      amount: 80,
+      status: PaymentStatus.SUCCESS,
+      verifiedAt: new Date("2026-08-10T00:00:00.000Z"),
+      providerReference: "PHASE17-CANARY-PAYMENT",
+      providerChannel: "card",
+      metadata: { refundProcessedAmount: 20, refundLastProcessedAt: "2026-08-10T00:05:00.000Z" },
+    },
+  });
+
+  await prisma.paymentRefund.upsert({
+    where: { id: IDS.refund },
+    update: {
+      shopId: IDS.shop,
+      paymentId: IDS.payment,
+      transactionReference: "PHASE17-CANARY-PAYMENT",
+      provider: "paystack",
+      providerRefundId: "171700001",
+      providerRefundReference: "PHASE17-CANARY-REFUND",
+      amount: 20,
+      currency: "GHS",
+      status: PaymentRefundStatus.PROCESSED,
+      providerStatus: "processed",
+      requestedById: IDS.user,
+      reason: "Release rehearsal partial refund",
+      providerResponse: { status: "processed", id: 171700001 },
+      requestedAt: new Date("2026-08-10T00:04:00.000Z"),
+      processedAt: new Date("2026-08-10T00:05:00.000Z"),
+      failedAt: null,
+    },
+    create: {
+      id: IDS.refund,
+      shopId: IDS.shop,
+      paymentId: IDS.payment,
+      transactionReference: "PHASE17-CANARY-PAYMENT",
+      provider: "paystack",
+      providerRefundId: "171700001",
+      providerRefundReference: "PHASE17-CANARY-REFUND",
+      amount: 20,
+      currency: "GHS",
+      status: PaymentRefundStatus.PROCESSED,
+      providerStatus: "processed",
+      requestedById: IDS.user,
+      reason: "Release rehearsal partial refund",
+      providerResponse: { status: "processed", id: 171700001 },
+      requestedAt: new Date("2026-08-10T00:04:00.000Z"),
+      processedAt: new Date("2026-08-10T00:05:00.000Z"),
+    },
   });
 
   await prisma.productionInventoryItem.upsert({
@@ -210,7 +271,7 @@ async function seed() {
 }
 
 async function snapshot() {
-  const [shop, user, product, variant, customer, order, payment, inventory, movement] = await Promise.all([
+  const [shop, user, product, variant, customer, order, payment, refund, inventory, movement] = await Promise.all([
     prisma.shop.findUnique({ where: { id: IDS.shop } }),
     prisma.user.findUnique({ where: { id: IDS.user } }),
     prisma.product.findUnique({ where: { id: IDS.product } }),
@@ -218,10 +279,11 @@ async function snapshot() {
     prisma.customer.findUnique({ where: { id: IDS.customer } }),
     prisma.order.findUnique({ where: { id: IDS.order }, include: { items: true, payments: true } }),
     prisma.payment.findUnique({ where: { id: IDS.payment } }),
+    prisma.paymentRefund.findUnique({ where: { id: IDS.refund } }),
     prisma.productionInventoryItem.findUnique({ where: { id: IDS.inventory } }),
     prisma.productionInventoryMovement.findUnique({ where: { id: IDS.movement } }),
   ]);
-  if (!shop || !user || !product || !variant || !customer || !order || !payment || !inventory || !movement) {
+  if (!shop || !user || !product || !variant || !customer || !order || !payment || !refund || !inventory || !movement) {
     throw new Error("Phase 17 canary is incomplete.");
   }
   const payload = {
@@ -231,13 +293,14 @@ async function snapshot() {
     variant: { id: variant.id, sku: variant.sku, stockQty: variant.stockQty, priceOverride: variant.priceOverride?.toString() ?? null, attributes: variant.attributes },
     customer: { id: customer.id, name: customer.name, phone: customer.phone, email: customer.email },
     order: { id: order.id, receiptNumber: order.receiptNumber, status: order.status, channel: order.channel, totalAmount: order.totalAmount.toString(), itemCount: order.items.length, paymentCount: order.payments.length },
-    payment: { id: payment.id, method: payment.method, status: payment.status, amount: payment.amount.toString(), providerReference: payment.providerReference, verifiedAt: payment.verifiedAt?.toISOString() ?? null },
+    payment: { id: payment.id, method: payment.method, status: payment.status, amount: payment.amount.toString(), providerReference: payment.providerReference, providerChannel: payment.providerChannel, verifiedAt: payment.verifiedAt?.toISOString() ?? null, metadata: payment.metadata },
+    refund: { id: refund.id, shopId: refund.shopId, paymentId: refund.paymentId, transactionReference: refund.transactionReference, provider: refund.provider, providerRefundId: refund.providerRefundId, providerRefundReference: refund.providerRefundReference, amount: refund.amount.toString(), currency: refund.currency, status: refund.status, providerStatus: refund.providerStatus, requestedById: refund.requestedById, requestedAt: refund.requestedAt.toISOString(), processedAt: refund.processedAt?.toISOString() ?? null },
     inventory: { id: inventory.id, inventoryKey: inventory.inventoryKey, kind: inventory.kind, unit: inventory.unit, quantity: inventory.quantity.toString(), unitCost: inventory.unitCost.toString() },
     movement: { id: movement.id, type: movement.type, quantityDelta: movement.quantityDelta.toString(), balanceAfter: movement.balanceAfter.toString(), unitCostSnapshot: movement.unitCostSnapshot.toString(), referenceId: movement.referenceId, createdById: movement.createdById },
-    financialTruth: { orderValue: "80", collected: "80", materialUsedMetres: "0.5", materialUseCost: "6.4" },
+    financialTruth: { orderValue: "80", capturedGross: "80", refunded: "20", collectedNet: "60", materialUsedMetres: "0.5", materialUseCost: "6.4" },
   };
   const canonical = JSON.stringify(payload);
-  return { version: 1, sha256: createHash("sha256").update(canonical).digest("hex"), payload };
+  return { version: 2, sha256: createHash("sha256").update(canonical).digest("hex"), payload };
 }
 
 async function capture(path: string) {
