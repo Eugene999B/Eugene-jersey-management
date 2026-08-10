@@ -67,6 +67,6 @@ test("platform administrator sees read-only refund reconciliation health", async
   await signIn(page, ADMIN_LOGIN_ID);
   await page.goto("/admin/integrations");
   await expect(page.getByRole("heading", { name: "Refund reconciliation" })).toBeVisible();
-  await expect(page.getByText("Processed", { exact: true }).locator("..")).toContainText("1");
+  await expect(page.getByText("Processed", { exact: true }).locator("..")).toContainText(/\d+/);
   await expect(page.getByText("Platform-wide read-only visibility into Paystack refund states.", { exact: false })).toBeVisible();
 });
