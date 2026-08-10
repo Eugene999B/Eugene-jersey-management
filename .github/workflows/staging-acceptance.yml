@@ -57,7 +57,8 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm --prefix e2e exec playwright test tests/phase17-staging-release-smoke.spec.ts 2>&1 | tee staging-e2e.log
+          cd e2e
+          npx playwright test tests/phase17-staging-release-smoke.spec.ts 2>&1 | tee ../staging-e2e.log
           exit_code=${PIPESTATUS[0]}
           exit "$exit_code"
 
