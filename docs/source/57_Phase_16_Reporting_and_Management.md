@@ -112,7 +112,7 @@ Platform billing reports use durable subscription billing records:
 - paid `SubscriptionInvoice` rows for revenue in the selected period,
 - failed `SubscriptionPaymentAttempt` rows and attempted value.
 
-The current billing model stores platform subscription amounts without a separate currency column; ESM therefore reports these billing figures in the platform billing currency used by the existing admin billing screens (GHS).
+Both invoice and payment-attempt records carry a currency code. Phase 16 groups aggregate billing values by currency and preserves each row's stored currency rather than mixing different currencies into one total.
 
 ### Module usage
 
