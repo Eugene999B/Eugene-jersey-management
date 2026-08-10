@@ -20,6 +20,42 @@ export async function listOrderCompletionTimes(shopId: string, orderIds: readonl
   return new Map(rows.map((row) => [row.orderId, row.completedAt]));
 }
 
+export type OrderTimingReportRow = {
+  orderId: string;
+  receiptNumber: string;
+  assignedToId: string | null;
+  assignedToName: string | null;
+  dueAt: Date | null;
+  completedAt: Date | null;
+};
+
+export async function listCompletedOrderTimings(shopId: string, from: Date, to: Date) {
+  return platformDb.$queryRaw<OrderTimingReportRow[]>`
+    SELECT
+      workflow."orderId",
+      orders."receiptNumber",
+      workflow."assignedToId",
+      assignee."name" AS "assignedToName",
+      workflow."dueAt",
+      MAX(events."createdAt") AS "completedAt"
+    FROM "OrderWorkflow" workflow
+    INNER JOIN "Order" orders
+      ON orders."id" = workflow."orderId" AND orders."shopId" = workflow."shopId"
+    LEFT JOIN "User" assignee
+      ON assignee."id" = workflow."assignedToId" AND assignee."shopId" = workflow."shopId"
+    INNER JOIN "OrderWorkflowEvent" events
+      ON events."orderId" = workflow."orderId"
+      AND events."shopId" = workflow."shopId"
+      AND events."type" = 'STATUS_CHANGED'
+      AND events."toStatus" = 'COMPLETED'
+    WHERE workflow."shopId" = ${shopId}
+      AND events."createdAt" >= ${from}
+      AND events."createdAt" <= ${to}
+    GROUP BY workflow."orderId", orders."receiptNumber", workflow."assignedToId", assignee."name", workflow."dueAt"
+    ORDER BY MAX(events."createdAt") DESC
+  `;
+}
+
 export type PlatformDeviceBridgeReport = {
   activeWebSerialProfiles: number;
   sentJobs: number;
