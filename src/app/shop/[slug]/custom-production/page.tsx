@@ -38,7 +38,7 @@ export default async function CustomProductionPage({
       },
     },
   });
-  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING") || !shop.enabledModules.includes("PRINTING_PRODUCTION")) {
+  if (!shop?.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING") || !shop.enabledModules.includes("PRINTING_PRODUCTION")) {
     return <main className="min-h-screen bg-[#f6f4ef] p-5"><div className="mx-auto max-w-3xl rounded-xl bg-white p-6"><h1 className="text-xl font-bold">Custom production unavailable</h1><p className="mt-2 text-sm text-slate-600">This shop is not accepting custom production requests right now.</p><Link className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white" href={`/shop/${slug}`}>Back to shop</Link></div></main>;
   }
 
@@ -96,7 +96,7 @@ export default async function CustomProductionPage({
               <label className="block text-sm font-semibold">Delivery address<input className="field mt-1" name="deliveryAddress" placeholder="Required when delivery is selected" /></label>
               <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-semibold">City<input className="field mt-1" name="deliveryCity" /></label><label className="block text-sm font-semibold">Area<input className="field mt-1" name="deliveryArea" /></label></div>
               <label className="block text-sm font-semibold">Delivery note<input className="field mt-1" name="deliveryNotes" /></label>
-              {shop.deliveryZones.length ? <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600"><p className="font-bold">Active delivery areas</p><p className="mt-1">{shop.deliveryZones.map((zone) => `${zone.name} (${currency(zone.fee, shop.currency)})`).join(" · ")}</p><p className="mt-1">Final delivery fee is confirmed with the quote.</p></div> : <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">This shop currently supports collection only.</p>}
+              {shop.deliveryZones.length ? <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600"><p className="font-bold">Active delivery areas</p><p className="mt-1">{shop.deliveryZones.map((zone) => `${zone.name} (${currency(Number(zone.fee), shop.currency)})`).join(" · ")}</p><p className="mt-1">Final delivery fee is confirmed with the quote.</p></div> : <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">This shop currently supports collection only.</p>}
               <button className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--shop-primary,#0f766e)] px-4 text-sm font-bold text-white" type="submit"><Sparkles size={17} /> Submit design request</button>
               <p className="text-center text-xs text-slate-500">You will track preview approval, deposit, production, balance and completion from your buyer request page.</p>
             </section>
