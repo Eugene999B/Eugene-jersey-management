@@ -7,11 +7,25 @@ import { customerProductionBalance, paidOrderAmount } from "@/lib/customer-produ
 import { prisma } from "@/lib/db";
 import { currency, titleCase } from "@/lib/format";
 
+const GREEN_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.COMPLETED,
+  CustomerProductionRequestStatus.READY,
+]);
+const ORANGE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.SUBMITTED,
+  CustomerProductionRequestStatus.CHANGES_REQUESTED,
+]);
+const BLUE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.APPROVED,
+  CustomerProductionRequestStatus.DEPOSIT_PAID,
+  CustomerProductionRequestStatus.IN_PRODUCTION,
+]);
+
 function tone(status: CustomerProductionRequestStatus): "green" | "red" | "orange" | "blue" | "slate" {
-  if ([CustomerProductionRequestStatus.COMPLETED, CustomerProductionRequestStatus.READY].includes(status)) return "green";
+  if (GREEN_STATUSES.has(status)) return "green";
   if (status === CustomerProductionRequestStatus.CANCELLED) return "red";
-  if ([CustomerProductionRequestStatus.SUBMITTED, CustomerProductionRequestStatus.CHANGES_REQUESTED].includes(status)) return "orange";
-  if ([CustomerProductionRequestStatus.APPROVED, CustomerProductionRequestStatus.DEPOSIT_PAID, CustomerProductionRequestStatus.IN_PRODUCTION].includes(status)) return "blue";
+  if (ORANGE_STATUSES.has(status)) return "orange";
+  if (BLUE_STATUSES.has(status)) return "blue";
   return "slate";
 }
 
