@@ -66,7 +66,7 @@ async function expectedTotals(shopId: string, businessDate: Date) {
   orders.forEach((order) => {
     totals.totalSales += Number(order.totalAmount);
     order.payments.forEach((payment) => {
-      if (![PaymentStatus.SUCCESS, PaymentStatus.REFUNDED].includes(payment.status) && payment.method !== PaymentMethod.STORE_CREDIT) return;
+      if (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED && payment.method !== PaymentMethod.STORE_CREDIT) return;
       const amount = netRecognizedPaymentAmount(payment);
       if (payment.method === PaymentMethod.CASH) totals.expectedCash += amount;
       if (payment.method === PaymentMethod.CARD) totals.expectedCard += amount;
