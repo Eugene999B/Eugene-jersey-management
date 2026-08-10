@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const STAFF_LOGIN_ID = "EJM-E2E-OWNER";
 const BUYER_PHONE = "+233200000115";
@@ -9,6 +9,13 @@ function password() {
   const value = process.env.E2E_PASSWORD;
   if (!value) throw new Error("E2E_PASSWORD is required for browser acceptance tests.");
   return value;
+}
+
+async function selectContaining(select: Locator, text: string) {
+  const option = select.locator("option").filter({ hasText: text }).first();
+  const value = await option.getAttribute("value");
+  if (!value) throw new Error(`Could not find selectable option containing: ${text}`);
+  await select.selectOption(value);
 }
 
 async function signInStaff(page: Page) {
@@ -50,9 +57,9 @@ test("buyer approves a quoted custom job and staff cannot complete before verifi
     await expect(buyerPage).toHaveURL(new RegExp(`/shop/${SHOP_SLUG}/custom-production`));
     await expect(buyerPage.getByRole("heading", { name: "Request custom production", exact: true })).toBeVisible();
 
-    await buyerPage.getByLabel("Customizable product").selectOption({ label: /E2E Phase 15 Custom Jersey/ });
+    await selectContaining(buyerPage.getByLabel("Customizable product"), "E2E Phase 15 Custom Jersey");
     await buyerPage.getByLabel("Garment and exact size").selectOption({ label: "E2E Phase 15 Tee · Black · M" });
-    await buyerPage.getByLabel("Print placement").selectOption({ label: /E2E Phase 15 Left chest/ });
+    await selectContaining(buyerPage.getByLabel("Print placement"), "E2E Phase 15 Left chest");
     await buyerPage.getByLabel("Text / name").fill(requestedText);
     await buyerPage.getByLabel("Number").fill("15");
     await buyerPage.getByLabel("Design notes").fill("Phase 15 browser approval flow. Keep the left-chest placement and spelling exact.");
@@ -87,7 +94,7 @@ test("buyer approves a quoted custom job and staff cannot complete before verifi
     await buyerPage.getByRole("button", { name: "Approve preview & create order", exact: true }).click();
     await expect(buyerPage).toHaveURL(/approved=1/);
     await expect(buyerPage.getByText("Preview approved. Your order is created; the deposit can now be paid.", { exact: true })).toBeVisible();
-    await expect(buyerPage.getByText("Deposit Paid", { exact: true })).toBeVisible();
+    await expect(buyerPage.getByText("Deposit Paid", { exact: true }).first()).toBeVisible();
     await expect(buyerPage.getByRole("button", { name: /Pay deposit/ })).toHaveCount(0);
     await expect(buyerPage.getByRole("button", { name: /Pay remaining balance/ })).toBeVisible();
 
