@@ -88,6 +88,7 @@ export async function getBuyerSession(): Promise<AuthenticatedBuyerSession | nul
   const activeSession = await isAccountSessionActive({
     accountKind: AccountKind.BUYER,
     accountId: buyer.id,
+    authVersion: buyer.updatedAt.getTime(),
     sessionId: tokenSession.sessionId,
   });
   if (!activeSession) return null;
@@ -106,6 +107,7 @@ export async function setBuyerSessionCookie(buyer: Omit<BuyerSession, "sessionId
   const accountSession = await createAccountSession({
     accountKind: AccountKind.BUYER,
     accountId: buyer.id,
+    authVersion: buyer.sessionVersion,
     ttlSeconds: BUYER_SESSION_TTL_SECONDS,
     metadata: accountSessionMetadataFromHeaders(requestHeaders),
   });
