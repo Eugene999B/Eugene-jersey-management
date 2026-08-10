@@ -67,10 +67,13 @@ describe("Paystack refund accounting", () => {
 });
 
 describe("Paystack refund safety architecture", () => {
-  it("uses an explicitly scoped platform repository and serializable refund reservation", () => {
+  it("uses provider verification plus a scoped serializable refund reservation", () => {
     const refunds = source("src/lib/payment-refunds.ts");
     expect(refunds).toContain('platformDb as prisma');
     expect(refunds).toContain('shopId: input.shopId');
+    expect(refunds).toContain('verifyPaystackTransaction');
+    expect(refunds).toContain('PAYMENT_PROVIDER_AMOUNT_MISMATCH');
+    expect(refunds).toContain('currency: providerCurrency');
     expect(refunds).toContain('Prisma.TransactionIsolationLevel.Serializable');
     expect(refunds).toContain('REFUND_ALREADY_IN_PROGRESS');
     expect(refunds).toContain('PaymentRefundStatus.RECONCILIATION_REQUIRED');
