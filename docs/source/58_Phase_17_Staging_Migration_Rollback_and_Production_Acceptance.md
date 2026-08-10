@@ -110,16 +110,24 @@ Railway variables that are sealed or intentionally production-only may need to b
 
 The repository includes `.github/workflows/staging-acceptance.yml`.
 
-Run **Verify Railway Staging Release** manually after Railway reports a healthy staging deployment. Provide the staging HTTPS URL as the `base_url` workflow input.
+Run **Verify Railway Staging Release** manually after Railway reports a healthy staging deployment.
 
-The GitHub repository must have a protected environment named `staging` with these secrets:
+The GitHub repository must have a protected environment named `staging` with this environment variable:
+
+```text
+STAGING_BASE_URL=https://your-railway-staging-host
+```
+
+and these secrets:
 
 ```text
 STAGING_ADMIN_LOGIN_ID
 STAGING_ADMIN_PASSWORD
 ```
 
-The workflow sets `E2E_EXTERNAL=true`, so Playwright targets the supplied Railway URL and does not start the local Next.js server.
+The staging URL is deliberately stored in the protected GitHub environment rather than accepted as a free-form workflow input. This prevents a manually mistyped or hostile URL from receiving staging administrator credentials.
+
+The workflow sets `E2E_EXTERNAL=true`, so Playwright targets the protected staging URL and does not start the local Next.js server.
 
 The staging smoke journey is intentionally read-only and verifies:
 
