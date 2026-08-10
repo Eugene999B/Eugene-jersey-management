@@ -58,7 +58,7 @@ export async function submitCustomerProductionRequestAction(formData: FormData) 
   if (!buyer?.isActive || buyer.phone !== buyerSession.phone) redirect(`/buyer/login?next=${encodeURIComponent(`/shop/${parsed.data.shopSlug}/custom-production`)}`);
 
   const shop = await prisma.shop.findUnique({ where: { slug: parsed.data.shopSlug } });
-  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING") || !shop.enabledModules.includes("PRINTING_PRODUCTION")) {
+  if (!shop?.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING") || !shop.enabledModules.includes("PRINTING_PRODUCTION")) {
     redirect(`/shop/${parsed.data.shopSlug}?error=closed`);
   }
   try {
@@ -81,10 +81,10 @@ export async function submitCustomerProductionRequestAction(formData: FormData) 
   if (!garment || !garmentSize || !placement) redirect(`/shop/${shop.slug}/custom-production?error=production-option`);
 
   const artwork = formData.get("artwork");
-  let artworkData: { originalName: string; mimeType: string; byteLength: number; sha256: string; data: Uint8Array } | null = null;
+  let artworkData: { originalName: string; mimeType: string; byteLength: number; sha256: string; data: Uint8Array<ArrayBuffer> } | null = null;
   if (artwork instanceof File && artwork.size > 0) {
     if (!customerArtworkMimeAllowed(artwork.type) || artwork.size > MAX_CUSTOMER_ARTWORK_BYTES) redirect(`/shop/${shop.slug}/custom-production?error=artwork`);
-    const bytes = new Uint8Array(await artwork.arrayBuffer());
+    const bytes = new Uint8Array<ArrayBuffer>(await artwork.arrayBuffer());
     if (!customerArtworkBytesMatchMime(bytes, artwork.type)) redirect(`/shop/${shop.slug}/custom-production?error=artwork-signature`);
     artworkData = {
       originalName: artwork.name.slice(0, 240) || "customer-artwork",
