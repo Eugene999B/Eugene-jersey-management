@@ -45,7 +45,7 @@ export default async function BuyerSecurityPage() {
               setupPending: status.setupPending,
             }}
           />
-          <SessionSecurityPanel currentSessionId={buyer.sessionId} sessions={sessions} />
+          <SessionSecurityPanel accountKind={AccountKind.BUYER} currentSessionId={buyer.sessionId} sessions={sessions} />
         </div>
       </div>
     </main>
