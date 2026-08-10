@@ -2,12 +2,15 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, FileText, History, PackageCheck, Printer, UserRound } from "lucide-react";
 import { PaymentMethod, PaymentStatus, Role } from "@prisma/client";
 import { OrderWorkflowPanel } from "@/components/orders/order-workflow-panel";
+import { PaymentRefundPanel } from "@/components/orders/payment-refund-panel";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
+import { netRecognizedPaymentAmount, processedRefundAmountFromMetadata } from "@/lib/payment-accounting";
+import { canManagePaymentRefunds } from "@/lib/payment-refund-access";
 import { getOrderWorkflow, listOrderWorkflowEvents } from "@/lib/order-workflow";
 import { productVariantOptionLabel } from "@/lib/product-variants";
 import { permissions } from "@/lib/rbac";
@@ -93,14 +96,15 @@ export default async function OrderDetailPage({ params }: Props) {
 
   const totalAmount = Number(order.totalAmount);
   const paidAmount = order.payments
-    .filter((payment) => payment.status === PaymentStatus.SUCCESS)
-    .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    .filter((payment) => payment.method !== PaymentMethod.STORE_CREDIT)
+    .reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0);
   const creditAmount = order.payments
     .filter((payment) => payment.method === PaymentMethod.STORE_CREDIT && payment.status === PaymentStatus.PENDING)
     .reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const refundedAmount = order.payments
-    .filter((payment) => payment.status === PaymentStatus.REFUNDED)
-    .reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const refundedAmount = order.payments.reduce((sum, payment) => {
+    if (payment.status === PaymentStatus.REFUNDED) return sum + Number(payment.amount);
+    return sum + Math.min(Number(payment.amount), processedRefundAmountFromMetadata(payment.metadata));
+  }, 0);
   const balanceAmount = Math.max(totalAmount - paidAmount, 0);
   const overdue = Boolean(workflow.dueAt && workflow.dueAt < new Date() && !["COMPLETED", "CANCELLED"].includes(order.status));
   const canEditWorkflow = workflowRoles.includes(session.role);
@@ -130,12 +134,14 @@ export default async function OrderDetailPage({ params }: Props) {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-6" aria-label="Order summary">
         <SummaryCard label="Total" value={currency(totalAmount, shop.currency)} />
-        <SummaryCard label="Paid now" value={currency(paidAmount, shop.currency)} tone="green" />
+        <SummaryCard label="Paid net" value={currency(paidAmount, shop.currency)} tone="green" />
         <SummaryCard label="Balance" value={currency(balanceAmount, shop.currency)} tone="orange" />
-        <SummaryCard label="Credit portion" value={currency(creditAmount, shop.currency)} />
+        <SummaryCard label="Refunded" value={currency(refundedAmount, shop.currency)} tone={refundedAmount > 0 ? "red" : undefined} />
         <SummaryCard label="Assigned to" value={workflow.assignedToName ?? "Unassigned"} />
         <SummaryCard label="Due" value={workflow.dueAt ? shortDate(workflow.dueAt) : "Not set"} tone={overdue ? "red" : undefined} />
       </section>
+
+      {creditAmount > 0 ? <p className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-950">Credit portion still outstanding: {currency(creditAmount, shop.currency)}</p> : null}
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.8fr)]">
         <div className="space-y-5">
@@ -213,6 +219,14 @@ export default async function OrderDetailPage({ params }: Props) {
               </div>
             ))}
           </section>
+
+          <PaymentRefundPanel
+            shopId={shop.id}
+            orderId={order.id}
+            currencyCode={shop.currency}
+            payments={order.payments}
+            canManage={canManagePaymentRefunds(session.role)}
+          />
 
           <section className="panel p-4 sm:p-5" aria-labelledby="related-work-heading">
             <h2 id="related-work-heading" className="font-bold">Design jobs, fulfilment, and returns</h2>
