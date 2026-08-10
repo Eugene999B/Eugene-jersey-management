@@ -4,12 +4,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 export type DeploymentTier = "production" | "staging";
-export type DeploymentEnvironment = {
-  ESM_DEPLOYMENT_TIER?: string;
-  RAILWAY_ENVIRONMENT_NAME?: string;
-  CI?: string;
-  RELEASE_PREDEPLOY_ALLOW_LOCAL?: string;
-};
+export type DeploymentEnvironment = Record<string, string | undefined>;
 
 function normalized(value: string | undefined) {
   return value?.trim().toLowerCase() ?? "";
