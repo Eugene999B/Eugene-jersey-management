@@ -30,7 +30,7 @@ Customer bank account details used for a Paystack `needs-attention` retry are no
 
 ESM supports these durable states:
 
-- `REQUESTED` — local refund capacity has been reserved before the provider request.
+- `REQUESTED` — local refund capacity has been reserved before the provider refund mutation.
 - `PENDING` — Paystack accepted the refund and it is waiting for processing.
 - `PROCESSING` — provider processing is in progress.
 - `NEEDS_ATTENTION` — Paystack requires verified customer bank details before it can continue.
@@ -40,9 +40,15 @@ ESM supports these durable states:
 
 A payment can have multiple historical partial refunds, but ESM permits only one active refund at a time for a payment. This makes provider webhook matching deterministic even when the provider does not initially supply a refund reference.
 
+## Original transaction verification
+
+Before a refund can be reserved, ESM performs a read-only Paystack verification of the original transaction reference. The provider transaction must still report a successful capture, its amount must exactly match the locally recorded gross payment, and its provider-recorded currency becomes the refund-ledger currency. This prevents a later shop currency-setting change from changing the currency of a historical captured payment.
+
+The same payment is re-read inside the serializable reservation transaction. If its provider reference or gross amount changed between verification and reservation, the refund is refused instead of using stale provider evidence.
+
 ## Over-refund and network safety
 
-Refund capacity is reserved inside a serializable database transaction before ESM contacts Paystack. Existing processed and active refunds are deducted from the amount still refundable.
+After the read-only original-transaction verification, refund capacity is reserved inside a serializable database transaction **before ESM sends the Paystack refund mutation**. Existing processed and active refunds are deducted from the amount still refundable.
 
 A definitive provider rejection marks the refund `FAILED`. A network timeout, connection failure or ambiguous 5xx response does **not** automatically retry. It moves the refund to `RECONCILIATION_REQUIRED` so the operator can query Paystack for the original outcome. This prevents a second request from accidentally creating a duplicate refund.
 
