@@ -3,6 +3,7 @@ import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { currency, titleCase } from "@/lib/format";
+import { netRecognizedPaymentAmount, processedRefundAmountFromMetadata } from "@/lib/payment-accounting";
 import { permissions } from "@/lib/rbac";
 import { requireTenantShopId, withTenantScope } from "@/lib/tenant-scope";
 import { productVariantOptionLabel } from "@/lib/product-variants";
@@ -51,13 +52,23 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Receipt not found." }, { status: 404 });
   }
 
-  const paymentRows = order.payments.map((payment) => ({
-    ...payment,
-    details: tenderGatewayDetails(payment.gatewayResponse),
-  }));
+  const paymentRows = order.payments.map((payment) => {
+    const grossAmount = Number(payment.amount);
+    const refundedAmount = payment.status === PaymentStatus.REFUNDED
+      ? grossAmount
+      : Math.min(grossAmount, processedRefundAmountFromMetadata(payment.metadata));
+    return {
+      ...payment,
+      details: tenderGatewayDetails(payment.gatewayResponse),
+      grossAmount,
+      refundedAmount,
+      netAmount: netRecognizedPaymentAmount(payment),
+    };
+  });
   const paidNow = paymentRows
-    .filter((payment) => payment.status === PaymentStatus.SUCCESS)
-    .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    .filter((payment) => payment.method !== PaymentMethod.STORE_CREDIT)
+    .reduce((sum, payment) => sum + payment.netAmount, 0);
+  const refundedTotal = paymentRows.reduce((sum, payment) => sum + payment.refundedAmount, 0);
   const creditBalance = paymentRows
     .filter((payment) => payment.method === PaymentMethod.STORE_CREDIT && payment.status === PaymentStatus.PENDING)
     .reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -86,6 +97,7 @@ export async function GET(_request: Request, context: RouteContext) {
         small { color: #64748b; }
         .total { font-weight: 700; font-size: 18px; }
         .summary td { font-weight: 700; }
+        .refund { color: #b91c1c; }
         @media print { body { padding: 0; } .receipt { border: 0; } }
       </style>
     </head>
@@ -113,13 +125,15 @@ export async function GET(_request: Request, context: RouteContext) {
                 <strong>${escapeHtml(titleCase(payment.method))}</strong><br>
                 <small>${escapeHtml(titleCase(payment.status))}${payment.providerReference && payment.method !== PaymentMethod.CASH && payment.method !== PaymentMethod.STORE_CREDIT ? ` · ${escapeHtml(payment.providerReference)}` : ""}</small>
                 ${payment.method === PaymentMethod.CASH ? `<br><small>Cash received: ${escapeHtml(currency(payment.details.tenderedAmount ?? Number(payment.amount), order.shop.currency))}${Number(payment.details.changeAmount ?? 0) > 0 ? ` · Change: ${escapeHtml(currency(payment.details.changeAmount ?? 0, order.shop.currency))}` : ""}</small>` : ""}
+                ${payment.refundedAmount > 0 ? `<br><small class="refund">Refunded: ${escapeHtml(currency(payment.refundedAmount, order.shop.currency))} · Net: ${escapeHtml(currency(payment.netAmount, order.shop.currency))}</small>` : ""}
               </td>
-              <td style="text-align:right">${escapeHtml(currency(payment.amount.toString(), order.shop.currency))}</td>
+              <td style="text-align:right">${escapeHtml(currency(payment.grossAmount, order.shop.currency))}</td>
             </tr>
           `).join("") : `<tr><td colspan="2">No payment was required.</td></tr>`}
         </table>
         <table class="summary">
-          <tr><td>Paid now</td><td style="text-align:right">${escapeHtml(currency(paidNow, order.shop.currency))}</td></tr>
+          <tr><td>Paid net</td><td style="text-align:right">${escapeHtml(currency(paidNow, order.shop.currency))}</td></tr>
+          ${refundedTotal > 0 ? `<tr class="refund"><td>Refunded</td><td style="text-align:right">${escapeHtml(currency(refundedTotal, order.shop.currency))}</td></tr>` : ""}
           ${creditBalance > 0 ? `<tr><td>Credit balance</td><td style="text-align:right">${escapeHtml(currency(creditBalance, order.shop.currency))}</td></tr>` : ""}
           ${cashReceived > 0 ? `<tr><td>Cash received</td><td style="text-align:right">${escapeHtml(currency(cashReceived, order.shop.currency))}</td></tr>` : ""}
           ${changeAmount > 0 ? `<tr><td>Change</td><td style="text-align:right">${escapeHtml(currency(changeAmount, order.shop.currency))}</td></tr>` : ""}

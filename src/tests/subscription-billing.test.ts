@@ -43,9 +43,13 @@ describe("subscription billing operations", () => {
     expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_PAID_AT_IMMUTABLE");
     expect(terminalGuard).toContain("EJM_SUBSCRIPTION_INVOICE_VOID_AUDIT_REQUIRED");
     expect(dashboardActions).not.toContain("@/lib/platform-db");
-    expect(webhook).toContain("settleSubscriptionInvoicePayment");
-    expect(webhook.indexOf("settleCommunicationCreditPurchase")).toBeLessThan(webhook.indexOf("settleSubscriptionInvoicePayment"));
-    expect(webhook.indexOf("settleSubscriptionInvoicePayment")).toBeLessThan(webhook.indexOf("settlePaystackTransaction(payload.data)"));
+
+    const communicationCall = webhook.indexOf("settleCommunicationCreditPurchase(transactionData)");
+    const subscriptionCall = webhook.indexOf("settleSubscriptionInvoicePayment(transactionData)");
+    const shopPaymentCall = webhook.indexOf("settlePaystackTransaction(transactionData)");
+    expect(communicationCall).toBeGreaterThanOrEqual(0);
+    expect(subscriptionCall).toBeGreaterThan(communicationCall);
+    expect(shopPaymentCall).toBeGreaterThan(subscriptionCall);
   });
 
   it("requires explicit administrator reasons for manual settlement and voiding", () => {

@@ -1,6 +1,14 @@
-import type { PaymentMethod, PaymentStatus } from "@prisma/client";
+import type { PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
+import { refundAdjustedPaymentTotals } from "@/lib/payment-accounting";
 
 export type MoneyLike = number | { toString(): string } | null | undefined;
+
+type PaymentRow = {
+  amount: MoneyLike;
+  method: PaymentMethod | string;
+  status: PaymentStatus | string;
+  metadata?: Prisma.JsonValue | Record<string, unknown> | null;
+};
 
 export function money(value: MoneyLike) {
   const parsed = Number(value ?? 0);
@@ -11,23 +19,21 @@ export function recognizedPayment(status: PaymentStatus | string, method: Paymen
   return status === "SUCCESS" || method === "STORE_CREDIT";
 }
 
-export function paymentMethodTotals(payments: Array<{ amount: MoneyLike; method: PaymentMethod | string; status: PaymentStatus | string }>) {
-  const totals = { CASH: 0, CARD: 0, MOMO: 0, STORE_CREDIT: 0, total: 0 };
-  for (const payment of payments) {
-    if (!recognizedPayment(payment.status, payment.method)) continue;
-    const amount = money(payment.amount);
-    if (payment.method === "CASH") totals.CASH += amount;
-    if (payment.method === "CARD") totals.CARD += amount;
-    if (payment.method === "MOMO") totals.MOMO += amount;
-    if (payment.method === "STORE_CREDIT") totals.STORE_CREDIT += amount;
-    totals.total += amount;
-  }
-  return totals;
+export function paymentMethodTotals(payments: PaymentRow[]) {
+  const totals = refundAdjustedPaymentTotals(payments);
+  return {
+    CASH: totals.CASH,
+    CARD: totals.CARD,
+    MOMO: totals.MOMO,
+    STORE_CREDIT: totals.STORE_CREDIT,
+    total: totals.total,
+    refunded: totals.refunded,
+  };
 }
 
 export function outstandingOrderBalance(order: {
   totalAmount: MoneyLike;
-  payments: Array<{ amount: MoneyLike; method: PaymentMethod | string; status: PaymentStatus | string }>;
+  payments: PaymentRow[];
 }) {
   return Math.max(0, money(order.totalAmount) - paymentMethodTotals(order.payments).total);
 }

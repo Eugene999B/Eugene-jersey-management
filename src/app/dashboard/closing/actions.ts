@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
 
 const closingSchema = z.object({
   businessDate: z.coerce.date(),
@@ -38,6 +39,7 @@ async function expectedTotals(shopId: string, businessDate: Date) {
           some: {
             OR: [
               { status: PaymentStatus.SUCCESS },
+              { status: PaymentStatus.REFUNDED },
               { method: PaymentMethod.STORE_CREDIT },
             ],
           },
@@ -64,11 +66,12 @@ async function expectedTotals(shopId: string, businessDate: Date) {
   orders.forEach((order) => {
     totals.totalSales += Number(order.totalAmount);
     order.payments.forEach((payment) => {
-      if (payment.status !== PaymentStatus.SUCCESS && payment.method !== PaymentMethod.STORE_CREDIT) return;
-      if (payment.method === PaymentMethod.CASH) totals.expectedCash += Number(payment.amount);
-      if (payment.method === PaymentMethod.CARD) totals.expectedCard += Number(payment.amount);
-      if (payment.method === PaymentMethod.MOMO) totals.expectedMomo += Number(payment.amount);
-      if (payment.method === PaymentMethod.STORE_CREDIT) totals.creditSales += Number(payment.amount);
+      if (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED && payment.method !== PaymentMethod.STORE_CREDIT) return;
+      const amount = netRecognizedPaymentAmount(payment);
+      if (payment.method === PaymentMethod.CASH) totals.expectedCash += amount;
+      if (payment.method === PaymentMethod.CARD) totals.expectedCard += amount;
+      if (payment.method === PaymentMethod.MOMO) totals.expectedMomo += amount;
+      if (payment.method === PaymentMethod.STORE_CREDIT) totals.creditSales += amount;
     });
   });
 

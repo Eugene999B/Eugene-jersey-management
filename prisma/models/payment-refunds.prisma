@@ -1,0 +1,39 @@
+enum PaymentRefundStatus {
+  REQUESTED
+  PENDING
+  PROCESSING
+  NEEDS_ATTENTION
+  RECONCILIATION_REQUIRED
+  FAILED
+  PROCESSED
+}
+
+model PaymentRefund {
+  id                      String              @id @default(cuid())
+  shopId                  String
+  paymentId               String
+  transactionReference    String
+  provider                String              @default("paystack")
+  providerRefundId        String?
+  providerRefundReference String?
+  amount                  Decimal             @db.Decimal(12, 2)
+  currency                String              @default("GHS")
+  status                  PaymentRefundStatus @default(REQUESTED)
+  providerStatus          String?
+  reason                  String?
+  customerNote            String?
+  merchantNote            String?
+  requestedById           String?
+  providerResponse        Json                @default("{}")
+  failureMessage          String?
+  requestedAt             DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  processedAt             DateTime?
+  failedAt                DateTime?
+
+  @@unique([provider, providerRefundId])
+  @@index([shopId, paymentId, status])
+  @@index([shopId, requestedAt])
+  @@index([transactionReference, status])
+  @@index([status, updatedAt])
+}
