@@ -8,7 +8,9 @@ import {
   type PaymentRefund,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { toMinorUnits } from "@/lib/payments";
+import { amountToSubunit } from "@/lib/payments";
+
+const PAYSTACK_TIMEOUT_MS = Math.max(5_000, Math.min(30_000, Number(process.env.PAYSTACK_TIMEOUT_MS ?? 15_000)));
 
 const ACTIVE_REFUND_STATUSES: PaymentRefundStatus[] = [
   PaymentRefundStatus.REQUESTED,
@@ -45,13 +47,13 @@ function secretKey() {
 }
 
 async function paystackRequest(path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${secretKey()}`);
+  headers.set("Content-Type", "application/json");
   return fetch(`https://api.paystack.co${path}`, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${secretKey()}`,
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers,
+    signal: init.signal ?? AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
     cache: "no-store",
   });
 }
@@ -132,7 +134,7 @@ async function applyProviderRefundState(refund: Pick<PaymentRefund, "id" | "shop
       status,
       providerResponse: provider.record as Prisma.InputJsonValue,
       failureMessage: status === PaymentRefundStatus.FAILED
-        ? String(provider.record.reason ?? provider.record.message ?? "Paystack refund failed")
+        ? String(provider.record.reason ?? provider.record.message ?? "Paystack refund failed").slice(0, 500)
         : null,
       failedAt: status === PaymentRefundStatus.FAILED ? now : null,
       processedAt: status === PaymentRefundStatus.PROCESSED ? now : null,
@@ -155,7 +157,7 @@ export async function requestPaymentRefund(input: {
   const reserved = await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findFirst({
       where: { id: input.paymentId, order: { shopId: input.shopId } },
-      include: { order: { select: { id: true, receiptNumber: true } } },
+      include: { order: { select: { id: true, receiptNumber: true, shop: { select: { currency: true } } } } },
     });
     if (!payment) throw new Error("PAYMENT_NOT_FOUND");
     if (![PaymentMethod.CARD, PaymentMethod.MOMO].includes(payment.method)) throw new Error("PAYMENT_NOT_PAYSTACK");
@@ -184,14 +186,14 @@ export async function requestPaymentRefund(input: {
         paymentId: payment.id,
         transactionReference: payment.providerReference,
         amount: new Prisma.Decimal(input.amount.toFixed(2)),
-        currency: payment.currency,
+        currency: payment.order.shop.currency.toUpperCase(),
         requestedById: input.requestedById,
         reason,
         customerNote,
         merchantNote,
       },
     });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15_000 });
 
   let response: Response;
   try {
@@ -199,7 +201,7 @@ export async function requestPaymentRefund(input: {
       method: "POST",
       body: JSON.stringify({
         transaction: reserved.transactionReference,
-        amount: toMinorUnits(money(reserved.amount)),
+        amount: amountToSubunit(money(reserved.amount)),
         currency: reserved.currency,
         customer_note: reserved.customerNote ?? undefined,
         merchant_note: reserved.merchantNote ?? undefined,
@@ -210,6 +212,7 @@ export async function requestPaymentRefund(input: {
       where: { id: reserved.id },
       data: {
         status: PaymentRefundStatus.RECONCILIATION_REQUIRED,
+        providerStatus: "unknown",
         failureMessage: error instanceof Error ? error.message.slice(0, 500) : "Paystack refund request outcome is unknown.",
       },
     });
@@ -236,58 +239,111 @@ export async function requestPaymentRefund(input: {
   return applyProviderRefundState(reserved, payload.data);
 }
 
+async function resolveRefundForWebhook(input: {
+  transactionReference: string;
+  amount: number;
+  currency: string;
+  providerRefundId?: string | null;
+  refundReference?: string | null;
+}) {
+  if (input.providerRefundId) {
+    const providerMatch = await prisma.paymentRefund.findFirst({
+      where: { provider: "paystack", providerRefundId: input.providerRefundId },
+    });
+    if (providerMatch) return providerMatch;
+  }
+
+  if (input.refundReference) {
+    const referenceMatches = await prisma.paymentRefund.findMany({
+      where: { provider: "paystack", providerRefundReference: input.refundReference },
+      orderBy: { requestedAt: "desc" },
+      take: 2,
+    });
+    if (referenceMatches.length === 1) return referenceMatches[0];
+  }
+
+  const amount = new Prisma.Decimal(input.amount.toFixed(2));
+  const activeMatches = await prisma.paymentRefund.findMany({
+    where: {
+      provider: "paystack",
+      transactionReference: input.transactionReference,
+      amount,
+      currency: input.currency,
+      status: { in: ACTIVE_REFUND_STATUSES },
+    },
+    orderBy: { requestedAt: "desc" },
+    take: 2,
+  });
+  if (activeMatches.length === 1) return activeMatches[0];
+  if (activeMatches.length > 1) throw new Error("REFUND_LEDGER_AMBIGUOUS");
+
+  const historicalMatches = await prisma.paymentRefund.findMany({
+    where: {
+      provider: "paystack",
+      transactionReference: input.transactionReference,
+      amount,
+      currency: input.currency,
+    },
+    orderBy: { requestedAt: "desc" },
+    take: 2,
+  });
+  if (historicalMatches.length === 1) return historicalMatches[0];
+  if (historicalMatches.length > 1) throw new Error("REFUND_LEDGER_AMBIGUOUS");
+  return null;
+}
+
 export async function applyPaystackRefundWebhook(input: {
   transactionReference: string;
   amountMinor: number;
   currency: string;
   status: string;
+  providerRefundId?: string | null;
   refundReference?: string | null;
   payload: Record<string, unknown>;
 }) {
+  const amount = input.amountMinor / 100;
+  const currency = input.currency.toUpperCase();
+  const refund = await resolveRefundForWebhook({
+    transactionReference: input.transactionReference,
+    amount,
+    currency,
+    providerRefundId: input.providerRefundId,
+    refundReference: input.refundReference,
+  });
+  if (!refund) throw new Error("REFUND_LEDGER_NOT_FOUND");
+  if (refund.transactionReference !== input.transactionReference) throw new Error("REFUND_TRANSACTION_MISMATCH");
+  if (Math.abs(money(refund.amount) - amount) > 0.005) throw new Error("REFUND_AMOUNT_MISMATCH");
+  if (refund.currency.toUpperCase() !== currency) throw new Error("REFUND_CURRENCY_MISMATCH");
+
   const payment = await prisma.payment.findFirst({
-    where: { providerReference: input.transactionReference },
-    include: { order: { select: { shopId: true } } },
+    where: { id: refund.paymentId, order: { shopId: refund.shopId } },
+    select: { id: true },
   });
   if (!payment) throw new Error("REFUND_PAYMENT_NOT_FOUND");
 
-  const amount = input.amountMinor / 100;
-  const active = await prisma.paymentRefund.findFirst({
-    where: {
-      shopId: payment.order.shopId,
-      paymentId: payment.id,
-      status: { in: ACTIVE_REFUND_STATUSES },
-    },
-    orderBy: { requestedAt: "asc" },
-  });
-  const refund = active ?? await prisma.paymentRefund.findFirst({
-    where: {
-      shopId: payment.order.shopId,
-      paymentId: payment.id,
-      amount: new Prisma.Decimal(amount.toFixed(2)),
-    },
-    orderBy: { requestedAt: "desc" },
-  });
-  if (!refund) throw new Error("REFUND_LEDGER_NOT_FOUND");
-  if (Math.abs(money(refund.amount) - amount) > 0.005) throw new Error("REFUND_AMOUNT_MISMATCH");
-  if (refund.currency.toUpperCase() !== input.currency.toUpperCase()) throw new Error("REFUND_CURRENCY_MISMATCH");
-
   const status = providerRefundStatus(input.status);
   if (!status) throw new Error("REFUND_STATUS_UNKNOWN");
+  const current = await prisma.paymentRefund.findUniqueOrThrow({ where: { id: refund.id } });
+  if (current.status === PaymentRefundStatus.PROCESSED && status !== PaymentRefundStatus.PROCESSED) {
+    return { refundId: refund.id, shopId: refund.shopId, paymentId: refund.paymentId, status: current.status };
+  }
+
   const now = new Date();
   await prisma.paymentRefund.update({
     where: { id: refund.id },
     data: {
       status,
       providerStatus: input.status,
+      providerRefundId: input.providerRefundId?.trim() || refund.providerRefundId,
       providerRefundReference: input.refundReference?.trim() || refund.providerRefundReference,
       providerResponse: input.payload as Prisma.InputJsonValue,
-      failureMessage: status === PaymentRefundStatus.FAILED ? String(input.payload.reason ?? "Paystack refund failed") : null,
+      failureMessage: status === PaymentRefundStatus.FAILED ? String(input.payload.reason ?? "Paystack refund failed").slice(0, 500) : null,
       failedAt: status === PaymentRefundStatus.FAILED ? now : null,
-      processedAt: status === PaymentRefundStatus.PROCESSED ? now : null,
+      processedAt: status === PaymentRefundStatus.PROCESSED ? now : refund.processedAt,
     },
   });
-  await syncPaymentRefundStatus(payment.order.shopId, payment.id);
-  return { refundId: refund.id, shopId: payment.order.shopId, paymentId: payment.id, status };
+  await syncPaymentRefundStatus(refund.shopId, refund.paymentId);
+  return { refundId: refund.id, shopId: refund.shopId, paymentId: refund.paymentId, status };
 }
 
 async function verifyPaystackTransactionId(reference: string) {
@@ -327,7 +383,8 @@ export async function reconcilePaymentRefund(shopId: string, refundId: string) {
       where: { id: refund.id },
       data: {
         status: PaymentRefundStatus.RECONCILIATION_REQUIRED,
-        failureMessage: "No unique Paystack refund record could be confirmed. Review the transaction in Paystack before retrying.",
+        providerStatus: "unknown",
+        failureMessage: "No unique Paystack refund record could be confirmed. Review the transaction in Paystack before starting another refund.",
       },
     });
   }
