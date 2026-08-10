@@ -42,6 +42,7 @@ export const adminNavigationSections: readonly AdminNavSection[] = [
 
 export const adminNavigationItems: readonly AdminNavItem[] = [
   { section: "Businesses", href: "/admin", label: "Platform overview", shortLabel: "Home", icon: BarChart3, permission: null },
+  { section: "Businesses", href: "/admin/reports", label: "Platform reports", shortLabel: "Reports", icon: BarChart3, permission: null },
   { section: "Businesses", href: "/admin/shops", label: "Businesses", shortLabel: "Businesses", icon: Store, permission: "shops" },
   { section: "Businesses", href: "/admin/applications", label: "Applications", shortLabel: "Apply", icon: ClipboardCheck, permission: "shops" },
   { section: "Plans & access", href: "/admin/access", label: "Access grants", shortLabel: "Access", icon: Gift, permission: "billing" },
