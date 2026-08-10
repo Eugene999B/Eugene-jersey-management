@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AccountKind, Role } from "@prisma/client";
+import {
+  accountSessionMetadataFromHeaders,
+  createAccountSession,
+} from "@/lib/account-sessions";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -190,6 +194,12 @@ export async function POST(request: NextRequest) {
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
   await audit({ shopId: user.shopId, userId: user.id, action: "auth.login", entityType: "User", entityId: user.id });
 
+  const accountSession = await createAccountSession({
+    accountKind: AccountKind.USER,
+    accountId: user.id,
+    ttlSeconds: SESSION_TTL_SECONDS,
+    metadata: accountSessionMetadataFromHeaders(request.headers),
+  });
   const token = await signSession({
     id: user.id,
     shopId: user.shopId,
@@ -197,6 +207,7 @@ export async function POST(request: NextRequest) {
     name: user.name,
     role: user.role,
     sessionVersion: user.sessionVersion,
+    sessionId: accountSession.id,
   });
   const response = wantsJson(request)
     ? NextResponse.json({ ok: true, redirectPath }, { headers: { "Cache-Control": "no-store" } })
