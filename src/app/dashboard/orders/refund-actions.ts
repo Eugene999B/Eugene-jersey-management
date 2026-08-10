@@ -32,6 +32,8 @@ const retrySchema = reconcileSchema.extend({
   accountNumber: z.string().trim().min(6).max(30),
 });
 
+type EvidenceWarning = "accounting-sync" | "audit-log";
+
 function resultCode(status: PaymentRefundStatus) {
   return status.toLowerCase().replaceAll("_", "-");
 }
@@ -43,6 +45,9 @@ function errorCode(error: unknown) {
   if (message === "PAYMENT_NOT_PAYSTACK") return "not-paystack";
   if (message === "PAYMENT_NOT_CAPTURED") return "not-captured";
   if (message === "PAYMENT_PROVIDER_REFERENCE_MISSING") return "missing-reference";
+  if (message === "PAYMENT_PROVIDER_VERIFY_FAILED") return "provider-verify-failed";
+  if (message === "PAYMENT_PROVIDER_AMOUNT_MISMATCH") return "provider-amount-mismatch";
+  if (message === "PAYMENT_CHANGED_DURING_REFUND") return "payment-changed";
   if (message === "REFUND_ALREADY_IN_PROGRESS") return "already-in-progress";
   if (message === "REFUND_AMOUNT_EXCEEDS_AVAILABLE") return "amount-exceeds-available";
   if (message === "REFUND_AMOUNT_INVALID") return "invalid-amount";
@@ -83,6 +88,37 @@ async function recordRefundAudit(input: {
   });
 }
 
+async function finalizeRefundEvidence(input: {
+  session: { id: string; shopId: string };
+  refund: PaymentRefund;
+  auditAction: string;
+  includeAmount?: boolean;
+}) {
+  const warnings: EvidenceWarning[] = [];
+  try {
+    await syncPaymentRefundAccounting(input.session.shopId, input.refund.paymentId);
+  } catch {
+    warnings.push("accounting-sync");
+  }
+  try {
+    await recordRefundAudit({
+      session: input.session,
+      refund: input.refund,
+      action: input.auditAction,
+      includeAmount: input.includeAmount,
+    });
+  } catch {
+    warnings.push("audit-log");
+  }
+  return warnings;
+}
+
+function successUrl(orderId: string, refund: PaymentRefund, warnings: EvidenceWarning[]) {
+  const params = new URLSearchParams({ refundResult: resultCode(refund.status) });
+  if (warnings.length) params.set("refundWarning", warnings.join(","));
+  return `/dashboard/orders/${orderId}?${params.toString()}`;
+}
+
 export async function requestPaymentRefundAction(formData: FormData) {
   const session = await requireRole(paymentRefundRoles);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
@@ -106,14 +142,18 @@ export async function requestPaymentRefundAction(formData: FormData) {
       reason: parsed.data.reason,
       customerNote: parsed.data.customerNote,
     });
-    await syncPaymentRefundAccounting(session.shopId, refund.paymentId);
-    await recordRefundAudit({ session: { id: session.id, shopId: session.shopId }, refund, action: "payment.refund_requested", includeAmount: true });
   } catch (error) {
     redirect(`/dashboard/orders/${parsed.data.orderId}?refundError=${errorCode(error)}`);
   }
 
+  const warnings = await finalizeRefundEvidence({
+    session: { id: session.id, shopId: session.shopId },
+    refund,
+    auditAction: "payment.refund_requested",
+    includeAmount: true,
+  });
   revalidateRefundSurfaces(parsed.data.orderId);
-  redirect(`/dashboard/orders/${parsed.data.orderId}?refundResult=${resultCode(refund.status)}`);
+  redirect(successUrl(parsed.data.orderId, refund, warnings));
 }
 
 export async function reconcilePaymentRefundAction(formData: FormData) {
@@ -129,14 +169,17 @@ export async function reconcilePaymentRefundAction(formData: FormData) {
   let refund: PaymentRefund;
   try {
     refund = await reconcilePaymentRefund(session.shopId, parsed.data.refundId);
-    await syncPaymentRefundAccounting(session.shopId, refund.paymentId);
-    await recordRefundAudit({ session: { id: session.id, shopId: session.shopId }, refund, action: "payment.refund_reconciled" });
   } catch (error) {
     redirect(`/dashboard/orders/${parsed.data.orderId}?refundError=${errorCode(error)}`);
   }
 
+  const warnings = await finalizeRefundEvidence({
+    session: { id: session.id, shopId: session.shopId },
+    refund,
+    auditAction: "payment.refund_reconciled",
+  });
   revalidateRefundSurfaces(parsed.data.orderId);
-  redirect(`/dashboard/orders/${parsed.data.orderId}?refundResult=${resultCode(refund.status)}`);
+  redirect(successUrl(parsed.data.orderId, refund, warnings));
 }
 
 export async function retryPaymentRefundAction(formData: FormData) {
@@ -159,12 +202,15 @@ export async function retryPaymentRefundAction(formData: FormData) {
       bankId: parsed.data.bankId,
       accountNumber: parsed.data.accountNumber,
     });
-    await syncPaymentRefundAccounting(session.shopId, refund.paymentId);
-    await recordRefundAudit({ session: { id: session.id, shopId: session.shopId }, refund, action: "payment.refund_bank_retry_submitted" });
   } catch (error) {
     redirect(`/dashboard/orders/${parsed.data.orderId}?refundError=${errorCode(error)}`);
   }
 
+  const warnings = await finalizeRefundEvidence({
+    session: { id: session.id, shopId: session.shopId },
+    refund,
+    auditAction: "payment.refund_bank_retry_submitted",
+  });
   revalidateRefundSurfaces(parsed.data.orderId);
-  redirect(`/dashboard/orders/${parsed.data.orderId}?refundResult=${resultCode(refund.status)}`);
+  redirect(successUrl(parsed.data.orderId, refund, warnings));
 }
