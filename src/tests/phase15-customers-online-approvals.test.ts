@@ -75,8 +75,8 @@ describe("Phase 15 customers, online ordering and approvals", () => {
     expect(action).toContain("getBuyerSession");
     expect(action).toContain('product: { shopId: shop.id, isPersonalizable: true }');
     expect(action).toContain("readProductionLibrary(shop.productionSetup)");
-    expect(action).toContain("garment.sizes.includes(garmentSize)");
-    expect(action).toContain("placement.garmentId === garmentResourceId");
+    expect(action).toContain("item.sizes.includes(garmentSize)");
+    expect(action).toContain("item.garmentId === garmentResourceId");
     expect(action).toContain("customerArtworkBytesMatchMime");
     expect(action).toContain("productSnapshot: jsonSnapshot");
     expect(action).toContain("garmentSnapshot: jsonSnapshot(garment)");
@@ -99,7 +99,7 @@ describe("Phase 15 customers, online ordering and approvals", () => {
     const payment = source("../app/api/customer-production-requests/[requestId]/payment/route.ts");
     const callback = source("../app/api/customer-production-paystack/callback/route.ts");
     expect(payment).toContain("paidOrderAmount(order.payments)");
-    expect(payment).toContain("stage === \"BALANCE\" && !amounts.depositSatisfied");
+    expect(payment).toContain('stage === "BALANCE" && !amounts.depositSatisfied');
     expect(payment).toContain("PaymentStatus.PENDING");
     expect(payment).toContain("initializePaystackTransaction");
     expect(payment).toContain("Too many custom-production payment attempts");
@@ -131,10 +131,10 @@ describe("Phase 15 customers, online ordering and approvals", () => {
 
   it("generalizes the verified marketplace without inventing distance precision", () => {
     const marketplace = source("../app/shops/page.tsx");
-    expect(marketplace).toContain('"PRODUCT"');
-    expect(marketplace).toContain('"SERVICE"');
-    expect(marketplace).toContain('"RENTAL"');
-    expect(marketplace).toContain('"CUSTOM"');
+    expect(marketplace).toContain('type MarketplaceOffer = "ALL" | "PRODUCT" | "SERVICE" | "RENTAL" | "CUSTOM"');
+    expect(marketplace).toContain('if (offer === "SERVICE") return { isService: true }');
+    expect(marketplace).toContain('if (offer === "RENTAL") return { isRentable: true }');
+    expect(marketplace).toContain('if (offer === "CUSTOM") return { isPersonalizable: true }');
     expect(marketplace).toContain("product.isPersonalizable");
     expect(marketplace).toContain("custom-production?product=");
     expect(marketplace).toContain("Distance ranking appears only when businesses have usable coordinates");
