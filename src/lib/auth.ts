@@ -32,6 +32,7 @@ export async function setSessionCookie(user: SessionUser) {
   const accountSession = await createAccountSession({
     accountKind: AccountKind.USER,
     accountId: user.id,
+    authVersion: user.sessionVersion,
     ttlSeconds: SESSION_TTL_SECONDS,
     metadata: accountSessionMetadataFromHeaders(requestHeaders),
   });
@@ -73,6 +74,7 @@ export async function getSession(): Promise<AuthenticatedSessionUser | null> {
   const activeSession = await isAccountSessionActive({
     accountKind: AccountKind.USER,
     accountId: user.id,
+    authVersion: user.sessionVersion,
     sessionId: tokenSession.sessionId,
   });
   if (!activeSession) return null;
