@@ -73,8 +73,9 @@ test("owner configures real production material, garment, placement and heat pre
   await garment.getByLabel("Garment cost").fill("25");
   await garment.getByLabel("Default selling price").fill("45");
   await garment.getByRole("button", { name: "Add garment profile" }).click();
-  await expect(page.getByRole("heading", { name: "Phase 11 black tee" })).toBeVisible();
-  await expect(page.getByText("Maximum 170 °C")).toBeVisible();
+  const savedGarment = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Phase 11 black tee", exact: true }) });
+  await expect(savedGarment.getByRole("heading", { name: "Phase 11 black tee", exact: true })).toBeVisible();
+  await expect(savedGarment.getByText("Maximum 170 °C", { exact: true })).toBeVisible();
 
   const placement = formForButton(page, "Add placement template");
   await placement.getByLabel("Placement name").fill("Phase 11 left chest");
