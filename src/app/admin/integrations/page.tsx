@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Store,
 } from "lucide-react";
+import { PaymentRefundReconciliation } from "@/components/admin/payment-refund-reconciliation";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
 import { compactNumber, currency, shortDate } from "@/lib/format";
@@ -149,6 +150,8 @@ export default async function AdminIntegrationsPage() {
           </article>
         ))}
       </section>
+
+      <PaymentRefundReconciliation />
 
       <section className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
         <div className="panel p-5">
