@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OrderStatus, ReturnRequestStatus } from "@prisma/client";
-import { Activity, AlertTriangle, Banknote, BookOpen, CheckCircle2, CreditCard, Download, LifeBuoy, Megaphone, Plus, Settings, Shield, Store, TrendingUp, UserCog } from "lucide-react";
+import { Activity, AlertTriangle, Banknote, BarChart3, BookOpen, CheckCircle2, CreditCard, Download, LifeBuoy, Megaphone, Plus, Settings, Shield, Store, TrendingUp, UserCog } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { prisma } from "@/lib/db";
 import { compactNumber, currency, shortDate } from "@/lib/format";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 type AdminPageProps = { searchParams?: Promise<{ error?: string }> };
 
 const destinations = [
+  { href: "/admin/reports", title: "Platform reports", text: "Review access modes, subscription revenue, module usage, support workload and device health.", icon: BarChart3 },
   { href: "/admin/shops", title: "Shops", text: "Create, inspect, suspend and verify tenant businesses.", icon: Store },
   { href: "/admin/staff", title: "Admin staff", text: "Create platform workers and control their access.", icon: UserCog },
   { href: "/admin/support", title: "Support", text: "Resolve returns, conversations and delayed orders.", icon: LifeBuoy },
