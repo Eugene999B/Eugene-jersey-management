@@ -46,7 +46,7 @@ export default async function AccountSecurityPage() {
               setupPending: status.setupPending,
             }}
           />
-          <SessionSecurityPanel currentSessionId={session.sessionId} sessions={sessions} />
+          <SessionSecurityPanel accountKind={AccountKind.USER} currentSessionId={session.sessionId} sessions={sessions} />
         </div>
       </div>
     </main>
