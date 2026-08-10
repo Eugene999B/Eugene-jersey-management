@@ -8,6 +8,7 @@ import {
   FulfillmentType,
   OrderChannel,
   OrderStatus,
+  Prisma,
 } from "@prisma/client";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
@@ -112,7 +113,7 @@ export async function approveCustomerProductionPreviewAction(formData: FormData)
         orderId: created.id,
       },
     });
-    const events = [
+    const events: Prisma.CustomerProductionEventCreateManyInput[] = [
       { shopId: locked.shopId, requestId: locked.id, type: CustomerProductionEventType.APPROVED, note: `Buyer approved preview version ${locked.previewVersion}.`, actorBuyerId: buyer.id },
       { shopId: locked.shopId, requestId: locked.id, type: CustomerProductionEventType.ORDER_CREATED, note: `Order ${created.receiptNumber} created after preview approval.`, metadata: { orderId: created.id, quotedTotal: total, depositAmount: deposit }, actorBuyerId: buyer.id },
     ];
