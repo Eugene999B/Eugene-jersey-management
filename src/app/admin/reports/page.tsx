@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
-  BarChart3,
   CheckCircle2,
   CreditCard,
   FolderKanban,
@@ -27,6 +26,8 @@ export const dynamic = "force-dynamic";
 
 type Props = { searchParams?: Promise<{ from?: string; to?: string }> };
 
+type CurrencyRow = { amount: { toString(): string } | number; currency: string };
+
 function inputDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
@@ -35,6 +36,17 @@ function validDate(value: string | undefined, fallback: Date, endOfDay = false) 
   if (!value) return fallback;
   const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
+function currencyTotals(rows: CurrencyRow[]) {
+  const totals = new Map<string, number>();
+  for (const row of rows) totals.set(row.currency, (totals.get(row.currency) ?? 0) + Number(row.amount));
+  return totals;
+}
+
+function displayCurrencyTotals(totals: Map<string, number>) {
+  if (!totals.size) return currency(0, "GHS");
+  return [...totals.entries()].map(([code, amount]) => currency(amount, code)).join(" · ");
 }
 
 export default async function AdminReportsPage({ searchParams }: Props) {
@@ -68,22 +80,18 @@ export default async function AdminReportsPage({ searchParams }: Props) {
         isActive: true,
         verificationStatus: true,
         subscriptionStatus: true,
-        planTier: true,
         enabledModules: true,
-        monthlyPrice: true,
-        yearlyPrice: true,
-        billingCycle: true,
       },
       orderBy: { name: "asc" },
     }),
     platformDb.shopAccessGrant.findMany({
       where: { isActive: true, startsAt: { lte: now }, OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-      select: { id: true, shopId: true, accessType: true, startsAt: true, endsAt: true, invoicesDisabled: true },
+      select: { id: true, shopId: true, accessType: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.subscriptionInvoice.findMany({
       where: { status: SubscriptionInvoiceStatus.PAID, paidAt: { gte: from, lte: to } },
-      select: { id: true, shopId: true, amount: true, paidAt: true },
+      select: { id: true, shopId: true, amount: true, currency: true, paidAt: true },
       orderBy: { paidAt: "desc" },
       take: 5000,
     }),
@@ -92,7 +100,16 @@ export default async function AdminReportsPage({ searchParams }: Props) {
         status: PaymentStatus.FAILED,
         OR: [{ failedAt: { gte: from, lte: to } }, { failedAt: null, createdAt: { gte: from, lte: to } }],
       },
-      select: { id: true, shopId: true, amount: true, provider: true, failedAt: true, createdAt: true, failureReason: true },
+      select: {
+        id: true,
+        shopId: true,
+        amount: true,
+        currency: true,
+        provider: true,
+        failedAt: true,
+        createdAt: true,
+        gatewayResponse: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 5000,
     }),
@@ -110,8 +127,8 @@ export default async function AdminReportsPage({ searchParams }: Props) {
     const key = grant ? grant.accessType : `SUBSCRIPTION_${shop.subscriptionStatus}`;
     accessCounts.set(key, (accessCounts.get(key) ?? 0) + 1);
   }
-  const subscriptionRevenue = paidInvoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
-  const failedSubscriptionValue = failedSubscriptionAttempts.reduce((sum, attempt) => sum + Number(attempt.amount), 0);
+  const subscriptionRevenue = currencyTotals(paidInvoices);
+  const failedSubscriptionValue = currencyTotals(failedSubscriptionAttempts);
   const moduleCounts = new Map<string, number>();
   for (const shop of activeShops) {
     for (const module of shop.enabledModules) moduleCounts.set(module, (moduleCounts.get(module) ?? 0) + 1);
@@ -143,8 +160,8 @@ export default async function AdminReportsPage({ searchParams }: Props) {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="panel p-4"><Store size={18} className="text-cyan-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Active businesses</p><p className="mt-1 text-3xl font-black">{activeShops.length}</p><p className="text-xs text-slate-500">{verifiedActive} verified · {shops.length} total records</p></div>
-        <div className="panel p-4"><CreditCard size={18} className="text-emerald-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Subscription revenue</p><p className="mt-1 text-3xl font-black">{currency(subscriptionRevenue, "GHS")}</p><p className="text-xs text-slate-500">{paidInvoices.length} paid invoice(s) in range</p></div>
-        <div className="panel p-4"><AlertTriangle size={18} className="text-red-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Failed subscription payments</p><p className="mt-1 text-3xl font-black">{failedSubscriptionAttempts.length}</p><p className="text-xs text-slate-500">{currency(failedSubscriptionValue, "GHS")} attempted value</p></div>
+        <div className="panel p-4"><CreditCard size={18} className="text-emerald-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Subscription revenue</p><p className="mt-1 text-xl font-black">{displayCurrencyTotals(subscriptionRevenue)}</p><p className="text-xs text-slate-500">{paidInvoices.length} paid invoice(s) in range</p></div>
+        <div className="panel p-4"><AlertTriangle size={18} className="text-red-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Failed subscription payments</p><p className="mt-1 text-3xl font-black">{failedSubscriptionAttempts.length}</p><p className="text-xs text-slate-500">{displayCurrencyTotals(failedSubscriptionValue)} attempted value</p></div>
         <div className="panel p-4"><FolderKanban size={18} className="text-orange-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Open support cases</p><p className="mt-1 text-3xl font-black">{openSupportCases.length}</p><p className="text-xs text-slate-500">{urgentSupportCases.length} high/urgent · {resolvedInRange} resolved in range</p></div>
         <div className="panel p-4"><HeartPulse size={18} className={deviceBridge.failedJobs || deviceBridge.staleSendingJobs ? "text-orange-700" : "text-emerald-700"} /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Direct cutter success</p><p className="mt-1 text-3xl font-black">{deviceBridge.successRatePercent.toFixed(1)}%</p><p className="text-xs text-slate-500">{deviceBridge.sentJobs} sent · {deviceBridge.failedJobs} failed in range</p></div>
       </section>
@@ -164,12 +181,12 @@ export default async function AdminReportsPage({ searchParams }: Props) {
       <section className="grid gap-5 xl:grid-cols-2">
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><CreditCard size={18} /> Subscription billing evidence</h2></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Business</th><th className="p-3">Result</th><th className="p-3">Amount</th><th className="p-3">Provider / detail</th><th className="p-3">Time</th></tr></thead><tbody className="divide-y divide-[#ded8cd]">{paidInvoices.slice(0, 20).map((invoice) => <tr key={invoice.id}><td className="p-3 font-semibold">{shopName.get(invoice.shopId) ?? invoice.shopId}</td><td className="p-3"><Badge tone="green">Paid invoice</Badge></td><td className="p-3">{currency(Number(invoice.amount), "GHS")}</td><td className="p-3 text-slate-500">Verified subscription invoice</td><td className="p-3">{invoice.paidAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(invoice.paidAt) : "—"}</td></tr>)}{failedSubscriptionAttempts.slice(0, 20).map((attempt) => <tr key={attempt.id}><td className="p-3 font-semibold">{shopName.get(attempt.shopId) ?? attempt.shopId}</td><td className="p-3"><Badge tone="red">Failed attempt</Badge></td><td className="p-3">{currency(Number(attempt.amount), "GHS")}</td><td className="p-3 text-slate-500">{attempt.provider} · {attempt.failureReason ?? "No provider reason"}</td><td className="p-3">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(attempt.failedAt ?? attempt.createdAt)}</td></tr>)}{!paidInvoices.length && !failedSubscriptionAttempts.length ? <tr><td className="p-5 text-slate-500" colSpan={5}>No subscription payment evidence in this range.</td></tr> : null}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Business</th><th className="p-3">Result</th><th className="p-3">Amount</th><th className="p-3">Provider / detail</th><th className="p-3">Time</th></tr></thead><tbody className="divide-y divide-[#ded8cd]">{paidInvoices.slice(0, 20).map((invoice) => <tr key={invoice.id}><td className="p-3 font-semibold">{shopName.get(invoice.shopId) ?? invoice.shopId}</td><td className="p-3"><Badge tone="green">Paid invoice</Badge></td><td className="p-3">{currency(Number(invoice.amount), invoice.currency)}</td><td className="p-3 text-slate-500">Verified subscription invoice</td><td className="p-3">{invoice.paidAt ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(invoice.paidAt) : "—"}</td></tr>)}{failedSubscriptionAttempts.slice(0, 20).map((attempt) => <tr key={attempt.id}><td className="p-3 font-semibold">{shopName.get(attempt.shopId) ?? attempt.shopId}</td><td className="p-3"><Badge tone="red">Failed attempt</Badge></td><td className="p-3">{currency(Number(attempt.amount), attempt.currency)}</td><td className="p-3 text-slate-500">{attempt.provider} · {attempt.gatewayResponse ?? "No provider response"}</td><td className="p-3">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(attempt.failedAt ?? attempt.createdAt)}</td></tr>)}{!paidInvoices.length && !failedSubscriptionAttempts.length ? <tr><td className="p-5 text-slate-500" colSpan={5}>No subscription payment evidence in this range.</td></tr> : null}</tbody></table></div>
         </div>
 
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><FolderKanban size={18} /> Support cases</h2></div>
-          <div className="max-h-[520px] divide-y divide-[#ded8cd] overflow-y-auto">{openSupportCases.slice(0, 30).map((supportCase) => <Link key={supportCase.id} href={`/admin/support/cases/${encodeURIComponent(supportCase.id)}`} className="block p-3 text-sm hover:bg-slate-50"><div className="flex flex-wrap items-center gap-2"><span className="font-bold">{supportCase.caseNumber}</span><Badge tone={supportCase.priority === "URGENT" || supportCase.priority === "HIGH" ? "red" : "orange"}>{titleCase(supportCase.priority)}</Badge><Badge>{titleCase(supportCase.status)}</Badge></div><p className="mt-1 font-semibold">{supportCase.subject}</p><p className="mt-1 text-xs text-slate-500">{shopName.get(supportCase.shopId ?? "") ?? supportCase.requesterName ?? "Platform case"} · updated {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(supportCase.updatedAt)}</p></Link>)}{!openSupportCases.length ? <p className="p-4 text-sm text-slate-500">No open support cases.</p> : null}</div>
+          <div className="max-h-[520px] divide-y divide-[#ded8cd] overflow-y-auto">{openSupportCases.slice(0, 30).map((supportCase) => <Link key={supportCase.id} href={`/admin/support/cases/${encodeURIComponent(supportCase.id)}`} className="block p-3 text-sm hover:bg-slate-50"><div className="flex flex-wrap items-center gap-2"><span className="font-bold">{supportCase.reference}</span><Badge tone={supportCase.priority === "URGENT" || supportCase.priority === "HIGH" ? "red" : "orange"}>{titleCase(supportCase.priority)}</Badge><Badge>{titleCase(supportCase.status)}</Badge></div><p className="mt-1 font-semibold">{supportCase.title}</p><p className="mt-1 text-xs text-slate-500">{shopName.get(supportCase.shopId ?? "") ?? "Platform case"} · updated {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(supportCase.updatedAt)}</p></Link>)}{!openSupportCases.length ? <p className="p-4 text-sm text-slate-500">No open support cases.</p> : null}</div>
         </div>
       </section>
 
