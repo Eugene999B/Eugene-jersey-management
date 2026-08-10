@@ -12,6 +12,24 @@ import {
   requestCustomerProductionChangesAction,
 } from "./actions";
 
+const GREEN_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.COMPLETED,
+  CustomerProductionRequestStatus.READY,
+]);
+const ORANGE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.CHANGES_REQUESTED,
+  CustomerProductionRequestStatus.SUBMITTED,
+]);
+const BLUE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.APPROVED,
+  CustomerProductionRequestStatus.DEPOSIT_PAID,
+  CustomerProductionRequestStatus.IN_PRODUCTION,
+]);
+const CLOSED_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.COMPLETED,
+  CustomerProductionRequestStatus.CANCELLED,
+]);
+
 function record(value: unknown) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -25,10 +43,10 @@ function dateTime(value: Date | null | undefined) {
 }
 
 function statusTone(status: CustomerProductionRequestStatus): "green" | "red" | "orange" | "blue" | "slate" {
-  if ([CustomerProductionRequestStatus.COMPLETED, CustomerProductionRequestStatus.READY].includes(status)) return "green";
+  if (GREEN_STATUSES.has(status)) return "green";
   if (status === CustomerProductionRequestStatus.CANCELLED) return "red";
-  if ([CustomerProductionRequestStatus.CHANGES_REQUESTED, CustomerProductionRequestStatus.SUBMITTED].includes(status)) return "orange";
-  if ([CustomerProductionRequestStatus.APPROVED, CustomerProductionRequestStatus.DEPOSIT_PAID, CustomerProductionRequestStatus.IN_PRODUCTION].includes(status)) return "blue";
+  if (ORANGE_STATUSES.has(status)) return "orange";
+  if (BLUE_STATUSES.has(status)) return "blue";
   return "slate";
 }
 
@@ -57,9 +75,9 @@ export default async function BuyerProductionRequestPage({ params, searchParams 
     : null;
   const previewSrc = productionRequest.previewSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(productionRequest.previewSvg)}` : null;
   const canApprove = productionRequest.status === CustomerProductionRequestStatus.PREVIEW_READY && productionRequest.quotedTotal !== null;
-  const canAttach = ![CustomerProductionRequestStatus.COMPLETED, CustomerProductionRequestStatus.CANCELLED].includes(productionRequest.status) && assets.length < 6;
-  const canPayDeposit = Boolean(order && amounts && amounts.depositDue > 0.005 && productionRequest.status !== CustomerProductionRequestStatus.CANCELLED);
-  const canPayBalance = Boolean(order && amounts && amounts.depositSatisfied && amounts.balanceDue > 0.005 && productionRequest.status !== CustomerProductionRequestStatus.CANCELLED);
+  const canAttach = !CLOSED_STATUSES.has(productionRequest.status) && assets.length < 6;
+  const canPayDeposit = Boolean(order && amounts?.depositDue && amounts.depositDue > 0.005 && productionRequest.status !== CustomerProductionRequestStatus.CANCELLED);
+  const canPayBalance = Boolean(order && amounts?.depositSatisfied && amounts.balanceDue > 0.005 && productionRequest.status !== CustomerProductionRequestStatus.CANCELLED);
 
   return (
     <main className="min-h-screen bg-[#f6f4ef]">
