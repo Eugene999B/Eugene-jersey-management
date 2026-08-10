@@ -66,7 +66,7 @@ describe("Phase 17 staging migration, rollback and release readiness", () => {
     expect(workflow.indexOf("Seed browser acceptance identities")).toBeLessThan(workflow.indexOf("Rehearse PostgreSQL backup and restore"));
   });
 
-  it("supports an explicit external staging target without starting the local Next.js server", () => {
+  it("pins external staging acceptance to a protected target without starting the local Next.js server", () => {
     const config = source("../../e2e/playwright.config.ts");
     const test = source("../../e2e/tests/phase17-staging-release-smoke.spec.ts");
     const workflow = source("../../.github/workflows/staging-acceptance.yml");
@@ -76,7 +76,9 @@ describe("Phase 17 staging migration, rollback and release readiness", () => {
     expect(test).toContain("Platform reports");
     expect(test).toContain("Production Integration Health");
     expect(workflow).toContain("environment: staging");
+    expect(workflow).toContain("vars.STAGING_BASE_URL");
     expect(workflow).toContain("STAGING_ADMIN_LOGIN_ID");
     expect(workflow).toContain("STAGING_ADMIN_PASSWORD");
+    expect(workflow).not.toContain("inputs.base_url");
   });
 });
