@@ -5,7 +5,7 @@ import { platformDb } from "@/lib/platform-db";
 
 function metadataRecord(value: Prisma.JsonValue) {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, Prisma.JsonValue>
+    ? value as Record<string, unknown>
     : {};
 }
 
@@ -28,12 +28,11 @@ export async function syncPaymentRefundAccounting(shopId: string, paymentId: str
     .flatMap((refund) => refund.processedAt ? [refund.processedAt] : [])
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
-  const currentMetadata = metadataRecord(payment.metadata);
-  const metadata: Prisma.InputJsonObject = {
-    ...currentMetadata,
+  const metadata = {
+    ...metadataRecord(payment.metadata),
     refundProcessedAmount: Number(boundedProcessed.toFixed(2)),
-    refundLastProcessedAt: latestProcessedAt?.toISOString() ?? null,
-  };
+    ...(latestProcessedAt ? { refundLastProcessedAt: latestProcessedAt.toISOString() } : {}),
+  } as Prisma.InputJsonObject;
 
   await platformDb.payment.update({
     where: { id: payment.id },
