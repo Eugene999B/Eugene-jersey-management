@@ -72,7 +72,7 @@ test("buyer approves a quoted custom job and staff cannot complete before verifi
     await buyerPage.getByRole("button", { name: "Submit design request", exact: true }).click();
     await buyerPage.waitForURL(/\/buyer\/production-requests\/[^/?]+$/, { timeout: 30_000 });
     const requestUrl = buyerPage.url();
-    await expect(buyerPage.getByText(requestedText, { exact: true })).toBeVisible();
+    await expect(buyerPage.getByText(`${requestedText} · #15`, { exact: true })).toBeVisible();
     await expect(buyerPage.getByRole("img", { name: /Customer artwork phase15-logo\.png/ })).toBeVisible();
     await expect(buyerPage.getByText("The shop is preparing your preview and quote.", { exact: true })).toBeVisible();
 
