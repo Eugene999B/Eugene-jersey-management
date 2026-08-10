@@ -10,6 +10,7 @@ import {
   ProductionInventoryKind,
   ProductionInventoryMovementType,
   ProductionInventoryUnit,
+  Role,
 } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -17,6 +18,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL
 
 const IDS = {
   shop: "phase17-canary-shop",
+  user: "phase17-canary-user",
   category: "phase17-canary-category",
   product: "phase17-canary-product",
   variant: "phase17-canary-variant",
@@ -57,6 +59,29 @@ async function seed() {
       isActive: true,
       publicOrderingEnabled: false,
       storefrontEnabled: false,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { id: IDS.user },
+    update: {
+      shopId: IDS.shop,
+      adminLoginId: "EJM-PHASE17-CANARY",
+      email: "phase17-canary-owner@example.test",
+      passwordHash: "phase17-release-rehearsal-disabled-login",
+      name: "Phase 17 Canary Owner",
+      role: Role.OWNER,
+      isActive: false,
+    },
+    create: {
+      id: IDS.user,
+      shopId: IDS.shop,
+      adminLoginId: "EJM-PHASE17-CANARY",
+      email: "phase17-canary-owner@example.test",
+      passwordHash: "phase17-release-rehearsal-disabled-login",
+      name: "Phase 17 Canary Owner",
+      role: Role.OWNER,
+      isActive: false,
     },
   });
 
@@ -164,7 +189,7 @@ async function seed() {
       referenceType: "PHASE17_RELEASE_REHEARSAL",
       referenceId: IDS.order,
       idempotencyKey: "phase17:release-canary:movement",
-      createdById: "phase17-release-rehearsal",
+      createdById: IDS.user,
     },
     create: {
       id: IDS.movement,
@@ -177,7 +202,7 @@ async function seed() {
       referenceType: "PHASE17_RELEASE_REHEARSAL",
       referenceId: IDS.order,
       idempotencyKey: "phase17:release-canary:movement",
-      createdById: "phase17-release-rehearsal",
+      createdById: IDS.user,
     },
   });
 
@@ -185,8 +210,9 @@ async function seed() {
 }
 
 async function snapshot() {
-  const [shop, product, variant, customer, order, payment, inventory, movement] = await Promise.all([
+  const [shop, user, product, variant, customer, order, payment, inventory, movement] = await Promise.all([
     prisma.shop.findUnique({ where: { id: IDS.shop } }),
+    prisma.user.findUnique({ where: { id: IDS.user } }),
     prisma.product.findUnique({ where: { id: IDS.product } }),
     prisma.productVariant.findUnique({ where: { id: IDS.variant } }),
     prisma.customer.findUnique({ where: { id: IDS.customer } }),
@@ -195,18 +221,19 @@ async function snapshot() {
     prisma.productionInventoryItem.findUnique({ where: { id: IDS.inventory } }),
     prisma.productionInventoryMovement.findUnique({ where: { id: IDS.movement } }),
   ]);
-  if (!shop || !product || !variant || !customer || !order || !payment || !inventory || !movement) {
+  if (!shop || !user || !product || !variant || !customer || !order || !payment || !inventory || !movement) {
     throw new Error("Phase 17 canary is incomplete.");
   }
   const payload = {
     shop: { id: shop.id, name: shop.name, slug: shop.slug, isActive: shop.isActive, currency: shop.currency, storefrontEnabled: shop.storefrontEnabled, publicOrderingEnabled: shop.publicOrderingEnabled },
+    actor: { id: user.id, shopId: user.shopId, email: user.email, role: user.role, isActive: user.isActive },
     product: { id: product.id, name: product.name, basePrice: product.basePrice.toString(), isPersonalizable: product.isPersonalizable },
     variant: { id: variant.id, sku: variant.sku, stockQty: variant.stockQty, priceOverride: variant.priceOverride?.toString() ?? null, attributes: variant.attributes },
     customer: { id: customer.id, name: customer.name, phone: customer.phone, email: customer.email },
     order: { id: order.id, receiptNumber: order.receiptNumber, status: order.status, channel: order.channel, totalAmount: order.totalAmount.toString(), itemCount: order.items.length, paymentCount: order.payments.length },
     payment: { id: payment.id, method: payment.method, status: payment.status, amount: payment.amount.toString(), providerReference: payment.providerReference, verifiedAt: payment.verifiedAt?.toISOString() ?? null },
     inventory: { id: inventory.id, inventoryKey: inventory.inventoryKey, kind: inventory.kind, unit: inventory.unit, quantity: inventory.quantity.toString(), unitCost: inventory.unitCost.toString() },
-    movement: { id: movement.id, type: movement.type, quantityDelta: movement.quantityDelta.toString(), balanceAfter: movement.balanceAfter.toString(), unitCostSnapshot: movement.unitCostSnapshot.toString(), referenceId: movement.referenceId },
+    movement: { id: movement.id, type: movement.type, quantityDelta: movement.quantityDelta.toString(), balanceAfter: movement.balanceAfter.toString(), unitCostSnapshot: movement.unitCostSnapshot.toString(), referenceId: movement.referenceId, createdById: movement.createdById },
     financialTruth: { orderValue: "80", collected: "80", materialUsedMetres: "0.5", materialUseCost: "6.4" },
   };
   const canonical = JSON.stringify(payload);
