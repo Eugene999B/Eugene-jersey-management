@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentProviderEventStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { settleCommunicationCreditPurchase } from "@/lib/communication-credits";
+import { syncPaymentRefundAccounting } from "@/lib/payment-refund-accounting";
 import { applyPaystackRefundWebhook } from "@/lib/payment-refunds";
 import { settlePaystackTransaction, verifyPaystackWebhookSignature, type PaystackTransactionData } from "@/lib/payments";
 import { settleSubscriptionInvoicePayment } from "@/lib/subscription-billing";
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Incomplete refund payload." }, { status: 400 });
       }
 
-      await applyPaystackRefundWebhook({
+      const refundResult = await applyPaystackRefundWebhook({
         transactionReference,
         amountMinor,
         currency,
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
         refundReference,
         payload: data,
       });
+      await syncPaymentRefundAccounting(refundResult.shopId, refundResult.paymentId);
       await prisma.paymentProviderEvent.update({
         where: { id: event.id },
         data: { status: PaymentProviderEventStatus.PROCESSED },
