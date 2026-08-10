@@ -90,7 +90,7 @@ describe("session navigation safety", () => {
     const previous = process.env.SESSION_SECRET;
     process.env.SESSION_SECRET = "session-navigation-regression-secret-2026-long-value";
     try {
-      const session = { id: "staff-1", shopId: null, email: "admin@example.test", name: "Admin", role: "SUPER_ADMIN" as const, sessionVersion: 4 };
+      const session = { id: "staff-1", shopId: null, email: "admin@example.test", name: "Admin", role: "SUPER_ADMIN" as const, sessionVersion: 4, sessionId: "session-navigation-test" };
       const token = await signSession(session);
       await expect(verifySessionToken(token)).resolves.toEqual(session);
     } finally {
