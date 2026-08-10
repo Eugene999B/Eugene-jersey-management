@@ -12,15 +12,45 @@ import { permissions } from "@/lib/rbac";
 import { getTenantContext } from "@/lib/tenant";
 import { advanceCustomerProductionAction, quoteCustomerProductionRequestAction } from "./actions";
 
+const GREEN_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.COMPLETED,
+  CustomerProductionRequestStatus.READY,
+]);
+const ORANGE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.SUBMITTED,
+  CustomerProductionRequestStatus.CHANGES_REQUESTED,
+]);
+const BLUE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.APPROVED,
+  CustomerProductionRequestStatus.DEPOSIT_PAID,
+  CustomerProductionRequestStatus.IN_PRODUCTION,
+]);
+const SHOP_ACTION_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.SUBMITTED,
+  CustomerProductionRequestStatus.CHANGES_REQUESTED,
+]);
+const ACTIVE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.APPROVED,
+  CustomerProductionRequestStatus.DEPOSIT_PAID,
+  CustomerProductionRequestStatus.IN_PRODUCTION,
+  CustomerProductionRequestStatus.READY,
+]);
+const QUOTABLE_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.SUBMITTED,
+  CustomerProductionRequestStatus.QUOTED,
+  CustomerProductionRequestStatus.PREVIEW_READY,
+  CustomerProductionRequestStatus.CHANGES_REQUESTED,
+]);
+
 function record(value: unknown) { return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function text(value: unknown, fallback = "") { return typeof value === "string" ? value : fallback; }
 function dateTime(value: Date | null | undefined) { return value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(value) : "—"; }
 
 function tone(status: CustomerProductionRequestStatus): "green" | "red" | "orange" | "blue" | "slate" {
-  if ([CustomerProductionRequestStatus.COMPLETED, CustomerProductionRequestStatus.READY].includes(status)) return "green";
+  if (GREEN_STATUSES.has(status)) return "green";
   if (status === CustomerProductionRequestStatus.CANCELLED) return "red";
-  if ([CustomerProductionRequestStatus.SUBMITTED, CustomerProductionRequestStatus.CHANGES_REQUESTED].includes(status)) return "orange";
-  if ([CustomerProductionRequestStatus.APPROVED, CustomerProductionRequestStatus.DEPOSIT_PAID, CustomerProductionRequestStatus.IN_PRODUCTION].includes(status)) return "blue";
+  if (ORANGE_STATUSES.has(status)) return "orange";
+  if (BLUE_STATUSES.has(status)) return "blue";
   return "slate";
 }
 
@@ -41,9 +71,9 @@ export default async function CustomerProductionDashboard({ searchParams }: { se
   const orderMap = new Map(orders.map((order) => [order.id, order]));
   const assetMap = new Map<string, typeof assets>();
   for (const asset of assets) assetMap.set(asset.requestId, [...(assetMap.get(asset.requestId) ?? []), asset]);
-  const waiting = requests.filter((request) => [CustomerProductionRequestStatus.SUBMITTED, CustomerProductionRequestStatus.CHANGES_REQUESTED].includes(request.status)).length;
+  const waiting = requests.filter((request) => SHOP_ACTION_STATUSES.has(request.status)).length;
   const awaitingApproval = requests.filter((request) => request.status === CustomerProductionRequestStatus.PREVIEW_READY).length;
-  const active = requests.filter((request) => [CustomerProductionRequestStatus.APPROVED, CustomerProductionRequestStatus.DEPOSIT_PAID, CustomerProductionRequestStatus.IN_PRODUCTION, CustomerProductionRequestStatus.READY].includes(request.status)).length;
+  const active = requests.filter((request) => ACTIVE_STATUSES.has(request.status)).length;
 
   return (
     <div className="space-y-5">
@@ -60,7 +90,7 @@ export default async function CustomerProductionDashboard({ searchParams }: { se
           const garment = record(request.garmentSnapshot);
           const placement = record(request.placementSnapshot);
           const requestAssets = assetMap.get(request.id) ?? [];
-          const canQuote = [CustomerProductionRequestStatus.SUBMITTED, CustomerProductionRequestStatus.QUOTED, CustomerProductionRequestStatus.PREVIEW_READY, CustomerProductionRequestStatus.CHANGES_REQUESTED].includes(request.status);
+          const canQuote = QUOTABLE_STATUSES.has(request.status);
           return <article key={request.id} className="panel overflow-hidden">
             <div className="border-b border-[#ded8cd] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">{request.title}</h2><Badge tone={tone(request.status)}>{titleCase(request.status)}</Badge></div><p className="mt-1 text-sm text-slate-500">{buyer?.name ?? "Buyer"} · {buyer?.phone ?? "No phone"} · submitted {dateTime(request.createdAt)}</p></div>{order ? <a className="inline-flex min-h-10 items-center rounded-xl border border-[#ded8cd] bg-white px-3 text-sm font-semibold" href={`/dashboard/orders/${encodeURIComponent(order.id)}`}>{order.receiptNumber}</a> : null}</div></div>
             <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[0.85fr_1.15fr]">
