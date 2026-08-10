@@ -6,23 +6,26 @@ function source(path: string) {
 }
 
 describe("account session and device management", () => {
-  it("stores durable platform-global sessions with expiry and revocation evidence", () => {
+  it("stores durable platform-global sessions with auth version, expiry and revocation evidence", () => {
     const schema = source("../../prisma/models/account-security.prisma");
     const migration = source("../../prisma/migrations/20260810150000_account_session_devices/migration.sql");
 
     expect(schema).toContain("model AccountSession");
     expect(schema).toContain("accountKind   AccountKind");
     expect(schema).toContain("accountId     String");
+    expect(schema).toContain("authVersion   String");
     expect(schema).toContain("lastSeenAt");
     expect(schema).toContain("expiresAt");
     expect(schema).toContain("revokedAt");
     expect(schema).toContain("revokedReason");
     expect(schema).toContain("@@index([accountKind, accountId, revokedAt, expiresAt])");
+    expect(schema).toContain("@@index([accountKind, accountId, authVersion])");
     expect(migration).toContain('CREATE TABLE "AccountSession"');
     expect(migration).toContain('"AccountKind" NOT NULL');
+    expect(migration).toContain('"authVersion" TEXT NOT NULL');
   });
 
-  it("binds staff and buyer JWTs to one durable session id", () => {
+  it("binds staff and buyer JWTs to one durable session id and current auth version", () => {
     const staffToken = source("../lib/session-token.ts");
     const buyerSession = source("../lib/buyer-session.ts");
     const staffAuth = source("../lib/auth.ts");
@@ -33,8 +36,11 @@ describe("account session and device management", () => {
     expect(buyerSession).toContain("sessionId: buyer.sessionId");
     expect(buyerSession).toContain(".setJti(buyer.sessionId)");
     expect(buyerSession).toContain("isAccountSessionActive");
+    expect(buyerSession).toContain("authVersion: buyer.updatedAt.getTime()");
+    expect(buyerSession).toContain("authVersion: buyer.sessionVersion");
     expect(staffAuth).toContain("createAccountSession");
     expect(staffAuth).toContain("isAccountSessionActive");
+    expect(staffAuth).toContain("authVersion: user.sessionVersion");
   });
 
   it("registers sessions only after password or two-factor authentication succeeds", () => {
@@ -44,12 +50,23 @@ describe("account session and device management", () => {
     const buyerSession = source("../lib/buyer-session.ts");
 
     expect(staffLogin).toContain("createAccountSession");
+    expect(staffLogin).toContain("authVersion: user.sessionVersion");
     expect(staffLogin).toContain("sessionId: accountSession.id");
     expect(twoFactorLogin.match(/createAccountSession/g)?.length).toBeGreaterThanOrEqual(2);
     expect(twoFactorLogin).toContain("AccountKind.USER");
     expect(twoFactorLogin).toContain("AccountKind.BUYER");
+    expect(twoFactorLogin).toContain("authVersion: updatedBuyer.updatedAt.getTime()");
     expect(buyerLogin).toContain("setBuyerSessionCookie");
     expect(buyerSession).toContain("accountSessionMetadataFromHeaders");
+  });
+
+  it("reconciles stale global security versions into durable revocation history", () => {
+    const sessions = source("../lib/account-sessions.ts");
+
+    expect(sessions).toContain("currentAccountAuthVersion");
+    expect(sessions).toContain("authVersion: { not: currentAuthVersion }");
+    expect(sessions).toContain('revokedReason: "account-security-version-changed"');
+    expect(sessions).toContain("authVersion,");
   });
 
   it("revokes the exact durable record during normal logout", () => {
