@@ -197,6 +197,7 @@ export async function POST(request: NextRequest) {
   const accountSession = await createAccountSession({
     accountKind: AccountKind.USER,
     accountId: user.id,
+    authVersion: user.sessionVersion,
     ttlSeconds: SESSION_TTL_SECONDS,
     metadata: accountSessionMetadataFromHeaders(request.headers),
   });
