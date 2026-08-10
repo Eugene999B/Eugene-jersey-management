@@ -17,6 +17,12 @@ import { prisma } from "@/lib/db";
 import { sendCustomerMessage } from "@/lib/messaging";
 
 const productionRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.DESIGNER];
+const QUOTABLE_REQUEST_STATUSES: ReadonlySet<CustomerProductionRequestStatus> = new Set([
+  CustomerProductionRequestStatus.SUBMITTED,
+  CustomerProductionRequestStatus.QUOTED,
+  CustomerProductionRequestStatus.PREVIEW_READY,
+  CustomerProductionRequestStatus.CHANGES_REQUESTED,
+]);
 
 function record(value: unknown) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -44,7 +50,7 @@ export async function quoteCustomerProductionRequestAction(formData: FormData) {
   });
   if (!parsed.success || parsed.data.depositAmount > parsed.data.quotedTotal) redirect("/dashboard/customer-production?error=quote");
   const request = await prisma.customerProductionRequest.findFirst({ where: { id: parsed.data.requestId, shopId } });
-  if (!request || ![CustomerProductionRequestStatus.SUBMITTED, CustomerProductionRequestStatus.QUOTED, CustomerProductionRequestStatus.PREVIEW_READY, CustomerProductionRequestStatus.CHANGES_REQUESTED].includes(request.status)) redirect("/dashboard/customer-production?error=state");
+  if (!request || !QUOTABLE_REQUEST_STATUSES.has(request.status)) redirect("/dashboard/customer-production?error=state");
   const buyer = await prisma.buyerAccount.findUnique({ where: { id: request.buyerId } });
   if (!buyer?.isActive) redirect("/dashboard/customer-production?error=buyer");
 
@@ -141,7 +147,7 @@ export async function advanceCustomerProductionAction(formData: FormData) {
       data: { status: nextStatus, [timestampField]: now },
     });
     if (changed.count !== 1) throw new Error("REQUEST_CHANGED");
-    await tx.order.updateMany({ where: { id: request.orderId!, shopId }, data: { status: orderStatus, completedAt: orderStatus === OrderStatus.COMPLETED ? now : undefined } });
+    await tx.order.updateMany({ where: { id: request.orderId!, shopId }, data: { status: orderStatus } });
     await tx.customerProductionEvent.create({ data: { shopId, requestId: request.id, type: eventType, note: parsed.data.action === "START_PRODUCTION" ? "Production started after verified deposit." : parsed.data.action === "MARK_READY" ? "Custom production is ready for fulfilment." : "Custom production completed after full payment.", actorUserId: session.id } });
   }).catch(() => redirect("/dashboard/customer-production?error=changed"));
 
