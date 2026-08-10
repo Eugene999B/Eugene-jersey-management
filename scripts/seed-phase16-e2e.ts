@@ -117,8 +117,8 @@ async function main() {
 
   const existingDesign = await prisma.designJob.findFirst({ where: { shopId: shop.id, title: JOB_TITLE } });
   const design = existingDesign
-    ? await prisma.designJob.update({ where: { id: existingDesign.id }, data: { orderId: order.id, customerId: customer.id, status: DesignJobStatus.APPROVED, canvasJson: { fixture: "phase16-financial-truth" } } })
-    : await prisma.designJob.create({ data: { shopId: shop.id, orderId: order.id, customerId: customer.id, title: JOB_TITLE, status: DesignJobStatus.APPROVED, canvasJson: { fixture: "phase16-financial-truth" } } });
+    ? await prisma.designJob.update({ where: { id: existingDesign.id }, data: { orderId: order.id, customerId: customer.id, status: DesignJobStatus.READY, canvasJson: { fixture: "phase16-financial-truth" } } })
+    : await prisma.designJob.create({ data: { shopId: shop.id, orderId: order.id, customerId: customer.id, title: JOB_TITLE, status: DesignJobStatus.READY, canvasJson: { fixture: "phase16-financial-truth" } } });
 
   const brief = await prisma.designProductionBrief.upsert({
     where: { shopId_designJobId: { shopId: shop.id, designJobId: design.id } },
