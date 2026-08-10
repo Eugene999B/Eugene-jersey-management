@@ -32,7 +32,7 @@ function refundTone(status: PaymentRefundStatus): "green" | "orange" | "red" | "
 }
 
 function isPaystackPayment(payment: Payment) {
-  return [PaymentMethod.CARD, PaymentMethod.MOMO].includes(payment.method) && Boolean(payment.providerReference);
+  return (payment.method === PaymentMethod.CARD || payment.method === PaymentMethod.MOMO) && Boolean(payment.providerReference);
 }
 
 export async function PaymentRefundPanel({ shopId, orderId, currencyCode, payments, canManage }: Props) {
@@ -61,9 +61,10 @@ export async function PaymentRefundPanel({ shopId, orderId, currencyCode, paymen
           const summary = paymentRefundSummary({ paymentAmount: payment.amount, paymentStatus: payment.status, refunds });
           const active = refunds.find((refund) => activePaymentRefundStatuses.includes(refund.status));
           const netRecognized = netRecognizedPaymentAmount(payment);
+          const captured = payment.status === PaymentStatus.SUCCESS || payment.status === PaymentStatus.REFUNDED;
           const canStart = canManage
             && isPaystackPayment(payment)
-            && [PaymentStatus.SUCCESS, PaymentStatus.REFUNDED].includes(payment.status)
+            && captured
             && summary.refundable > 0.005
             && !active;
 
