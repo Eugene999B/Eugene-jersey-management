@@ -19,7 +19,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ re
   if (!isTrustedApplicationOrigin(request)) return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
   const buyer = await getBuyerSession();
   if (!buyer) return NextResponse.redirect(new URL(`/buyer/login?next=${encodeURIComponent(`/buyer/production-requests/${requestId}`)}`, request.url), 303);
-  await enforceRateLimit({ key: `custom-production-payment:${buyer.id}`, limit: 12, windowSeconds: 60 * 60 }).catch(() => null);
+  try {
+    await enforceRateLimit({ key: `custom-production-payment:${buyer.id}`, limit: 12, windowSeconds: 60 * 60 });
+  } catch {
+    return NextResponse.json({ error: "Too many custom-production payment attempts. Try again later." }, { status: 429 });
+  }
 
   const form = await request.formData();
   const stage = String(form.get("stage") ?? "DEPOSIT").toUpperCase();
@@ -27,7 +31,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ re
 
   const productionRequest = await prisma.customerProductionRequest.findFirst({
     where: { id: requestId, buyerId: buyer.id },
-    include: undefined,
   });
   if (!productionRequest?.orderId || productionRequest.quotedTotal === null || productionRequest.depositAmount === null || productionRequest.status === CustomerProductionRequestStatus.CANCELLED) {
     return NextResponse.redirect(new URL(`/buyer/production-requests/${requestId}?error=payment-not-ready`, request.url), 303);
