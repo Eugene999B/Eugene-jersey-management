@@ -97,7 +97,7 @@ async function syncPaymentRefundStatus(shopId: string, paymentId: string) {
     where: { id: paymentId, order: { shopId } },
     select: { id: true, amount: true, status: true },
   });
-  if (!payment || ![PaymentStatus.SUCCESS, PaymentStatus.REFUNDED].includes(payment.status)) return;
+  if (!payment || (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED)) return;
 
   const refunds = await prisma.paymentRefund.findMany({
     where: { shopId, paymentId },
@@ -179,8 +179,8 @@ export async function requestPaymentRefund(input: {
       },
     });
     if (!payment) throw new Error("PAYMENT_NOT_FOUND");
-    if (![PaymentMethod.CARD, PaymentMethod.MOMO].includes(payment.method)) throw new Error("PAYMENT_NOT_PAYSTACK");
-    if (![PaymentStatus.SUCCESS, PaymentStatus.REFUNDED].includes(payment.status)) throw new Error("PAYMENT_NOT_CAPTURED");
+    if (payment.method !== PaymentMethod.CARD && payment.method !== PaymentMethod.MOMO) throw new Error("PAYMENT_NOT_PAYSTACK");
+    if (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED) throw new Error("PAYMENT_NOT_CAPTURED");
     if (!payment.providerReference) throw new Error("PAYMENT_PROVIDER_REFERENCE_MISSING");
 
     const existing = await tx.paymentRefund.findMany({
