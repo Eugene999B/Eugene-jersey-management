@@ -10,11 +10,11 @@ export default function DashboardError({ reset }: { error: Error & { digest?: st
         <span className="rounded-xl bg-red-50 p-3 text-red-700"><AlertTriangle size={22} /></span>
         <div>
           <h1 className="text-xl font-semibold">This action or page could not be completed</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Your saved business records were not intentionally changed by this error. Try the current page again. If the same problem repeats, return to Home and review the latest state before repeating the action.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Review the latest page state before repeating the action, because some operations can finish before a screen error is shown. Try the page again once; if the same problem repeats, return to Home and avoid repeating the business action until its current status is clear.</p>
         </div>
       </div>
       <div className="mt-5 flex flex-wrap gap-2">
-        <Button type="button" onClick={reset}><RefreshCcw size={16} /> Try again</Button>
+        <Button type="button" onClick={reset}><RefreshCcw size={16} /> Try page again</Button>
         <LinkButton href="/dashboard" variant="outline">Return to Home</LinkButton>
       </div>
     </section>
