@@ -56,8 +56,26 @@ function completeProfileData(data: ParsedProfile) {
 }
 
 function profileError(error: unknown) {
+  if (error instanceof Error && error.message.includes("EJM_MACHINE_PROFILE_HAS_OPEN_JOBS")) {
+    return NextResponse.json({
+      error: "This machine profile still has prepared, sending, or failed cutter jobs. Finish or cancel those jobs before deactivating the machine.",
+      code: "MACHINE_PROFILE_HAS_OPEN_JOBS",
+    }, { status: 409 });
+  }
+  if (error instanceof Error && error.message.includes("EJM_MACHINE_PROFILE_HAS_HISTORY")) {
+    return NextResponse.json({
+      error: "This machine profile has cutter production history and cannot be deleted. Deactivate it after all open jobs are finished or cancelled.",
+      code: "MACHINE_PROFILE_HAS_HISTORY",
+    }, { status: 409 });
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
     return NextResponse.json({ error: "A machine profile with this name already exists in this shop." }, { status: 409 });
+  }
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+    return NextResponse.json({
+      error: "This machine profile is referenced by production history and cannot be deleted. Deactivate it instead.",
+      code: "MACHINE_PROFILE_HAS_HISTORY",
+    }, { status: 409 });
   }
   throw error;
 }
@@ -223,6 +241,6 @@ export async function DELETE(request: NextRequest) {
     if (error instanceof Error && error.message === "A shop must keep at least one machine profile.") {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    throw error;
+    return profileError(error);
   }
 }
