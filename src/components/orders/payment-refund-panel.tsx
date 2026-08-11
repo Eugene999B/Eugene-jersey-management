@@ -6,6 +6,8 @@ import {
   retryPaymentRefundAction,
 } from "@/app/dashboard/orders/refund-actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmActionButton } from "@/components/ui/confirm-action-button";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
 import { isPaystackRefundEligiblePayment } from "@/lib/payment-refund-eligibility";
@@ -94,7 +96,7 @@ export async function PaymentRefundPanel({ shopId, orderId, currencyCode, paymen
                           <form action={reconcilePaymentRefundAction}>
                             <input type="hidden" name="orderId" value={orderId} />
                             <input type="hidden" name="refundId" value={refund.id} />
-                            <button type="submit" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 px-3 text-xs font-bold hover:bg-slate-100"><RefreshCw size={14} />Reconcile with Paystack</button>
+                            <Button variant="outline" size="sm"><RefreshCw size={14} />Reconcile with Paystack</Button>
                           </form>
                         ) : null}
                       </div>
@@ -112,7 +114,7 @@ export async function PaymentRefundPanel({ shopId, orderId, currencyCode, paymen
                           <label className="text-xs font-bold text-amber-950">Customer account number
                             <input name="accountNumber" required inputMode="numeric" autoComplete="off" minLength={6} maxLength={30} className="field mt-1 bg-white" placeholder="Account number" />
                           </label>
-                          <button type="submit" disabled={!banks.length} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-900 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><Landmark size={15} />Retry refund</button>
+                          <ConfirmActionButton confirmation="Retry this refund through Paystack with the selected bank details? Confirm the bank and account number before continuing." disabled={!banks.length} className="bg-amber-900 text-white hover:bg-amber-950"><Landmark size={15} />Retry refund</ConfirmActionButton>
                           {!banks.length ? <p className="text-xs text-amber-900 sm:col-span-3">Bank list is unavailable. Reconcile later; do not submit unverified bank details.</p> : null}
                           <p className="text-xs text-amber-900 sm:col-span-3">Bank details are sent to Paystack for this retry and are not stored by ESM.</p>
                         </form>
@@ -137,7 +139,7 @@ export async function PaymentRefundPanel({ shopId, orderId, currencyCode, paymen
                   </label>
                   <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
                     <p className="flex max-w-xl gap-2 text-xs leading-5 text-cyan-950"><AlertTriangle size={15} className="mt-0.5 shrink-0" />Submitting this form sends a real refund request to Paystack. An uncertain network outcome is locked for reconciliation instead of automatically retried.</p>
-                    <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white"><RotateCcw size={15} />Issue refund</button>
+                    <ConfirmActionButton confirmation="Issue this Paystack refund now? Verify the refund amount and reason first. A real provider request will be sent immediately." variant="secondary"><RotateCcw size={15} />Issue refund</ConfirmActionButton>
                   </div>
                 </form>
               ) : null}
