@@ -9,8 +9,20 @@ import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
-export default async function SuppliersPage() {
+type Props = { searchParams?: Promise<{ error?: string }> };
+
+const supplierErrors: Record<string, string> = {
+  supplier: "Check the supplier details. Use a supplier name of at least 2 characters. If you add a portal login, enter both a valid email and a strong temporary password.",
+  "portal-email-exists": "That supplier portal email already belongs to another account. Use a different email or leave the portal login blank.",
+  order: "Check the purchase order. Choose a supplier, enter an item description, a positive quantity and a valid unit cost.",
+  "order-tenant": "That supplier or linked stock item is no longer available in this shop. Refresh the page and choose it again.",
+  receive: "Choose a valid purchase order to receive.",
+  "receive-changed": "This purchase order could not be received because it was already received, changed, or has a stock link that is no longer valid. Refresh and review it before trying again.",
+};
+
+export default async function SuppliersPage({ searchParams }: Props) {
   await requireRole(permissions.suppliers);
+  const params = (await searchParams) ?? {};
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
@@ -28,6 +40,7 @@ export default async function SuppliersPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      {params.error && supplierErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{supplierErrors[params.error]}</div> : null}
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">Suppliers</h1><p className="mt-2 text-sm text-slate-500">Manage supplier records, portal logins, purchase orders, receiving, cost history and production-stock replenishment.</p></div><LinkButton href="/dashboard/production-stock" variant="outline"><Boxes size={16} /> Production stock & costing</LinkButton></div>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-5">

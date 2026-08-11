@@ -37,6 +37,8 @@ export default async function StaffPage({ searchParams }: Props) {
   return (
     <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
       <section className="panel p-4 sm:p-5">
+        {params.error === "staff" ? <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Check the staff name, email, role and password, then try again. The password must meet the displayed password rules.</div> : null}
+        {params.error === "invite" ? <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Enter a valid staff email and choose a role you are allowed to assign.</div> : null}
         {params.error === "email-exists" ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">That email already belongs to an existing account and cannot be moved into this shop.</div> : null}
         {params.error === "plan-staff-limit" ? <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">This shop has used all staff slots included in its assigned subscription version. Disable an unused account or ask the platform administrator to assign different approved terms.</div> : null}
         {params.error === "role-authority" ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">You cannot create, invite, enable, or disable that role. Owners manage managers; managers can manage ordinary staff only.</div> : null}
