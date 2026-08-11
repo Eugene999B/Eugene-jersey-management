@@ -6,19 +6,20 @@ import { prisma } from "@/lib/db";
 import { permissions, roleLabels } from "@/lib/rbac";
 import { requireRole } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
+import { PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
+import { assignableStaffRoles, canToggleStaffAccess } from "@/lib/staff-authority";
 import { staffCapacity } from "@/lib/subscription-entitlements";
 import { getTenantContext } from "@/lib/tenant";
 
 type Props = { searchParams?: Promise<{ error?: string; invite?: string }> };
 
-const staffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER];
-
 export default async function StaffPage({ searchParams }: Props) {
-  await requireRole(permissions.staff);
+  const actor = await requireRole(permissions.staff);
   const params = (await searchParams) ?? {};
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
+  const staffRoles = assignableStaffRoles(actor.role);
   const [users, invites, capacity] = await Promise.all([
     prisma.user.findMany({ where: { shopId: shop.id }, orderBy: { createdAt: "desc" } }),
     prisma.inviteToken.findMany({ where: { shopId: shop.id, usedAt: null }, orderBy: { createdAt: "desc" }, take: 10 }),
@@ -26,11 +27,20 @@ export default async function StaffPage({ searchParams }: Props) {
   ]);
   const atLimit = capacity.atLimit;
 
+  const protectedReason = (user: (typeof users)[number]) => {
+    if (user.id === actor.id) return "Your account";
+    if (user.role === Role.OWNER) return "Owner protected";
+    if (!canToggleStaffAccess(actor.role, user.role)) return "Owner only";
+    return null;
+  };
+
   return (
     <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
       <section className="panel p-4 sm:p-5">
         {params.error === "email-exists" ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">That email already belongs to an existing account and cannot be moved into this shop.</div> : null}
         {params.error === "plan-staff-limit" ? <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">This shop has used all staff slots included in its assigned subscription version. Disable an unused account or ask the platform administrator to assign different approved terms.</div> : null}
+        {params.error === "role-authority" ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">You cannot create, invite, enable, or disable that role. Owners manage managers; managers can manage ordinary staff only.</div> : null}
+        {params.error === "self" ? <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">You cannot disable your own account from the staff directory.</div> : null}
         {params.invite ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><p className="font-semibold">Invite created</p><p className="mt-1 break-all">{`${process.env.APP_URL ?? "http://localhost:3000"}/invite/${params.invite}`}</p><p className="mt-1 text-xs">Copy this link now and send it through a trusted channel. The secret is shown only in this response.</p></div> : null}
 
         <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
@@ -40,12 +50,12 @@ export default async function StaffPage({ searchParams }: Props) {
         </div>
 
         <h1 className="mt-6 text-xl font-semibold">Create staff login</h1>
-        <p className="mt-2 text-sm text-slate-500">Create a working account immediately and choose the role that controls access. The owner account is not counted as an included staff slot.</p>
+        <p className="mt-2 text-sm text-slate-500">Create a working account immediately and choose a role within your authority. Owners manage managers; managers can create ordinary staff. The owner account is not counted as an included staff slot.</p>
         <form action={createStaffAccountAction} className="mt-5 space-y-3">
           <input className="field" name="name" placeholder="Staff name" required />
           <input className="field" name="email" type="email" placeholder="staff@example.com" required />
           <input className="field" name="phone" placeholder="+233..." />
-          <input className="field" name="password" type="password" minLength={8} autoComplete="new-password" placeholder="Temporary password (8+ characters)" required />
+          <input className="field" name="password" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={100} autoComplete="new-password" placeholder={`${PASSWORD_MIN_LENGTH}+ characters with a letter and number`} required />
           <select className="field" name="role" defaultValue={Role.CASHIER}>
             {staffRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
           </select>
@@ -76,35 +86,41 @@ export default async function StaffPage({ searchParams }: Props) {
       <section className="panel overflow-hidden">
         <div className="border-b border-[#ded8cd] p-4 sm:p-5">
           <h1 className="text-xl font-semibold">Staff directory</h1>
-          <p className="text-sm text-slate-500">Role-based access controls are enforced in middleware, pages, API routes and the assigned subscription staff limit.</p>
+          <p className="text-sm text-slate-500">Account authority is enforced on the server. Disabling an account increments its session version, invalidating existing sessions.</p>
         </div>
 
         <div className="space-y-3 p-3 sm:hidden">
-          {users.map((user) => (
-            <article key={user.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">
-              <div className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0"><p className="truncate font-semibold">{user.name}</p><p className="break-all text-sm text-slate-500">Login ID: {user.adminLoginId ?? user.email}</p><p className="break-all text-xs text-slate-400">Email: {user.email}</p></div>
-                <Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm"><Badge>{roleLabels[user.role]}</Badge><span className="text-slate-500">Last login: {user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</span></div>
-              <form action={toggleStaffAccessAction} className="mt-4"><input type="hidden" name="userId" value={user.id} /><Button variant="outline" className="w-full">{user.isActive ? "Disable access" : "Enable access"}</Button></form>
-            </article>
-          ))}
+          {users.map((user) => {
+            const protection = protectedReason(user);
+            return (
+              <article key={user.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0"><p className="truncate font-semibold">{user.name}</p><p className="break-all text-sm text-slate-500">Login ID: {user.adminLoginId ?? user.email}</p><p className="break-all text-xs text-slate-400">Email: {user.email}</p></div>
+                  <Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm"><Badge>{roleLabels[user.role]}</Badge><span className="text-slate-500">Last login: {user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</span></div>
+                {protection ? <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs font-semibold text-slate-500">{protection}</p> : <form action={toggleStaffAccessAction} className="mt-4"><input type="hidden" name="userId" value={user.id} /><Button variant="outline" className="w-full">{user.isActive ? "Disable access" : "Enable access"}</Button></form>}
+              </article>
+            );
+          })}
         </div>
 
         <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4">Last login</th><th className="p-4">Action</th></tr></thead>
             <tbody className="divide-y divide-[#ded8cd] bg-white">
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td className="p-4"><p className="font-semibold">{user.name}</p><p className="text-slate-500">Login ID: {user.adminLoginId ?? user.email}</p><p className="text-xs text-slate-400">{user.email}</p></td>
-                  <td className="p-4"><Badge>{roleLabels[user.role]}</Badge></td>
-                  <td className="p-4"><Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge></td>
-                  <td className="p-4 text-slate-500">{user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</td>
-                  <td className="p-4"><form action={toggleStaffAccessAction}><input type="hidden" name="userId" value={user.id} /><Button variant="outline" className="min-h-8 px-2 py-1 text-xs">{user.isActive ? "Disable" : "Enable"}</Button></form></td>
-                </tr>
-              ))}
+              {users.map((user) => {
+                const protection = protectedReason(user);
+                return (
+                  <tr key={user.id}>
+                    <td className="p-4"><p className="font-semibold">{user.name}</p><p className="text-slate-500">Login ID: {user.adminLoginId ?? user.email}</p><p className="text-xs text-slate-400">{user.email}</p></td>
+                    <td className="p-4"><Badge>{roleLabels[user.role]}</Badge></td>
+                    <td className="p-4"><Badge tone={user.isActive ? "green" : "red"}>{user.isActive ? "Active" : "Disabled"}</Badge></td>
+                    <td className="p-4 text-slate-500">{user.lastLoginAt ? shortDate(user.lastLoginAt) : "Never"}</td>
+                    <td className="p-4">{protection ? <span className="text-xs font-semibold text-slate-400">{protection}</span> : <form action={toggleStaffAccessAction}><input type="hidden" name="userId" value={user.id} /><Button variant="outline" className="min-h-8 px-2 py-1 text-xs">{user.isActive ? "Disable" : "Enable"}</Button></form>}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

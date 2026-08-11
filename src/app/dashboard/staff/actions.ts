@@ -11,6 +11,11 @@ import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createPlainToken, hashToken, minutesFromNow } from "@/lib/tokens";
 import {
+  canAssignStaffRole,
+  canToggleStaffAccess,
+  ownerAssignableStaffRoles,
+} from "@/lib/staff-authority";
+import {
   createStaffAccountWithinPlan,
   createStaffInviteWithinPlan,
   SubscriptionEntitlementError,
@@ -18,11 +23,9 @@ import {
   toggleStaffAccessWithinPlan,
 } from "@/lib/subscription-entitlements";
 
-const allowedStaffRoles = [Role.MANAGER, Role.CASHIER, Role.DESIGNER, Role.INVENTORY_CLERK, Role.ACCOUNTANT, Role.VIEWER] as const;
-
 const schema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
-  role: z.nativeEnum(Role).refine((role) => allowedStaffRoles.includes(role as (typeof allowedStaffRoles)[number])),
+  role: z.nativeEnum(Role).refine((role) => ownerAssignableStaffRoles.includes(role as (typeof ownerAssignableStaffRoles)[number])),
 });
 
 const staffSchema = z.object({
@@ -30,7 +33,7 @@ const staffSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   phone: z.string().trim().max(30).optional(),
   password: strongPasswordSchema,
-  role: z.nativeEnum(Role).refine((role) => allowedStaffRoles.includes(role as (typeof allowedStaffRoles)[number])),
+  role: z.nativeEnum(Role).refine((role) => ownerAssignableStaffRoles.includes(role as (typeof ownerAssignableStaffRoles)[number])),
 });
 
 function staffRedirect(error: string): never {
@@ -56,6 +59,7 @@ export async function createStaffAccountAction(formData: FormData) {
     role: formData.get("role"),
   });
   if (!parsed.success) staffRedirect("staff");
+  if (!canAssignStaffRole(session.role, parsed.data.role)) staffRedirect("role-authority");
 
   const user = await createStaffAccountWithinPlan({
     shopId,
@@ -84,7 +88,8 @@ export async function toggleStaffAccessAction(formData: FormData) {
 
   const userId = String(formData.get("userId") ?? "");
   const user = await prisma.user.findFirstOrThrow({ where: { id: userId, shopId } });
-  if (user.id === session.id) redirect("/dashboard/staff?error=self");
+  if (user.id === session.id) staffRedirect("self");
+  if (!canToggleStaffAccess(session.role, user.role)) staffRedirect("role-authority");
 
   const updated = await toggleStaffAccessWithinPlan({ shopId, userId }).catch(handleStaffWriteError);
   await audit({
@@ -93,6 +98,7 @@ export async function toggleStaffAccessAction(formData: FormData) {
     action: updated.isActive ? "staff.access_enabled" : "staff.access_disabled",
     entityType: "User",
     entityId: user.id,
+    metadata: { role: user.role },
   });
   revalidatePath("/dashboard/staff");
 }
@@ -107,6 +113,7 @@ export async function createInviteAction(formData: FormData) {
     role: formData.get("role"),
   });
   if (!parsed.success) staffRedirect("invite");
+  if (!canAssignStaffRole(session.role, parsed.data.role)) staffRedirect("role-authority");
 
   const token = createPlainToken();
   const invite = await createStaffInviteWithinPlan({
