@@ -14,6 +14,7 @@ import {
 } from "@/lib/customer-production";
 import { prisma } from "@/lib/db";
 import { readProductionLibrary } from "@/lib/production-specs";
+import { publicShopAcceptsOrders } from "@/lib/public-shop-access";
 import { assertOrderCreationAvailable, CommercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const requestSchema = z.object({
@@ -58,7 +59,7 @@ export async function submitCustomerProductionRequestAction(formData: FormData) 
   if (!buyer?.isActive || buyer.phone !== buyerSession.phone) redirect(`/buyer/login?next=${encodeURIComponent(`/shop/${parsed.data.shopSlug}/custom-production`)}`);
 
   const shop = await prisma.shop.findUnique({ where: { slug: parsed.data.shopSlug } });
-  if (!shop?.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING") || !shop.enabledModules.includes("PRINTING_PRODUCTION")) {
+  if (!shop || !publicShopAcceptsOrders(shop, ["ONLINE_SELLING", "PRINTING_PRODUCTION"])) {
     redirect(`/shop/${parsed.data.shopSlug}?error=closed`);
   }
   try {
