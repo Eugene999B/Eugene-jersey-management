@@ -7,6 +7,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   OrderStatus,
+  Prisma,
   Role,
   type Customer,
   type Order,
@@ -114,6 +115,25 @@ function tenderGatewayResponse(tender: {
   });
 }
 
+function duplicateCheckoutResponse(order: {
+  id: string;
+  shopId: string;
+  receiptNumber: string;
+  totalAmount: unknown;
+  status: OrderStatus;
+}, shopId: string) {
+  if (order.shopId !== shopId) return NextResponse.json({ error: "Checkout key conflict." }, { status: 409 });
+  return NextResponse.json({
+    orderId: order.id,
+    receiptNumber: order.receiptNumber,
+    totalAmount: Number(order.totalAmount),
+    receiptUrl: `/api/receipts/${order.id}`,
+    orderStatus: order.status,
+    checkoutMode: order.status === OrderStatus.PENDING ? "ORDER_JOB" : "SALE",
+    duplicate: true,
+  });
+}
+
 export async function POST(request: NextRequest) {
   const session = await requireRole(permissions.pos);
   if (!session.shopId) {
@@ -132,18 +152,7 @@ export async function POST(request: NextRequest) {
     where: { idempotencyKey: parsed.data.idempotencyKey },
     select: { id: true, shopId: true, receiptNumber: true, totalAmount: true, status: true },
   });
-  if (previousOrder) {
-    if (previousOrder.shopId !== session.shopId) return NextResponse.json({ error: "Checkout key conflict." }, { status: 409 });
-    return NextResponse.json({
-      orderId: previousOrder.id,
-      receiptNumber: previousOrder.receiptNumber,
-      totalAmount: Number(previousOrder.totalAmount),
-      receiptUrl: `/api/receipts/${previousOrder.id}`,
-      orderStatus: previousOrder.status,
-      checkoutMode: previousOrder.status === OrderStatus.PENDING ? "ORDER_JOB" : "SALE",
-      duplicate: true,
-    });
-  }
+  if (previousOrder) return duplicateCheckoutResponse(previousOrder, session.shopId);
 
   const shop = await prisma.shop.findUniqueOrThrow({ where: { id: session.shopId } });
   try {
@@ -257,6 +266,18 @@ export async function POST(request: NextRequest) {
   let checkoutResult: CheckoutTransactionResult;
   try {
     checkoutResult = await prisma.$transaction(async (tx) => {
+      if (externalReferences.length) {
+        const reused = await tx.payment.findFirst({
+          where: {
+            providerReference: { in: externalReferences },
+            status: PaymentStatus.SUCCESS,
+            order: { shopId: session.shopId! },
+          },
+          select: { id: true },
+        });
+        if (reused) throw new Error("EXTERNAL_REFERENCE_REUSED");
+      }
+
       const normalizedCustomerPhone = parsed.data.customerPhone ? normalizePhone(parsed.data.customerPhone) : undefined;
       const customerMatch = !selectedCustomer && (normalizedCustomerPhone || parsed.data.customerEmail)
         ? await tx.customer.findFirst({ where: { shopId: session.shopId!, OR: [
@@ -393,10 +414,23 @@ export async function POST(request: NextRequest) {
             }
           : null,
       };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15_000 });
   } catch (error) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
       return NextResponse.json({ error: "Stock changed while checking out. Refresh and try again." }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === "EXTERNAL_REFERENCE_REUSED") {
+      return NextResponse.json({ error: "One of those external payment references has already been recorded in this shop." }, { status: 409 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.order.findUnique({
+        where: { idempotencyKey: parsed.data.idempotencyKey },
+        select: { id: true, shopId: true, receiptNumber: true, totalAmount: true, status: true },
+      });
+      if (existing) return duplicateCheckoutResponse(existing, session.shopId);
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      return NextResponse.json({ error: "Checkout changed while it was being saved. Review the cart and try once more." }, { status: 409 });
     }
     const commercial = commercialSubscriptionError(error);
     if (commercial) return NextResponse.json({ error: commercial.message, code: commercial.code }, { status: 409 });

@@ -9,13 +9,16 @@ import { requireRole } from "@/lib/auth";
 import { syncPaymentRefundAccounting } from "@/lib/payment-refund-accounting";
 import { paymentRefundRoles } from "@/lib/payment-refund-access";
 import {
+  canonicalPaymentRefundTarget,
+  canonicalRefundOrderId,
+} from "@/lib/payment-refund-targets";
+import {
   reconcilePaymentRefund,
   requestPaymentRefund,
   retryPaymentRefundWithBankDetails,
 } from "@/lib/payment-refunds";
 
 const requestSchema = z.object({
-  orderId: z.string().min(1).max(120),
   paymentId: z.string().min(1).max(120),
   amount: z.coerce.number().positive().max(100_000_000),
   reason: z.string().trim().max(300).optional(),
@@ -23,7 +26,6 @@ const requestSchema = z.object({
 });
 
 const reconcileSchema = z.object({
-  orderId: z.string().min(1).max(120),
   refundId: z.string().min(1).max(120),
 });
 
@@ -64,6 +66,11 @@ function revalidateRefundSurfaces(orderId: string) {
   revalidatePath("/dashboard/reports");
   revalidatePath("/dashboard/closing");
   revalidatePath("/admin/integrations");
+}
+
+function refundErrorUrl(orderId: string | null, error: unknown) {
+  const suffix = `refundError=${encodeURIComponent(errorCode(error))}`;
+  return orderId ? `/dashboard/orders/${orderId}?${suffix}` : `/dashboard/orders?${suffix}`;
 }
 
 async function recordRefundAudit(input: {
@@ -124,13 +131,20 @@ export async function requestPaymentRefundAction(formData: FormData) {
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = requestSchema.safeParse({
-    orderId: formData.get("orderId"),
     paymentId: formData.get("paymentId"),
     amount: formData.get("amount"),
     reason: formData.get("reason") || undefined,
     customerNote: formData.get("customerNote") || undefined,
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
+
+  let target: Awaited<ReturnType<typeof canonicalPaymentRefundTarget>>;
+  try {
+    target = await canonicalPaymentRefundTarget(session.shopId, parsed.data.paymentId);
+  } catch (error) {
+    redirect(refundErrorUrl(null, error));
+  }
+  const orderId = target.orderId;
 
   let refund: PaymentRefund;
   try {
@@ -143,7 +157,7 @@ export async function requestPaymentRefundAction(formData: FormData) {
       customerNote: parsed.data.customerNote,
     });
   } catch (error) {
-    redirect(`/dashboard/orders/${parsed.data.orderId}?refundError=${errorCode(error)}`);
+    redirect(refundErrorUrl(orderId, error));
   }
 
   const warnings = await finalizeRefundEvidence({
@@ -152,8 +166,8 @@ export async function requestPaymentRefundAction(formData: FormData) {
     auditAction: "payment.refund_requested",
     includeAmount: true,
   });
-  revalidateRefundSurfaces(parsed.data.orderId);
-  redirect(successUrl(parsed.data.orderId, refund, warnings));
+  revalidateRefundSurfaces(orderId);
+  redirect(successUrl(orderId, refund, warnings));
 }
 
 export async function reconcilePaymentRefundAction(formData: FormData) {
@@ -161,16 +175,22 @@ export async function reconcilePaymentRefundAction(formData: FormData) {
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = reconcileSchema.safeParse({
-    orderId: formData.get("orderId"),
     refundId: formData.get("refundId"),
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
+
+  let orderId: string;
+  try {
+    orderId = await canonicalRefundOrderId(session.shopId, parsed.data.refundId);
+  } catch (error) {
+    redirect(refundErrorUrl(null, error));
+  }
 
   let refund: PaymentRefund;
   try {
     refund = await reconcilePaymentRefund(session.shopId, parsed.data.refundId);
   } catch (error) {
-    redirect(`/dashboard/orders/${parsed.data.orderId}?refundError=${errorCode(error)}`);
+    redirect(refundErrorUrl(orderId, error));
   }
 
   const warnings = await finalizeRefundEvidence({
@@ -178,8 +198,8 @@ export async function reconcilePaymentRefundAction(formData: FormData) {
     refund,
     auditAction: "payment.refund_reconciled",
   });
-  revalidateRefundSurfaces(parsed.data.orderId);
-  redirect(successUrl(parsed.data.orderId, refund, warnings));
+  revalidateRefundSurfaces(orderId);
+  redirect(successUrl(orderId, refund, warnings));
 }
 
 export async function retryPaymentRefundAction(formData: FormData) {
@@ -187,12 +207,18 @@ export async function retryPaymentRefundAction(formData: FormData) {
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
 
   const parsed = retrySchema.safeParse({
-    orderId: formData.get("orderId"),
     refundId: formData.get("refundId"),
     bankId: formData.get("bankId"),
     accountNumber: formData.get("accountNumber"),
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
+
+  let orderId: string;
+  try {
+    orderId = await canonicalRefundOrderId(session.shopId, parsed.data.refundId);
+  } catch (error) {
+    redirect(refundErrorUrl(null, error));
+  }
 
   let refund: PaymentRefund;
   try {
@@ -203,7 +229,7 @@ export async function retryPaymentRefundAction(formData: FormData) {
       accountNumber: parsed.data.accountNumber,
     });
   } catch (error) {
-    redirect(`/dashboard/orders/${parsed.data.orderId}?refundError=${errorCode(error)}`);
+    redirect(refundErrorUrl(orderId, error));
   }
 
   const warnings = await finalizeRefundEvidence({
@@ -211,6 +237,6 @@ export async function retryPaymentRefundAction(formData: FormData) {
     refund,
     auditAction: "payment.refund_bank_retry_submitted",
   });
-  revalidateRefundSurfaces(parsed.data.orderId);
-  redirect(successUrl(parsed.data.orderId, refund, warnings));
+  revalidateRefundSurfaces(orderId);
+  redirect(successUrl(orderId, refund, warnings));
 }
