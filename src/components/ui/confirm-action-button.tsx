@@ -12,6 +12,11 @@ export function ConfirmActionButton({ confirmation, onClick, ...props }: Confirm
     <Button
       {...props}
       onClick={(event) => {
+        const form = event.currentTarget.form;
+        if (form && !form.checkValidity()) {
+          onClick?.(event);
+          return;
+        }
         if (!window.confirm(confirmation)) {
           event.preventDefault();
           return;
