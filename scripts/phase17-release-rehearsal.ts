@@ -12,6 +12,7 @@ import {
   ProductionInventoryMovementType,
   ProductionInventoryUnit,
   Role,
+  ShopVerificationStatus,
 } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -50,6 +51,7 @@ async function seed() {
       slug: "phase17-release-canary",
       currency: "GHS",
       isActive: true,
+      verificationStatus: ShopVerificationStatus.VERIFIED,
       publicOrderingEnabled: false,
       storefrontEnabled: false,
     },
@@ -59,6 +61,7 @@ async function seed() {
       slug: "phase17-release-canary",
       currency: "GHS",
       isActive: true,
+      verificationStatus: ShopVerificationStatus.VERIFIED,
       publicOrderingEnabled: false,
       storefrontEnabled: false,
     },
@@ -287,7 +290,7 @@ async function snapshot() {
     throw new Error("Phase 17 canary is incomplete.");
   }
   const payload = {
-    shop: { id: shop.id, name: shop.name, slug: shop.slug, isActive: shop.isActive, currency: shop.currency, storefrontEnabled: shop.storefrontEnabled, publicOrderingEnabled: shop.publicOrderingEnabled },
+    shop: { id: shop.id, name: shop.name, slug: shop.slug, isActive: shop.isActive, verificationStatus: shop.verificationStatus, currency: shop.currency, storefrontEnabled: shop.storefrontEnabled, publicOrderingEnabled: shop.publicOrderingEnabled },
     actor: { id: user.id, shopId: user.shopId, email: user.email, role: user.role, isActive: user.isActive },
     product: { id: product.id, name: product.name, basePrice: product.basePrice.toString(), isPersonalizable: product.isPersonalizable },
     variant: { id: variant.id, sku: variant.sku, stockQty: variant.stockQty, priceOverride: variant.priceOverride?.toString() ?? null, attributes: variant.attributes },
