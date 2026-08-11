@@ -5,6 +5,10 @@ function source(path: string) {
   return readFileSync(path, "utf8");
 }
 
+function expectVisibleErrorKey(page: string, code: string) {
+  expect(page.includes(`${code}:`) || page.includes(`"${code}":`)).toBe(true);
+}
+
 describe("Phase 20 action feedback and recovery", () => {
   test("supplier action redirects have visible operator guidance", () => {
     const actions = source("src/app/dashboard/suppliers/actions.ts");
@@ -12,7 +16,7 @@ describe("Phase 20 action feedback and recovery", () => {
 
     for (const code of ["supplier", "portal-email-exists", "order", "order-tenant", "receive", "receive-changed"]) {
       expect(actions).toContain(`error=${code}`);
-      expect(page).toContain(`${code}:`);
+      expectVisibleErrorKey(page, code);
     }
     expect(page).toContain('role="alert"');
     expect(page).toContain("Refresh and review it before trying again.");
@@ -24,7 +28,7 @@ describe("Phase 20 action feedback and recovery", () => {
 
     for (const code of ["code", "shop", "order", "link", "fulfill", "fulfill-changed"]) {
       expect(actions).toContain(`error=${code}`);
-      expect(page).toContain(`${code}:`);
+      expectVisibleErrorKey(page, code);
     }
     expect(page).toContain('role="alert"');
     expect(page).toContain("no longer has enough linked stock");
