@@ -11,6 +11,7 @@ import { createNumericCode } from "@/lib/phone-codes";
 import { hashToken } from "@/lib/tokens";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { releaseUnpaidOnlineReservation } from "@/lib/order-lifecycle";
+import { publicShopAcceptsOrders } from "@/lib/public-shop-access";
 import { assertOrderCreationAvailable, commercialSubscriptionError } from "@/lib/subscription-hardening";
 
 const orderSchema = z.object({
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
   }
 
   const shop = await prisma.shop.findUnique({ where: { slug: parsed.data.shopSlug }, include: { paymentConfig: true } });
-  if (!shop || !shop.isActive || !shop.storefrontEnabled || !shop.publicOrderingEnabled || !shop.enabledModules.includes("ONLINE_SELLING")) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=closed`);
+  if (!shop || !publicShopAcceptsOrders(shop)) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=closed`);
   if (parsed.data.fulfillmentType === FulfillmentType.DELIVERY && parsed.data.paymentChoice === "CASH") return redirectTo(request, `/shop/${shopSlug}?error=delivery-payment`);
   if (parsed.data.paymentChoice === "PAYSTACK" && !isPaystackCheckoutReady(shop.paymentConfig)) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=payment`);
   if (parsed.data.paymentChoice === "CASH" && !shop.paymentConfig?.allowCash) return redirectTo(request, `/shop/${parsed.data.shopSlug}?error=payment`);
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest) {
   const cashHoldExpiresAt = parsed.data.paymentChoice === "CASH" ? new Date(Date.now() + shop.cashOrderHoldMinutes * 60_000) : null;
   const paystackReference = `SHOP-${shop.slug}-${Date.now()}-${nanoid(6)}`;
   const verificationCode = createNumericCode();
+  const buyerEmail = buyer.email?.trim().toLowerCase() ?? null;
 
   let orderResult;
   try {
@@ -131,10 +133,10 @@ export async function POST(request: NextRequest) {
         const updated = await tx.productVariant.updateMany({ where: { id: variant.id, stockQty: { gte: parsed.data.quantity } }, data: { stockQty: { decrement: parsed.data.quantity } } });
         if (updated.count !== 1) throw new Error("INSUFFICIENT_STOCK");
       }
-      const matchedCustomer = await tx.customer.findFirst({ where: { shopId: shop.id, OR: [{ phone: buyer.phone }, ...(buyer.email ? [{ email: buyer.email }] : [])] } });
+      const matchedCustomer = await tx.customer.findFirst({ where: { shopId: shop.id, OR: [{ phone: buyer.phone }, ...(buyerEmail ? [{ email: { equals: buyerEmail, mode: "insensitive" as const } }] : [])] } });
       const customer = matchedCustomer
-        ? await tx.customer.update({ where: { id: matchedCustomer.id }, data: { name: buyer.name, phone: buyer.phone, email: buyer.email } })
-        : await tx.customer.create({ data: { shopId: shop.id, name: buyer.name, phone: buyer.phone, email: buyer.email, group: "Online" } });
+        ? await tx.customer.update({ where: { id: matchedCustomer.id }, data: { name: buyer.name, phone: buyer.phone, email: buyerEmail } })
+        : await tx.customer.create({ data: { shopId: shop.id, name: buyer.name, phone: buyer.phone, email: buyerEmail, group: "Online" } });
       const order = await tx.order.create({
         data: {
           shopId: shop.id, customerId: customer.id, receiptNumber: receiptNumber(shop.slug), status: OrderStatus.PENDING,
@@ -154,7 +156,7 @@ export async function POST(request: NextRequest) {
         },
       });
       return { order, customer };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
     if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") return redirectTo(request, `/shop/${shop.slug}?error=stock`);
     if (commercialSubscriptionError(error)) return redirectTo(request, `/shop/${shop.slug}?error=subscription`);
@@ -162,6 +164,9 @@ export async function POST(request: NextRequest) {
       const existing = await prisma.order.findUnique({ where: { idempotencyKey: parsed.data.idempotencyKey } });
       if (existing?.buyerId === buyer.id) return redirectTo(request, `/track/${existing.receiptNumber}?access=${encodeURIComponent(existing.publicAccessToken)}`);
       return redirectTo(request, `/shop/${shop.slug}?error=duplicate-request`);
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      return redirectTo(request, `/shop/${shop.slug}?error=retry`);
     }
     throw error;
   }
