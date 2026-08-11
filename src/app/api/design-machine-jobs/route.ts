@@ -41,15 +41,16 @@ const createSchema = z.object({
 
 function jobError(error: unknown) {
   if (!(error instanceof Error)) throw error;
-  if (error.message.startsWith("MACHINE_JOB_DUPLICATE:")) {
+  const duplicate = error.message.match(/MACHINE_JOB_DUPLICATE:([A-Za-z0-9_-]+)/);
+  if (duplicate) {
     return NextResponse.json({
-      error: "This exact cutter payload was already sent to this machine within the last 15 minutes. Review the previous job before choosing an intentional resend.",
+      error: "This exact cutter payload is already queued, sending, failed and awaiting review, or was sent to this machine within the last 15 minutes. Review the previous job before choosing an intentional resend.",
       code: "MACHINE_JOB_DUPLICATE",
-      existingJobId: error.message.split(":")[1],
+      existingJobId: duplicate[1],
     }, { status: 409 });
   }
-  if (error.message === "MACHINE_JOB_SOURCE_INVALID") {
-    return NextResponse.json({ error: "The saved design or direct HPGL machine profile is no longer available in this shop." }, { status: 400 });
+  if (error.message.includes("MACHINE_JOB_SOURCE_INVALID")) {
+    return NextResponse.json({ error: "The saved design or active direct HPGL machine profile is no longer available in this shop." }, { status: 400 });
   }
   throw error;
 }
