@@ -40,7 +40,7 @@ for (const workspace of roleWorkspaces) {
     if ("forbiddenPath" in workspace) {
       await page.goto(workspace.forbiddenPath);
       await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
-      await expect(page.getByText("You do not have permission to open that shop tool.")).toBeVisible();
+      await expect(page.getByText("Access restricted.", { exact: false })).toBeVisible();
     }
   });
 }
