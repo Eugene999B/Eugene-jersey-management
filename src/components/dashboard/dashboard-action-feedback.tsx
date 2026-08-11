@@ -53,7 +53,7 @@ export function DashboardActionFeedback() {
   if (!message) return null;
 
   return (
-    <div role="alert" className="mx-3 mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold leading-6 text-red-800 sm:mx-4 lg:mx-6">
+    <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold leading-6 text-red-800">
       {message}
     </div>
   );
