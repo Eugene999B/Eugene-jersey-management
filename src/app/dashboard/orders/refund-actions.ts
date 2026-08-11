@@ -166,11 +166,16 @@ export async function requestPaymentRefundAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
 
-  let orderId: string | null = null;
+  let target: Awaited<ReturnType<typeof canonicalPaymentTarget>>;
+  try {
+    target = await canonicalPaymentTarget(session.shopId, parsed.data.paymentId);
+  } catch (error) {
+    redirect(refundErrorUrl(null, error));
+  }
+  const orderId = target.orderId;
+
   let refund: PaymentRefund;
   try {
-    const target = await canonicalPaymentTarget(session.shopId, parsed.data.paymentId);
-    orderId = target.orderId;
     refund = await requestPaymentRefund({
       shopId: session.shopId,
       paymentId: parsed.data.paymentId,
@@ -202,10 +207,15 @@ export async function reconcilePaymentRefundAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
 
-  let orderId: string | null = null;
-  let refund: PaymentRefund;
+  let orderId: string;
   try {
     orderId = await canonicalRefundOrderId(session.shopId, parsed.data.refundId);
+  } catch (error) {
+    redirect(refundErrorUrl(null, error));
+  }
+
+  let refund: PaymentRefund;
+  try {
     refund = await reconcilePaymentRefund(session.shopId, parsed.data.refundId);
   } catch (error) {
     redirect(refundErrorUrl(orderId, error));
@@ -231,10 +241,15 @@ export async function retryPaymentRefundAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
 
-  let orderId: string | null = null;
-  let refund: PaymentRefund;
+  let orderId: string;
   try {
     orderId = await canonicalRefundOrderId(session.shopId, parsed.data.refundId);
+  } catch (error) {
+    redirect(refundErrorUrl(null, error));
+  }
+
+  let refund: PaymentRefund;
+  try {
     refund = await retryPaymentRefundWithBankDetails({
       shopId: session.shopId,
       refundId: parsed.data.refundId,
