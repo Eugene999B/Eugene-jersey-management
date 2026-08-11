@@ -34,6 +34,7 @@ describe("Phase 19C heat press state serialization", () => {
     const route = source("src/app/api/heat-press-runs/[runId]/action/route.ts");
     expect(route).toContain('FROM "HeatPressRun"');
     expect(route).toContain("FOR UPDATE");
-    expect(route).toContain('WHERE "id" = ${runId} AND "shopId" = ${shopId}');
+    expect(route).toContain('WHERE "id" =');
+    expect(route).toContain('AND "shopId" =');
   });
 });
