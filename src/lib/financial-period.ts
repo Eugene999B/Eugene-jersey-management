@@ -29,10 +29,11 @@ function addTender(totals: TenderTotals, method: PaymentMethod, amount: number) 
   if (method === PaymentMethod.MOMO) totals.MOMO += amount;
 }
 
-export async function financialPeriodTotals(shopId: string, start: Date, end: Date): Promise<FinancialPeriodTotals> {
+export async function financialPeriodTotals(shopId: string, start: Date, endExclusive: Date): Promise<FinancialPeriodTotals> {
+  const range = { gte: start, lt: endExclusive };
   const [orders, captures, refunds, debtPayments] = await Promise.all([
     platformDb.order.findMany({
-      where: { shopId, status: { not: "CANCELLED" }, createdAt: { gte: start, lte: end } },
+      where: { shopId, status: { not: "CANCELLED" }, createdAt: range },
       select: {
         totalAmount: true,
         payments: { where: { method: PaymentMethod.STORE_CREDIT }, select: { amount: true } },
@@ -44,8 +45,8 @@ export async function financialPeriodTotals(shopId: string, start: Date, end: Da
         method: { in: [PaymentMethod.CASH, PaymentMethod.CARD, PaymentMethod.MOMO] },
         status: { in: [PaymentStatus.SUCCESS, PaymentStatus.REFUNDED] },
         OR: [
-          { verifiedAt: { gte: start, lte: end } },
-          { verifiedAt: null, createdAt: { gte: start, lte: end } },
+          { verifiedAt: range },
+          { verifiedAt: null, createdAt: range },
         ],
       },
       select: { amount: true, method: true },
@@ -54,12 +55,12 @@ export async function financialPeriodTotals(shopId: string, start: Date, end: Da
       where: {
         shopId,
         status: PaymentRefundStatus.PROCESSED,
-        processedAt: { gte: start, lte: end },
+        processedAt: range,
       },
       select: { paymentId: true, amount: true },
     }),
     platformDb.debtPayment.findMany({
-      where: { shopId, receivedAt: { gte: start, lte: end } },
+      where: { shopId, receivedAt: range },
       select: { amount: true, method: true },
     }),
   ]);
