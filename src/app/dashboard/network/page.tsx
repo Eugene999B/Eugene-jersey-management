@@ -49,7 +49,7 @@ export default async function NetworkPage({ searchParams }: Props) {
   const partners = links.map((link) => link.requesterShopId === shop.id ? link.partnerShop : link.requesterShop);
   const partnerProducts = partners.length
     ? await prisma.productVariant.findMany({
-        where: { product: { shopId: { in: partners.map((partner) => partner.id) } },
+        where: { product: { shopId: { in: partners.map((partner) => partner.id) } } },
         include: { product: { include: { shop: true } } },
         orderBy: { sku: "asc" },
         take: 200,
