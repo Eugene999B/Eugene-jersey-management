@@ -1,9 +1,10 @@
-import type { CSSProperties, ReactNode } from "react";
+import { Suspense, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { DashboardActionFeedback } from "@/components/dashboard/dashboard-action-feedback";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { businessModuleEnabled, businessModuleForDashboardPath } from "@/lib/business-modules";
@@ -75,6 +76,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       topbar={<DashboardTopbar session={session} shop={shop} includedFeatures={includedFeatures} pathname={pathname} />}
       notice={notice}
     >
+      <Suspense fallback={null}><DashboardActionFeedback /></Suspense>
       {children}
     </DashboardShell>
   );
