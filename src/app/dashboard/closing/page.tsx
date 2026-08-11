@@ -5,7 +5,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { closeDayAction } from "@/app/dashboard/closing/actions";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
-import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
+import { financialPeriodTotals } from "@/lib/financial-period";
 import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
@@ -35,12 +35,8 @@ export default async function ClosingPage({ searchParams }: Props) {
   const selectedDate = params.date ?? todayInput();
   const { start, end } = bounds(selectedDate);
 
-  const [orders, debtPayments, closings] = await Promise.all([
-    prisma.order.findMany({
-      where: { shopId: shop.id, createdAt: { gte: start, lt: end }, status: { not: "CANCELLED" } },
-      include: { payments: true, processedBy: true },
-      orderBy: { createdAt: "desc" },
-    }),
+  const [truth, debtPayments, closings] = await Promise.all([
+    financialPeriodTotals(shop.id, start, end),
     prisma.debtPayment.findMany({
       where: { shopId: shop.id, receivedAt: { gte: start, lt: end } },
       include: { debt: { include: { customer: true } }, receivedBy: true },
@@ -54,21 +50,14 @@ export default async function ClosingPage({ searchParams }: Props) {
     }),
   ]);
 
-  const debtCash = debtPayments.filter((payment) => payment.method === "CASH").reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const debtCard = debtPayments.filter((payment) => payment.method === "CARD").reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const debtMomo = debtPayments.filter((payment) => payment.method === "MOMO").reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const debtCollections = debtCash + debtCard + debtMomo;
-  const tenderPayments = orders.flatMap((order) => order.payments);
-  const cash = tenderPayments.filter((payment) => payment.method === "CASH").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0) + debtCash;
-  const card = tenderPayments.filter((payment) => payment.method === "CARD").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0) + debtCard;
-  const momo = tenderPayments.filter((payment) => payment.method === "MOMO").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0) + debtMomo;
-  const credit = tenderPayments.filter((payment) => payment.method === "STORE_CREDIT").reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0);
-  const total = orders.reduce((sum, order) => sum + Number(order.totalAmount), 0);
+  const cash = truth.netTenders.CASH + truth.debtCollections.CASH;
+  const card = truth.netTenders.CARD + truth.debtCollections.CARD;
+  const momo = truth.netTenders.MOMO + truth.debtCollections.MOMO;
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><h1 className="text-2xl font-semibold">Daily closing</h1><p className="mt-2 text-sm text-slate-500">Compare the system expectation with the money counted by staff. Processed Paystack refunds are already netted from card and MoMo totals.</p></div>
+        <div><h1 className="text-2xl font-semibold">Daily closing</h1><p className="mt-2 text-sm text-slate-500">Sales are booked on the order date. Cash, card and MoMo reconcile on the date money was actually verified, collected or refunded.</p></div>
         <div className="grid w-full grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {["pdf", "word", "excel"].map((format) => (
             <a key={format} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#ded8cd] bg-white px-2 py-2 text-xs font-semibold sm:gap-2 sm:px-3 sm:text-sm" href={`/api/exports?module=closing&format=${format}&from=${selectedDate}&to=${selectedDate}`}><FileDown size={15} /> {format.toUpperCase()}</a>
@@ -77,12 +66,12 @@ export default async function ClosingPage({ searchParams }: Props) {
       </div>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-6">
-        <StatCard label="Total sales" value={currency(total, shop.currency)} icon={<ReceiptText size={20} />} />
+        <StatCard label="Sales booked" value={currency(truth.bookedSales, shop.currency)} icon={<ReceiptText size={20} />} helper={`${truth.bookedOrderCount} orders created`} />
         <StatCard label="Expected cash" value={currency(cash, shop.currency)} />
-        <StatCard label="Card net" value={currency(card, shop.currency)} />
-        <StatCard label="Momo net" value={currency(momo, shop.currency)} />
-        <StatCard label="Credit sales" value={currency(credit, shop.currency)} icon={<Scale size={20} />} />
-        <StatCard label="Debt collected" value={currency(debtCollections, shop.currency)} helper="Assigned by tender" />
+        <StatCard label="Card net" value={currency(card, shop.currency)} helper={truth.providerRefunds.CARD > 0 ? `${currency(truth.providerRefunds.CARD, shop.currency)} refunded today` : undefined} />
+        <StatCard label="Momo net" value={currency(momo, shop.currency)} helper={truth.providerRefunds.MOMO > 0 ? `${currency(truth.providerRefunds.MOMO, shop.currency)} refunded today` : undefined} />
+        <StatCard label="Credit sales" value={currency(truth.creditSales, shop.currency)} icon={<Scale size={20} />} />
+        <StatCard label="Debt collected" value={currency(truth.debtCollections.total, shop.currency)} helper="Assigned by tender" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr] xl:gap-5">
@@ -93,7 +82,7 @@ export default async function ClosingPage({ searchParams }: Props) {
             <input className="field" name="openingFloat" type="number" min="0" step="0.01" placeholder="Opening float" defaultValue="0" />
             <input className="field" name="manualCash" type="number" min="0" step="0.01" placeholder="Cash counted manually" required />
             <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2"><input className="field" name="expenses" type="number" min="0" step="0.01" placeholder="Expenses" defaultValue="0" /><input className="field" name="refunds" type="number" min="0" step="0.01" placeholder="Cash/manual refunds only" defaultValue="0" /></div>
-            <p className="text-xs leading-5 text-slate-500">Do not enter Paystack card or MoMo refunds here. Processed provider refunds are already deducted from their tender totals automatically.</p>
+            <p className="text-xs leading-5 text-slate-500">Do not enter Paystack card or MoMo refunds here. Processed provider refunds are deducted on the day Paystack actually processes them.</p>
             <textarea className="field min-h-24" name="notes" placeholder="Variance reason, manager notes, cash bag code" />
             <Button className="w-full">Save closing</Button>
           </form>
