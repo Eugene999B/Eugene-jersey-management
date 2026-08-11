@@ -28,6 +28,13 @@ describe("Phase 22 consequential action confirmations", () => {
     expect(panel).not.toContain('<button type="submit"');
   });
 
+  test("confirmation waits for native form validity before asking the operator", () => {
+    const button = source("src/components/ui/confirm-action-button.tsx");
+    expect(button).toContain("const form = event.currentTarget.form");
+    expect(button).toContain("if (form && !form.checkValidity())");
+    expect(button.indexOf("form.checkValidity()")).toBeLessThan(button.indexOf("window.confirm(confirmation)"));
+  });
+
   test("supplier receiving browser acceptance explicitly accepts the confirmation", () => {
     const e2e = source("e2e/tests/phase14-stock-purchasing-costing.spec.ts");
     expect(e2e).toContain('page.once("dialog", (dialog) => dialog.accept())');
