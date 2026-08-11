@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ClosingStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { ClosingStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
+import { financialPeriodTotals } from "@/lib/financial-period";
 
 const closingSchema = z.object({
   businessDate: z.coerce.date(),
@@ -27,68 +27,6 @@ function dateBounds(value: Date) {
   return { start, end };
 }
 
-async function expectedTotals(shopId: string, businessDate: Date) {
-  const { start, end } = dateBounds(businessDate);
-  const [orders, debtPayments] = await Promise.all([
-    prisma.order.findMany({
-      where: {
-        shopId,
-        createdAt: { gte: start, lt: end },
-        status: { not: "CANCELLED" },
-        payments: {
-          some: {
-            OR: [
-              { status: PaymentStatus.SUCCESS },
-              { status: PaymentStatus.REFUNDED },
-              { method: PaymentMethod.STORE_CREDIT },
-            ],
-          },
-        },
-      },
-      include: { payments: true },
-    }),
-    prisma.debtPayment.findMany({ where: { shopId, receivedAt: { gte: start, lt: end } } }),
-  ]);
-
-  const totals = {
-    expectedCash: 0,
-    expectedCard: 0,
-    expectedMomo: 0,
-    creditSales: 0,
-    totalSales: 0,
-    orderCount: orders.length,
-    debtCollections: 0,
-    debtCash: 0,
-    debtCard: 0,
-    debtMomo: 0,
-  };
-
-  orders.forEach((order) => {
-    totals.totalSales += Number(order.totalAmount);
-    order.payments.forEach((payment) => {
-      if (payment.status !== PaymentStatus.SUCCESS && payment.status !== PaymentStatus.REFUNDED && payment.method !== PaymentMethod.STORE_CREDIT) return;
-      const amount = netRecognizedPaymentAmount(payment);
-      if (payment.method === PaymentMethod.CASH) totals.expectedCash += amount;
-      if (payment.method === PaymentMethod.CARD) totals.expectedCard += amount;
-      if (payment.method === PaymentMethod.MOMO) totals.expectedMomo += amount;
-      if (payment.method === PaymentMethod.STORE_CREDIT) totals.creditSales += amount;
-    });
-  });
-
-  debtPayments.forEach((payment) => {
-    const amount = Number(payment.amount);
-    totals.debtCollections += amount;
-    if (payment.method === PaymentMethod.CASH) totals.debtCash += amount;
-    if (payment.method === PaymentMethod.CARD) totals.debtCard += amount;
-    if (payment.method === PaymentMethod.MOMO) totals.debtMomo += amount;
-  });
-
-  totals.expectedCash += totals.debtCash;
-  totals.expectedCard += totals.debtCard;
-  totals.expectedMomo += totals.debtMomo;
-  return totals;
-}
-
 export async function closeDayAction(formData: FormData) {
   const session = await requireRole(permissions.closing);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
@@ -99,27 +37,31 @@ export async function closeDayAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/closing?error=invalid");
 
-  const expected = await expectedTotals(session.shopId, parsed.data.businessDate);
-  const expectedCashWithFloat = expected.expectedCash + parsed.data.openingFloat - parsed.data.expenses - parsed.data.refunds;
+  const { start, end } = dateBounds(parsed.data.businessDate);
+  const truth = await financialPeriodTotals(session.shopId, start, end);
+  const expectedCash = truth.netTenders.CASH + truth.debtCollections.CASH;
+  const expectedCard = truth.netTenders.CARD + truth.debtCollections.CARD;
+  const expectedMomo = truth.netTenders.MOMO + truth.debtCollections.MOMO;
+  const expectedCashWithFloat = expectedCash + parsed.data.openingFloat - parsed.data.expenses - parsed.data.refunds;
   const cashDifference = Number((parsed.data.manualCash - expectedCashWithFloat).toFixed(2));
   const status = Math.abs(cashDifference) <= 1 ? ClosingStatus.BALANCED : ClosingStatus.VARIANCE;
   const data = {
     closedById: session.id,
     openingFloat: parsed.data.openingFloat,
-    expectedCash: expected.expectedCash,
+    expectedCash,
     manualCash: parsed.data.manualCash,
     cashDifference,
-    expectedCard: expected.expectedCard,
-    expectedMomo: expected.expectedMomo,
-    creditSales: expected.creditSales,
-    totalSales: expected.totalSales,
+    expectedCard,
+    expectedMomo,
+    creditSales: truth.creditSales,
+    totalSales: truth.bookedSales,
     expenses: parsed.data.expenses,
     refunds: parsed.data.refunds,
-    debtCollections: expected.debtCollections,
-    debtCash: expected.debtCash,
-    debtCard: expected.debtCard,
-    debtMomo: expected.debtMomo,
-    orderCount: expected.orderCount,
+    debtCollections: truth.debtCollections.total,
+    debtCash: truth.debtCollections.CASH,
+    debtCard: truth.debtCollections.CARD,
+    debtMomo: truth.debtCollections.MOMO,
+    orderCount: truth.bookedOrderCount,
     status,
     notes: parsed.data.notes,
   };
@@ -135,7 +77,13 @@ export async function closeDayAction(formData: FormData) {
     action: "closing.day_closed",
     entityType: "DailyClosing",
     entityId: closing.id,
-    metadata: { businessDate: parsed.data.businessDate.toISOString(), cashDifference, recognizedOrders: expected.orderCount },
+    metadata: {
+      businessDate: parsed.data.businessDate.toISOString(),
+      cashDifference,
+      recognizedOrders: truth.bookedOrderCount,
+      providerRefunds: truth.providerRefunds,
+      captures: truth.captures,
+    },
   });
   revalidatePath("/dashboard/closing");
   redirect(`/dashboard/closing?date=${parsed.data.businessDate.toISOString().slice(0, 10)}`);
