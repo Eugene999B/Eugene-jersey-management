@@ -1,5 +1,5 @@
 import { AlertTriangle, Landmark, RefreshCw, RotateCcw } from "lucide-react";
-import { PaymentMethod, PaymentRefundStatus, PaymentStatus, type Payment } from "@prisma/client";
+import { PaymentRefundStatus, PaymentStatus, type Payment } from "@prisma/client";
 import {
   reconcilePaymentRefundAction,
   requestPaymentRefundAction,
@@ -8,6 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
+import { isPaystackRefundEligiblePayment } from "@/lib/payment-refund-eligibility";
 import {
   activePaymentRefundStatuses,
   listPaymentRefundsForPayment,
@@ -31,10 +32,6 @@ function refundTone(status: PaymentRefundStatus): "green" | "orange" | "red" | "
   return "slate";
 }
 
-function isPaystackPayment(payment: Payment) {
-  return (payment.method === PaymentMethod.CARD || payment.method === PaymentMethod.MOMO) && Boolean(payment.providerReference);
-}
-
 export async function PaymentRefundPanel({ shopId, orderId, currencyCode, payments, canManage }: Props) {
   const refundRows = await Promise.all(payments.map(async (payment) => ({
     payment,
@@ -44,7 +41,7 @@ export async function PaymentRefundPanel({ shopId, orderId, currencyCode, paymen
   const banks = canManage && hasNeedsAttention
     ? await listPaystackGhanaBanks().catch(() => [])
     : [];
-  const paystackRows = refundRows.filter((row) => isPaystackPayment(row.payment) || row.refunds.length > 0);
+  const paystackRows = refundRows.filter((row) => isPaystackRefundEligiblePayment(row.payment) || row.refunds.length > 0);
 
   return (
     <section className="panel p-4 sm:p-5" aria-labelledby="refund-control-heading">
@@ -63,7 +60,7 @@ export async function PaymentRefundPanel({ shopId, orderId, currencyCode, paymen
           const netRecognized = netRecognizedPaymentAmount(payment);
           const captured = payment.status === PaymentStatus.SUCCESS || payment.status === PaymentStatus.REFUNDED;
           const canStart = canManage
-            && isPaystackPayment(payment)
+            && isPaystackRefundEligiblePayment(payment)
             && captured
             && summary.refundable > 0.005
             && !active;
