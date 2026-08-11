@@ -30,14 +30,16 @@ describe("Phase 19A refund target integrity", () => {
     })).toBe(false);
   });
 
-  it("derives refund navigation from tenant-scoped payment/refund records instead of hidden order input", () => {
+  it("derives refund navigation from tenant-scoped service records instead of hidden order input", () => {
     const actions = source("src/app/dashboard/orders/refund-actions.ts");
+    const targets = source("src/lib/payment-refund-targets.ts");
     expect(actions).not.toContain('formData.get("orderId")');
-    expect(actions).toContain("canonicalPaymentTarget");
+    expect(actions).not.toContain("@/lib/platform-db");
+    expect(actions).toContain("canonicalPaymentRefundTarget");
     expect(actions).toContain("canonicalRefundOrderId");
-    expect(actions).toContain("order: { shopId }");
-    expect(actions).toContain("where: { id: refundId, shopId }");
-    expect(actions).toContain("isPaystackRefundEligiblePayment(payment)");
+    expect(targets).toContain("order: { shopId }");
+    expect(targets).toContain("where: { id: refundId, shopId }");
+    expect(targets).toContain("isPaystackRefundEligiblePayment(payment)");
   });
 });
 
