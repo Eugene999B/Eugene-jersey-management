@@ -52,8 +52,8 @@ async function seed() {
       currency: "GHS",
       isActive: true,
       verificationStatus: ShopVerificationStatus.VERIFIED,
-      publicOrderingEnabled: false,
-      storefrontEnabled: false,
+      publicOrderingEnabled: true,
+      storefrontEnabled: true,
     },
     create: {
       id: IDS.shop,
@@ -62,8 +62,8 @@ async function seed() {
       currency: "GHS",
       isActive: true,
       verificationStatus: ShopVerificationStatus.VERIFIED,
-      publicOrderingEnabled: false,
-      storefrontEnabled: false,
+      publicOrderingEnabled: true,
+      storefrontEnabled: true,
     },
   });
 
