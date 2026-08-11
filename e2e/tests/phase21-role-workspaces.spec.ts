@@ -19,8 +19,12 @@ function password() {
 async function signIn(page: Page, loginId: string) {
   await page.goto("/login");
   await page.getByRole("button", { name: "Enter credentials" }).click();
-  await page.getByPlaceholder("Click, then enter Login ID or email").fill(loginId);
-  await page.getByPlaceholder("Click, then enter password").fill(password());
+  const loginField = page.getByPlaceholder("Click, then enter Login ID or email");
+  const passwordField = page.getByPlaceholder("Click, then enter password");
+  await loginField.click();
+  await loginField.fill(loginId);
+  await passwordField.click();
+  await passwordField.fill(password());
   await page.getByRole("button", { name: "Open control room" }).click();
   await page.waitForURL((url) => url.pathname !== "/login", { timeout: 30_000 });
 }
