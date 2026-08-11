@@ -89,6 +89,6 @@ export function canSeeNav(role: Role) {
     exports: hasRole({ role }, permissions.exports),
     staff: hasRole({ role }, permissions.staff),
     settings: hasRole({ role }, permissions.settings),
-    subscription: hasRole({ role }, permissions.settings),
+    subscription: hasRole({ role }, permissions.subscription),
   };
 }
