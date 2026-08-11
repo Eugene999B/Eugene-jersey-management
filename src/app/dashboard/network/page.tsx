@@ -1,6 +1,7 @@
 import { Link2, PackagePlus, Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmActionButton } from "@/components/ui/confirm-action-button";
 import { createNetworkOrderAction, fulfillNetworkOrderAction, linkShopByCodeAction } from "@/app/dashboard/network/actions";
 import { prisma } from "@/lib/db";
 import { currency, shortDate, titleCase } from "@/lib/format";
@@ -48,7 +49,7 @@ export default async function NetworkPage({ searchParams }: Props) {
   const partners = links.map((link) => link.requesterShopId === shop.id ? link.partnerShop : link.requesterShop);
   const partnerProducts = partners.length
     ? await prisma.productVariant.findMany({
-        where: { product: { shopId: { in: partners.map((partner) => partner.id) } } },
+        where: { product: { shopId: { in: partners.map((partner) => partner.id) } },
         include: { product: { include: { shop: true } } },
         orderBy: { sku: "asc" },
         take: 200,
@@ -107,7 +108,7 @@ export default async function NetworkPage({ searchParams }: Props) {
             <div className="panel overflow-hidden">
               <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="text-lg font-semibold">Incoming requests</h2></div>
               <div className="divide-y divide-[#ded8cd] bg-white">
-                {incoming.map((order) => <article key={order.id} className="min-w-0 p-3 text-sm sm:p-4"><div className="flex items-start justify-between gap-3"><p className="min-w-0 truncate font-semibold">{order.orderNumber}</p><Badge className="shrink-0" tone={order.status === "FULFILLED" ? "green" : "orange"}>{titleCase(order.status)}</Badge></div><p className="mt-1 text-slate-500">{order.requesterShop.name} · {currency(order.totalAmount.toString(), shop.currency)}</p><p className="mt-2 break-words text-slate-600">{order.items.map((item) => `${item.quantity}x ${item.description}`).join(", ")}</p><form className="mt-3" action={fulfillNetworkOrderAction}><input type="hidden" name="orderId" value={order.id} /><Button variant="outline" className="w-full" disabled={order.status === "FULFILLED"}>Fulfill request</Button></form></article>)}
+                {incoming.map((order) => <article key={order.id} className="min-w-0 p-3 text-sm sm:p-4"><div className="flex items-start justify-between gap-3"><p className="min-w-0 truncate font-semibold">{order.orderNumber}</p><Badge className="shrink-0" tone={order.status === "FULFILLED" ? "green" : "orange"}>{titleCase(order.status)}</Badge></div><p className="mt-1 text-slate-500">{order.requesterShop.name} · {currency(order.totalAmount.toString(), shop.currency)}</p><p className="mt-2 break-words text-slate-600">{order.items.map((item) => `${item.quantity}x ${item.description}`).join(", ")}</p><form className="mt-3" action={fulfillNetworkOrderAction}><input type="hidden" name="orderId" value={order.id} /><ConfirmActionButton confirmation="Fulfil this partner request now? Linked non-service stock will be reduced and the request will be marked fulfilled. Review the requested quantities before continuing." variant="outline" className="w-full" disabled={order.status === "FULFILLED"}>Fulfill request</ConfirmActionButton></form></article>)}
                 {!incoming.length ? <p className="p-4 text-sm text-slate-500">No incoming requests.</p> : null}
               </div>
             </div>
