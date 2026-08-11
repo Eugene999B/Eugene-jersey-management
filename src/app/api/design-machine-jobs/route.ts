@@ -44,7 +44,7 @@ function jobError(error: unknown) {
   const duplicate = error.message.match(/MACHINE_JOB_DUPLICATE:([A-Za-z0-9_-]+)/);
   if (duplicate) {
     return NextResponse.json({
-      error: "This exact cutter payload is already queued, sending, failed and awaiting review, or was sent to this machine within the last 15 minutes. Review the previous job before choosing an intentional resend.",
+      error: "This exact cutter payload is already queued, sending, failed and awaiting review, or already sent to this machine within the last 15 minutes. Review the previous job before choosing an intentional resend.",
       code: "MACHINE_JOB_DUPLICATE",
       existingJobId: duplicate[1],
     }, { status: 409 });
