@@ -373,18 +373,32 @@ export async function updateProductAction(formData: FormData) {
             teamName: parsed.data.teamName,
           }),
         };
-        if (existing) await tx.productVariant.update({ where: { id: existing.id }, data });
-        else await tx.productVariant.create({ data: { productId: product.id, ...data } });
+        if (existing) {
+          const changed = await tx.productVariant.updateMany({
+            where: { id: existing.id, productId: product.id, stockQty: existing.stockQty },
+            data,
+          });
+          if (changed.count !== 1) throw new Error("INVENTORY_CHANGED");
+        } else {
+          await tx.productVariant.create({ data: { productId: product.id, ...data } });
+        }
       }
 
       if (parsed.data.isService && submittedRows[0]?.id) {
-        await tx.productVariant.updateMany({
-          where: { productId: product.id, id: { not: submittedRows[0].id } },
-          data: { stockQty: 0 },
-        });
+        const otherVariants = product.variants.filter((variant) => variant.id !== submittedRows[0]?.id);
+        for (const variant of otherVariants) {
+          const changed = await tx.productVariant.updateMany({
+            where: { id: variant.id, productId: product.id, stockQty: variant.stockQty },
+            data: { stockQty: 0 },
+          });
+          if (changed.count !== 1) throw new Error("INVENTORY_CHANGED");
+        }
       }
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "INVENTORY_CHANGED") {
+      redirect("/dashboard/catalog?error=inventory-changed");
+    }
     redirect("/dashboard/catalog?error=sku-exists");
   }
 
