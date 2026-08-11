@@ -9,6 +9,7 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { sendCustomerMessage } from "@/lib/messaging";
+import { claimDebtPaymentSubmission, completeDebtPaymentSubmission } from "@/lib/debt-payment-idempotency";
 
 const debtSchema = z.object({
   customerId: z.string().min(1),
@@ -78,11 +79,18 @@ export async function createDebtAction(formData: FormData) {
 
 const paymentSchema = z.object({
   debtId: z.string().min(1),
+  collectionKey: z.string().min(12).max(100),
   amount: z.coerce.number().positive(),
   method: z.enum([PaymentMethod.CASH, PaymentMethod.CARD, PaymentMethod.MOMO]),
   reference: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(300).optional(),
+}).superRefine((value, context) => {
+  if (value.method !== PaymentMethod.CASH && !value.reference) {
+    context.addIssue({ code: "custom", path: ["reference"], message: "Card and mobile-money collections require a reference." });
+  }
 });
+
+type DebtPaymentResult = { debtId: string; paidAmount: number; duplicate: boolean };
 
 export async function recordDebtPaymentAction(formData: FormData) {
   const session = await requireRole(permissions.debts);
@@ -91,6 +99,7 @@ export async function recordDebtPaymentAction(formData: FormData) {
 
   const parsed = paymentSchema.safeParse({
     debtId: formData.get("debtId"),
+    collectionKey: formData.get("collectionKey"),
     amount: formData.get("amount"),
     method: formData.get("method"),
     reference: formData.get("reference") || undefined,
@@ -98,15 +107,42 @@ export async function recordDebtPaymentAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/debts?error=payment");
 
-  let paymentResult: { debtId: string; paidAmount: number };
+  let paymentResult: DebtPaymentResult;
   try {
     paymentResult = await prisma.$transaction(async (tx) => {
+      const claim = await claimDebtPaymentSubmission(tx, {
+        key: parsed.data.collectionKey,
+        shopId,
+        debtId: parsed.data.debtId,
+      });
+      if (claim.duplicate) {
+        const existingPayment = await tx.debtPayment.findFirst({
+          where: { id: claim.paymentId, shopId, debtId: parsed.data.debtId },
+          select: { debt: { select: { paidAmount: true } } },
+        });
+        if (!existingPayment) throw new Error("COLLECTION_KEY_CONFLICT");
+        return { debtId: parsed.data.debtId, paidAmount: Number(existingPayment.debt.paidAmount), duplicate: true };
+      }
+
       const debt = await tx.debt.findFirstOrThrow({
         where: { id: parsed.data.debtId, shopId },
       });
       const installments = await tx.debtInstallment.findMany({ where: { debtId: debt.id }, orderBy: { dueDate: "asc" } });
       const balance = Number(debt.principalAmount) - Number(debt.paidAmount);
       if (balance <= 0 || parsed.data.amount > balance) throw new Error("AMOUNT_EXCEEDS_BALANCE");
+
+      if (parsed.data.method !== PaymentMethod.CASH && parsed.data.reference) {
+        const reusedReference = await tx.debtPayment.findFirst({
+          where: {
+            shopId,
+            method: parsed.data.method,
+            reference: { equals: parsed.data.reference, mode: "insensitive" },
+          },
+          select: { id: true },
+        });
+        if (reusedReference) throw new Error("COLLECTION_REFERENCE_REUSED");
+      }
+
       const paidAmount = Number((Number(debt.paidAmount) + parsed.data.amount).toFixed(2));
       const fullyPaid = paidAmount >= Number(debt.principalAmount);
       const updated = await tx.debt.updateMany({
@@ -115,7 +151,7 @@ export async function recordDebtPaymentAction(formData: FormData) {
       });
       if (updated.count !== 1) throw new Error("DEBT_CHANGED");
 
-      await tx.debtPayment.create({
+      const payment = await tx.debtPayment.create({
         data: {
           shopId,
           debtId: debt.id,
@@ -125,6 +161,12 @@ export async function recordDebtPaymentAction(formData: FormData) {
           reference: parsed.data.reference,
           notes: parsed.data.notes,
         },
+      });
+      await completeDebtPaymentSubmission(tx, {
+        key: parsed.data.collectionKey,
+        shopId,
+        debtId: debt.id,
+        paymentId: payment.id,
       });
 
       let remaining = paidAmount;
@@ -139,23 +181,37 @@ export async function recordDebtPaymentAction(formData: FormData) {
           },
         });
       }
-      return { debtId: debt.id, paidAmount };
+      return { debtId: debt.id, paidAmount, duplicate: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
-    if (error instanceof Error && (error.message === "AMOUNT_EXCEEDS_BALANCE" || error.message === "DEBT_CHANGED")) {
+    if (error instanceof Error && error.message === "AMOUNT_EXCEEDS_BALANCE") {
       redirect("/dashboard/debts?error=amount-exceeds-balance");
+    }
+    if (error instanceof Error && error.message === "COLLECTION_REFERENCE_REUSED") {
+      redirect("/dashboard/debts?error=reference-reused");
+    }
+    if (error instanceof Error && ["DEBT_CHANGED", "COLLECTION_STILL_PROCESSING"].includes(error.message)) {
+      redirect("/dashboard/debts?error=collection-changed");
+    }
+    if (error instanceof Error && error.message === "COLLECTION_KEY_CONFLICT") {
+      redirect("/dashboard/debts?error=collection-conflict");
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      redirect("/dashboard/debts?error=collection-changed");
     }
     throw error;
   }
 
-  await audit({
-    shopId: session.shopId,
-    userId: session.id,
-    action: "debt.payment_recorded",
-    entityType: "Debt",
-    entityId: paymentResult.debtId,
-    metadata: { amount: parsed.data.amount, method: parsed.data.method, reference: parsed.data.reference },
-  });
+  if (!paymentResult.duplicate) {
+    await audit({
+      shopId: session.shopId,
+      userId: session.id,
+      action: "debt.payment_recorded",
+      entityType: "Debt",
+      entityId: paymentResult.debtId,
+      metadata: { amount: parsed.data.amount, method: parsed.data.method, reference: parsed.data.reference },
+    });
+  }
 
   revalidatePath("/dashboard/debts");
   revalidatePath("/dashboard/closing");
