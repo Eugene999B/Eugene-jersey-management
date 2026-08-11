@@ -65,6 +65,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   if (parsed.data.status === OrderStatus.CANCELLED && order.channel === OrderChannel.ONLINE) {
+    if (order.status !== OrderStatus.PENDING) {
+      return NextResponse.json({
+        error: "This online order has already entered production. Its reserved stock cannot be returned automatically; use the production cancellation workflow so consumed stock and waste stay accurate.",
+      }, { status: 409 });
+    }
     const result = await releaseUnpaidOnlineReservation({
       orderId: order.id,
       reason: parsed.data.note || `Cancelled by ${session.name} before confirmed payment.`,
@@ -72,7 +77,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!result.released) {
       const error = result.reason === "paid"
         ? "Paid online orders require the refund/return workflow before cancellation."
-        : "This order changed before cancellation. Refresh and try again.";
+        : result.reason === "not-cancellable"
+          ? "This reservation can no longer be released because production has started."
+          : "This order changed before cancellation. Refresh and try again.";
       return NextResponse.json({ error }, { status: 409 });
     }
     await recordOrderWorkflowEvent({

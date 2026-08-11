@@ -3,11 +3,7 @@ import "server-only";
 import { OrderChannel, OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
-const cancellableUnpaidStatuses: OrderStatus[] = [
-  OrderStatus.PENDING,
-  OrderStatus.IN_PRODUCTION,
-  OrderStatus.READY,
-];
+const cancellableUnpaidStatuses: OrderStatus[] = [OrderStatus.PENDING];
 
 export type ReservationReleaseResult = {
   released: boolean;
@@ -39,7 +35,7 @@ export async function releaseUnpaidOnlineReservation(input: {
       where: {
         id: order.id,
         channel: OrderChannel.ONLINE,
-        status: { in: cancellableUnpaidStatuses },
+        status: OrderStatus.PENDING,
         stockReleasedAt: null,
         payments: { none: { status: PaymentStatus.SUCCESS } },
       },
