@@ -1,6 +1,7 @@
 import { Boxes, PackageCheck, Plus, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
+import { ConfirmActionButton } from "@/components/ui/confirm-action-button";
 import { StatCard } from "@/components/ui/stat-card";
 import { createSupplierAction, createSupplierOrderAction, receiveSupplierOrderAction } from "@/app/dashboard/suppliers/actions";
 import { prisma } from "@/lib/db";
@@ -104,7 +105,7 @@ export default async function SuppliersPage({ searchParams }: Props) {
               {orders.map((order) => (
                 <article key={order.id} className="grid min-w-0 gap-3 p-3 sm:p-4 lg:grid-cols-[1fr_180px]">
                   <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{order.orderNumber}</p><Badge tone={order.status === "RECEIVED" ? "green" : "orange"}>{titleCase(order.status)}</Badge></div><p className="mt-1 text-sm text-slate-500">{order.supplier.name} · {currency(order.totalAmount.toString(), shop.currency)}</p><p className="mt-2 break-words text-sm text-slate-600">{order.items.map((item) => `${item.quantity}x ${item.description}`).join(", ")}</p><p className="mt-2 text-xs text-slate-400">Created {shortDate(order.createdAt)} {order.expectedAt ? `· expected ${shortDate(order.expectedAt)}` : ""}</p></div>
-                  <form action={receiveSupplierOrderAction} className="self-end"><input type="hidden" name="orderId" value={order.id} /><Button variant="outline" className="w-full" disabled={order.status === "RECEIVED"}><PackageCheck size={16} /> Receive & post stock</Button></form>
+                  <form action={receiveSupplierOrderAction} className="self-end"><input type="hidden" name="orderId" value={order.id} /><ConfirmActionButton confirmation="Receive this purchase order and post its linked stock, cost history and supplier balance? Review the quantities first because this changes inventory and supplier accounting." variant="outline" className="w-full" disabled={order.status === "RECEIVED"}><PackageCheck size={16} /> Receive & post stock</ConfirmActionButton></form>
                 </article>
               ))}
               {!orders.length ? <p className="p-5 text-sm text-slate-500">No purchase orders yet.</p> : null}
