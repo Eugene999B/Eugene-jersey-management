@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { clsx } from "clsx";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 
 const variants = {
   primary: "bg-[var(--shop-primary)] text-white shadow-sm hover:brightness-95 active:brightness-90",
@@ -24,7 +27,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   loading?: boolean;
 };
 
-export function Button({ variant = "primary", size = "md", className, children, loading = false, disabled, ...props }: ButtonProps) {
+export function Button({ variant = "primary", size = "md", className, children, loading = false, disabled, type, ...props }: ButtonProps) {
+  const { pending } = useFormStatus();
+  const effectiveLoading = loading || (type !== "button" && pending);
+
   return (
     <button
       className={clsx(
@@ -33,11 +39,12 @@ export function Button({ variant = "primary", size = "md", className, children, 
         sizes[size],
         className,
       )}
-      disabled={disabled || loading}
-      aria-busy={loading || undefined}
+      type={type}
+      disabled={disabled || effectiveLoading}
+      aria-busy={effectiveLoading || undefined}
       {...props}
     >
-      {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" /> : null}
+      {effectiveLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" /> : null}
       {children}
     </button>
   );
