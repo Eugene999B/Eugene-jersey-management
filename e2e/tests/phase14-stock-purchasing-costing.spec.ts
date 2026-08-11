@@ -96,6 +96,7 @@ test("production stock receives purchases and posts true job cost exactly once",
 
   const po = page.getByRole("article").filter({ hasText: `White HTV restock ${suffix}` });
   await expect(po).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
   await po.getByRole("button", { name: "Receive & post stock", exact: true }).click();
   await expect(po.getByText("Received", { exact: true })).toBeVisible();
 
