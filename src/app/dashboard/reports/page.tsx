@@ -18,6 +18,7 @@ import { ReportActions } from "@/components/reports/report-actions";
 import { Badge } from "@/components/ui/badge";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { financialPeriodTotals } from "@/lib/financial-period";
 import { currency, titleCase } from "@/lib/format";
 import {
   cashFlowSummary,
@@ -25,7 +26,6 @@ import {
   money,
   onTimeSummary,
   outstandingOrderBalance,
-  paymentMethodTotals,
   reworkSummary,
 } from "@/lib/reporting-analytics";
 import { listCompletedOrderTimings } from "@/lib/reporting-data";
@@ -61,14 +61,14 @@ export default async function ReportsPage({ searchParams }: Props) {
   const parsedTo = validDate(params.to, defaultTo, true);
   const start = parsedFrom <= parsedTo ? parsedFrom : defaultFrom;
   const end = parsedFrom <= parsedTo ? parsedTo : defaultTo;
+  const endExclusive = new Date(end.getTime() + 1);
   const range = { gte: start, lte: end };
 
   const [
     periodOrders,
-    periodPayments,
+    periodFinance,
     currentOrders,
     currentDebts,
-    debtPayments,
     supplierEntries,
     suppliers,
     inventoryItems,
@@ -87,12 +87,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       orderBy: { createdAt: "desc" },
       take: 1500,
     }),
-    prisma.payment.findMany({
-      where: { order: { shopId: shop.id }, createdAt: range },
-      include: { order: { select: { receiptNumber: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 3000,
-    }),
+    financialPeriodTotals(shop.id, start, endExclusive),
     prisma.order.findMany({
       where: { shopId: shop.id, status: { not: "CANCELLED" } },
       include: { payments: true, customer: true },
@@ -100,7 +95,6 @@ export default async function ReportsPage({ searchParams }: Props) {
       take: 3000,
     }),
     prisma.debt.findMany({ where: { shopId: shop.id }, include: { customer: true }, orderBy: { dueDate: "asc" }, take: 2000 }),
-    prisma.debtPayment.findMany({ where: { shopId: shop.id, receivedAt: range }, orderBy: { receivedAt: "desc" }, take: 3000 }),
     prisma.supplierAccountEntry.findMany({ where: { shopId: shop.id }, orderBy: { createdAt: "desc" }, take: 5000 }),
     prisma.supplier.findMany({ where: { shopId: shop.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.productionInventoryItem.findMany({ where: { shopId: shop.id, isActive: true }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
@@ -122,8 +116,14 @@ export default async function ReportsPage({ searchParams }: Props) {
     listCompletedOrderTimings(shop.id, start, end),
   ]);
 
-  const paymentTotals = paymentMethodTotals(periodPayments);
-  const sales = periodOrders.reduce((sum, order) => sum + money(order.totalAmount), 0);
+  const paymentTotals = {
+    CASH: periodFinance.netTenders.CASH,
+    CARD: periodFinance.netTenders.CARD,
+    MOMO: periodFinance.netTenders.MOMO,
+    STORE_CREDIT: periodFinance.creditSales,
+    total: periodFinance.netTenders.CASH + periodFinance.netTenders.CARD + periodFinance.netTenders.MOMO + periodFinance.creditSales,
+  };
+  const sales = periodFinance.bookedSales;
   const outstandingOrders = currentOrders
     .map((order) => ({ order, balance: outstandingOrderBalance(order) }))
     .filter((row) => row.balance > 0.005);
@@ -195,10 +195,11 @@ export default async function ReportsPage({ searchParams }: Props) {
   const reconciledJobs = profitRows.filter((row) => row.reconciliation.reconciled).length;
 
   const expenseTotal = closings.reduce((sum, closing) => sum + money(closing.expenses), 0);
-  const refundTotal = closings.reduce((sum, closing) => sum + money(closing.refunds), 0);
-  const debtCollections = debtPayments.reduce((sum, payment) => sum + money(payment.amount), 0);
+  const manualRefundTotal = closings.reduce((sum, closing) => sum + money(closing.refunds), 0);
+  const providerRefundTotal = periodFinance.providerRefunds.CASH + periodFinance.providerRefunds.CARD + periodFinance.providerRefunds.MOMO;
+  const debtCollections = periodFinance.debtCollections.total;
   const liquidPayments = paymentTotals.CASH + paymentTotals.CARD + paymentTotals.MOMO;
-  const cashFlow = cashFlowSummary({ paymentInflows: liquidPayments, debtCollections, expenses: expenseTotal, refunds: refundTotal });
+  const cashFlow = cashFlowSummary({ paymentInflows: liquidPayments, debtCollections, expenses: expenseTotal, refunds: manualRefundTotal });
   const timing = onTimeSummary(timings);
   const reworkedRunIds = new Set(reworkEvents.map((event) => event.heatPressRunId));
   const rework = reworkSummary({ totalRuns: heatPressRuns.length, reworkedRuns: reworkedRunIds.size });
@@ -244,21 +245,21 @@ export default async function ReportsPage({ searchParams }: Props) {
       </form>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="panel p-4"><TrendingUp size={18} className="text-cyan-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Sales / order value</p><p className="mt-1 text-2xl font-black">{currency(sales, shop.currency)}</p><p className="text-xs text-slate-500">{periodOrders.length} non-cancelled orders created in range</p></div>
-        <div className="panel p-4"><WalletCards size={18} className="text-emerald-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Recognized payments</p><p className="mt-1 text-2xl font-black">{currency(paymentTotals.total, shop.currency)}</p><p className="text-xs text-slate-500">Successful payments + store credit usage</p></div>
+        <div className="panel p-4"><TrendingUp size={18} className="text-cyan-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Sales / order value</p><p className="mt-1 text-2xl font-black">{currency(sales, shop.currency)}</p><p className="text-xs text-slate-500">{periodFinance.bookedOrderCount} non-cancelled orders created in range</p></div>
+        <div className="panel p-4"><WalletCards size={18} className="text-emerald-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Recognized payment activity</p><p className="mt-1 text-2xl font-black">{currency(paymentTotals.total, shop.currency)}</p><p className="text-xs text-slate-500">Verified tender net of provider refunds + store credit booked in range</p></div>
         <div className="panel p-4"><AlertTriangle size={18} className="text-orange-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Outstanding order balances</p><p className="mt-1 text-2xl font-black">{currency(outstandingOrderTotal, shop.currency)}</p><p className="text-xs text-slate-500">{outstandingOrders.length} orders still unpaid</p></div>
-        <div className="panel p-4"><Banknote size={18} className={cashFlow.net >= 0 ? "text-emerald-700" : "text-red-700"} /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Net cash flow</p><p className="mt-1 text-2xl font-black">{currency(cashFlow.net, shop.currency)}</p><p className="text-xs text-slate-500">Liquid payments + debt collections − closing expenses/refunds</p></div>
+        <div className="panel p-4"><Banknote size={18} className={cashFlow.net >= 0 ? "text-emerald-700" : "text-red-700"} /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Net cash flow</p><p className="mt-1 text-2xl font-black">{currency(cashFlow.net, shop.currency)}</p><p className="text-xs text-slate-500">Verified liquid tender + debt collections − provider/manual refunds − closing expenses</p></div>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><WalletCards size={18} /> Payment methods</h2></div>
-          <div className="grid grid-cols-2 gap-3 p-4 sm:p-5"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Cash</p><p className="font-black">{currency(paymentTotals.CASH, shop.currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Card</p><p className="font-black">{currency(paymentTotals.CARD, shop.currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Mobile money</p><p className="font-black">{currency(paymentTotals.MOMO, shop.currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Store credit</p><p className="font-black">{currency(paymentTotals.STORE_CREDIT, shop.currency)}</p></div></div>
+          <div className="grid grid-cols-2 gap-3 p-4 sm:p-5"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Cash net</p><p className="font-black">{currency(paymentTotals.CASH, shop.currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Card net</p><p className="font-black">{currency(paymentTotals.CARD, shop.currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Mobile money net</p><p className="font-black">{currency(paymentTotals.MOMO, shop.currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs uppercase text-slate-500">Store credit booked</p><p className="font-black">{currency(paymentTotals.STORE_CREDIT, shop.currency)}</p></div></div>
         </div>
         <div className="panel overflow-hidden">
           <div className="border-b border-[#ded8cd] p-4 sm:p-5"><h2 className="flex items-center gap-2 text-lg font-bold"><Banknote size={18} /> Expenses & cash flow</h2></div>
-          <div className="grid grid-cols-2 gap-3 p-4 sm:p-5"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs uppercase text-emerald-700">Liquid payment inflow</p><p className="font-black">{currency(liquidPayments, shop.currency)}</p></div><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs uppercase text-emerald-700">Debt collections</p><p className="font-black">{currency(debtCollections, shop.currency)}</p></div><div className="rounded-xl bg-red-50 p-3"><p className="text-xs uppercase text-red-700">Closing expenses</p><p className="font-black">{currency(expenseTotal, shop.currency)}</p></div><div className="rounded-xl bg-red-50 p-3"><p className="text-xs uppercase text-red-700">Refund outflow</p><p className="font-black">{currency(refundTotal, shop.currency)}</p></div></div>
-          <p className="px-4 pb-4 text-xs text-slate-500 sm:px-5 sm:pb-5">Expense reporting is based on daily closings entered during the selected range; {closings.length} closing day(s) contribute expense/refund data.</p>
+          <div className="grid grid-cols-2 gap-3 p-4 sm:p-5"><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs uppercase text-emerald-700">Liquid tender net</p><p className="font-black">{currency(liquidPayments, shop.currency)}</p></div><div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs uppercase text-emerald-700">Debt collections</p><p className="font-black">{currency(debtCollections, shop.currency)}</p></div><div className="rounded-xl bg-red-50 p-3"><p className="text-xs uppercase text-red-700">Closing expenses</p><p className="font-black">{currency(expenseTotal, shop.currency)}</p></div><div className="rounded-xl bg-red-50 p-3"><p className="text-xs uppercase text-red-700">Refund outflow</p><p className="font-black">{currency(providerRefundTotal + manualRefundTotal, shop.currency)}</p></div></div>
+          <p className="px-4 pb-4 text-xs text-slate-500 sm:px-5 sm:pb-5">Provider refunds are assigned to the date they were processed; manual/cash refunds and expenses come from {closings.length} closing day(s) in the selected range.</p>
         </div>
       </section>
 

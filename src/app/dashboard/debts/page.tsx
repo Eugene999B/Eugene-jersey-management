@@ -1,5 +1,6 @@
 import { CalendarClock, CreditCard, MessageSquareText, Plus } from "lucide-react";
 import { NotificationChannel } from "@prisma/client";
+import { nanoid } from "nanoid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
@@ -16,8 +17,11 @@ type Props = { searchParams?: Promise<{ error?: string }> };
 const debtErrors: Record<string, string> = {
   invalid: "Choose a customer and enter a valid debt amount and due date.",
   customer: "That customer could not be found in this shop.",
-  payment: "Enter a valid payment amount and choose cash, card, or mobile money.",
+  payment: "Enter a valid payment amount. Card and mobile-money collections also require their transaction reference.",
   "amount-exceeds-balance": "The amount received cannot be greater than the outstanding balance.",
+  "reference-reused": "That card or mobile-money reference has already been used for a debt collection in this shop.",
+  "collection-changed": "This debt changed while the collection was being posted. Review the new balance before trying again.",
+  "collection-conflict": "That collection request does not match this debt. Refresh the page before trying again.",
   "sms-credits": "This shop has no SMS credits. An owner or manager can purchase an approved package from Messages.",
   "whatsapp-credits": "This shop has no WhatsApp credits. An owner or manager can purchase an approved package from Messages.",
 };
@@ -100,6 +104,7 @@ export default async function DebtsPage({ searchParams }: Props) {
             {debts.map((debt) => {
               const balance = Number(debt.principalAmount) - Number(debt.paidAmount);
               const isOverdue = debt.status !== "PAID" && debt.dueDate < new Date();
+              const collectionKey = `debt-${nanoid(24)}`;
               return (
                 <article key={debt.id} className="grid min-w-0 gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_280px]">
                   <div className="min-w-0">
@@ -119,6 +124,7 @@ export default async function DebtsPage({ searchParams }: Props) {
                   <div className="space-y-2">
                     <form action={recordDebtPaymentAction} className="rounded-xl border border-[#ded8cd] bg-[#f9f8f5] p-3">
                       <input type="hidden" name="debtId" value={debt.id} />
+                      <input type="hidden" name="collectionKey" value={collectionKey} />
                       <p className="mb-2 text-sm font-semibold">Receive debt payment</p>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <input className="field min-w-0" name="amount" type="number" min="0.01" max={balance} step="0.01" placeholder="Amount received" required />
@@ -128,7 +134,7 @@ export default async function DebtsPage({ searchParams }: Props) {
                           <option value="MOMO">Mobile money</option>
                         </select>
                       </div>
-                      <input className="field mt-2" name="reference" placeholder="Reference (optional)" />
+                      <input className="field mt-2" name="reference" placeholder="Reference (required for card/MoMo)" />
                       <Button className="mt-2 w-full" variant="outline">Post collection</Button>
                     </form>
                     <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2">
