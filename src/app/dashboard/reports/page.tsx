@@ -123,7 +123,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     STORE_CREDIT: periodFinance.creditSales,
     total: periodFinance.netTenders.CASH + periodFinance.netTenders.CARD + periodFinance.netTenders.MOMO + periodFinance.creditSales,
   };
-  const sales = periodOrders.reduce((sum, order) => sum + money(order.totalAmount), 0);
+  const sales = periodFinance.bookedSales;
   const outstandingOrders = currentOrders
     .map((order) => ({ order, balance: outstandingOrderBalance(order) }))
     .filter((row) => row.balance > 0.005);
@@ -245,7 +245,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       </form>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="panel p-4"><TrendingUp size={18} className="text-cyan-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Sales / order value</p><p className="mt-1 text-2xl font-black">{currency(sales, shop.currency)}</p><p className="text-xs text-slate-500">{periodOrders.length} non-cancelled orders created in range</p></div>
+        <div className="panel p-4"><TrendingUp size={18} className="text-cyan-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Sales / order value</p><p className="mt-1 text-2xl font-black">{currency(sales, shop.currency)}</p><p className="text-xs text-slate-500">{periodFinance.bookedOrderCount} non-cancelled orders created in range</p></div>
         <div className="panel p-4"><WalletCards size={18} className="text-emerald-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Recognized payment activity</p><p className="mt-1 text-2xl font-black">{currency(paymentTotals.total, shop.currency)}</p><p className="text-xs text-slate-500">Verified tender net of provider refunds + store credit booked in range</p></div>
         <div className="panel p-4"><AlertTriangle size={18} className="text-orange-700" /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Outstanding order balances</p><p className="mt-1 text-2xl font-black">{currency(outstandingOrderTotal, shop.currency)}</p><p className="text-xs text-slate-500">{outstandingOrders.length} orders still unpaid</p></div>
         <div className="panel p-4"><Banknote size={18} className={cashFlow.net >= 0 ? "text-emerald-700" : "text-red-700"} /><p className="mt-2 text-xs font-bold uppercase text-slate-500">Net cash flow</p><p className="mt-1 text-2xl font-black">{currency(cashFlow.net, shop.currency)}</p><p className="text-xs text-slate-500">Verified liquid tender + debt collections − provider/manual refunds − closing expenses</p></div>
