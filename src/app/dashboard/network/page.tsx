@@ -8,8 +8,20 @@ import { getTenantContext } from "@/lib/tenant";
 import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 
-export default async function NetworkPage() {
+type Props = { searchParams?: Promise<{ error?: string }> };
+
+const networkErrors: Record<string, string> = {
+  code: "Enter a valid partner shop code.",
+  shop: "That shop cannot be linked. Check the code and confirm the partner shop is active, verified and enabled for marketplace trading.",
+  order: "Check the partner order details. Choose a partner, enter a description, positive quantity and valid unit price.",
+  link: "That partner link or selected item is no longer available. Refresh the page and choose again.",
+  fulfill: "Choose a valid incoming network order to fulfil.",
+  "fulfill-changed": "This order could not be fulfilled because it changed, was already handled, or no longer has enough linked stock. Refresh and review it before trying again.",
+};
+
+export default async function NetworkPage({ searchParams }: Props) {
   await requireRole(permissions.network);
+  const params = (await searchParams) ?? {};
   const { shop } = await getTenantContext();
   if (!shop) return null;
 
@@ -45,6 +57,7 @@ export default async function NetworkPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      {params.error && networkErrors[params.error] ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{networkErrors[params.error]}</div> : null}
       <div><h1 className="text-2xl font-semibold">Shop network</h1><p className="mt-2 text-sm text-slate-500">Link with another shop using its unique code, then request and fulfil items securely.</p></div>
 
       <section className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr] xl:gap-5">
