@@ -6,10 +6,12 @@ import { PaymentRefundStatus, type PaymentRefund } from "@prisma/client";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth";
-import { platformDb } from "@/lib/platform-db";
 import { syncPaymentRefundAccounting } from "@/lib/payment-refund-accounting";
 import { paymentRefundRoles } from "@/lib/payment-refund-access";
-import { isPaystackRefundEligiblePayment } from "@/lib/payment-refund-eligibility";
+import {
+  canonicalPaymentRefundTarget,
+  canonicalRefundOrderId,
+} from "@/lib/payment-refund-targets";
 import {
   reconcilePaymentRefund,
   requestPaymentRefund,
@@ -64,36 +66,6 @@ function revalidateRefundSurfaces(orderId: string) {
   revalidatePath("/dashboard/reports");
   revalidatePath("/dashboard/closing");
   revalidatePath("/admin/integrations");
-}
-
-async function canonicalPaymentTarget(shopId: string, paymentId: string) {
-  const payment = await platformDb.payment.findFirst({
-    where: { id: paymentId, order: { shopId } },
-    select: {
-      orderId: true,
-      method: true,
-      providerReference: true,
-      providerChannel: true,
-    },
-  });
-  if (!payment) throw new Error("PAYMENT_NOT_FOUND");
-  if (!isPaystackRefundEligiblePayment(payment)) throw new Error("PAYMENT_NOT_PAYSTACK");
-  return payment;
-}
-
-async function canonicalRefundOrderId(shopId: string, refundId: string) {
-  const refund = await platformDb.paymentRefund.findFirst({
-    where: { id: refundId, shopId },
-    select: { paymentId: true },
-  });
-  if (!refund) throw new Error("REFUND_NOT_FOUND");
-
-  const payment = await platformDb.payment.findFirst({
-    where: { id: refund.paymentId, order: { shopId } },
-    select: { orderId: true },
-  });
-  if (!payment) throw new Error("PAYMENT_NOT_FOUND");
-  return payment.orderId;
 }
 
 function refundErrorUrl(orderId: string | null, error: unknown) {
@@ -166,9 +138,9 @@ export async function requestPaymentRefundAction(formData: FormData) {
   });
   if (!parsed.success) redirect("/dashboard/orders?refundError=invalid-request");
 
-  let target: Awaited<ReturnType<typeof canonicalPaymentTarget>>;
+  let target: Awaited<ReturnType<typeof canonicalPaymentRefundTarget>>;
   try {
-    target = await canonicalPaymentTarget(session.shopId, parsed.data.paymentId);
+    target = await canonicalPaymentRefundTarget(session.shopId, parsed.data.paymentId);
   } catch (error) {
     redirect(refundErrorUrl(null, error));
   }
