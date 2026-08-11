@@ -1,21 +1,21 @@
 import { Role } from "@prisma/client";
 
-export const ownerAssignableStaffRoles = [
+export const ownerAssignableStaffRoles: readonly Role[] = [
   Role.MANAGER,
   Role.CASHIER,
   Role.DESIGNER,
   Role.INVENTORY_CLERK,
   Role.ACCOUNTANT,
   Role.VIEWER,
-] as const;
+];
 
-export const managerAssignableStaffRoles = [
+export const managerAssignableStaffRoles: readonly Role[] = [
   Role.CASHIER,
   Role.DESIGNER,
   Role.INVENTORY_CLERK,
   Role.ACCOUNTANT,
   Role.VIEWER,
-] as const;
+];
 
 export function assignableStaffRoles(actorRole: Role): readonly Role[] {
   if (actorRole === Role.OWNER) return ownerAssignableStaffRoles;
