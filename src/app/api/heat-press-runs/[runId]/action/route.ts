@@ -80,6 +80,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ru
 
   try {
     const run = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "HeatPressRun"
+        WHERE "id" = ${runId} AND "shopId" = ${shopId}
+        FOR UPDATE
+      `);
+      if (!locked.length) throw new Error("Heat press run not found in this shop.");
+
       const current = await tx.heatPressRun.findFirst({ where: { id: runId, shopId } });
       if (!current) throw new Error("Heat press run not found in this shop.");
       if (statusIn(current.status, [HeatPressRunStatus.PASSED, HeatPressRunStatus.REWORK_REQUIRED])) {

@@ -13,10 +13,11 @@ describe("Phase 19B online reservation stock integrity", () => {
     expect(lifecycle).not.toContain("OrderStatus.IN_PRODUCTION,\n  OrderStatus.READY");
   });
 
-  it("blocks automatic online cancellation once production has started", () => {
+  it("never restores sellable stock automatically once production has started", () => {
     const route = source("src/app/api/orders/[orderId]/status/route.ts");
-    expect(route).toContain("order.status !== OrderStatus.PENDING");
-    expect(route).toContain("reserved stock cannot be returned automatically");
+    expect(route).toContain("if (order.status === OrderStatus.PENDING)");
+    expect(route).toContain("stockReleased: false, productionStarted: true");
+    expect(route).toContain("orders.production_cancelled");
   });
 });
 

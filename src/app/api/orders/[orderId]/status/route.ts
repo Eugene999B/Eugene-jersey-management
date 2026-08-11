@@ -65,23 +65,55 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   if (parsed.data.status === OrderStatus.CANCELLED && order.channel === OrderChannel.ONLINE) {
-    if (order.status !== OrderStatus.PENDING) {
-      return NextResponse.json({
-        error: "This online order has already entered production. Its reserved stock cannot be returned automatically; use the production cancellation workflow so consumed stock and waste stay accurate.",
-      }, { status: 409 });
+    const successfulPayment = order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS);
+    if (successfulPayment) {
+      return NextResponse.json({ error: "Paid online orders require the refund/return workflow before cancellation." }, { status: 409 });
     }
-    const result = await releaseUnpaidOnlineReservation({
-      orderId: order.id,
-      reason: parsed.data.note || `Cancelled by ${session.name} before confirmed payment.`,
+
+    if (order.status === OrderStatus.PENDING) {
+      const result = await releaseUnpaidOnlineReservation({
+        orderId: order.id,
+        reason: parsed.data.note || `Cancelled by ${session.name} before confirmed payment.`,
+      });
+      if (!result.released) {
+        const error = result.reason === "paid"
+          ? "Paid online orders require the refund/return workflow before cancellation."
+          : result.reason === "not-cancellable"
+            ? "This reservation can no longer be released because production has started."
+            : "This order changed before cancellation. Refresh and try again.";
+        return NextResponse.json({ error }, { status: 409 });
+      }
+      await recordOrderWorkflowEvent({
+        shopId: session.shopId,
+        orderId: order.id,
+        actorId: session.id,
+        type: "CANCELLED",
+        fromStatus: order.status,
+        toStatus: OrderStatus.CANCELLED,
+        note: parsed.data.note || `Cancelled by ${session.name}.`,
+        metadata: { channel: order.channel, stockReleased: true, productionStarted: false },
+      });
+      return NextResponse.json({ ok: true, order: { ...order, status: OrderStatus.CANCELLED } });
+    }
+
+    const cancellationReason = parsed.data.note || `Cancelled by ${session.name} after production started.`;
+    const cancelled = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({
+        where: { id: order.id, shopId: session.shopId!, status: order.status, stockReleasedAt: null },
+        data: { status: OrderStatus.CANCELLED, cancellationReason },
+      });
+      if (claimed.count !== 1) return null;
+      await tx.payment.updateMany({
+        where: { orderId: order.id, status: PaymentStatus.PENDING },
+        data: { status: PaymentStatus.FAILED, gatewayResponse: cancellationReason },
+      });
+      if (order.couponId) {
+        await tx.coupon.updateMany({ where: { id: order.couponId, usedCount: { gt: 0 } }, data: { usedCount: { decrement: 1 } } });
+      }
+      return tx.order.findUnique({ where: { id: order.id } });
     });
-    if (!result.released) {
-      const error = result.reason === "paid"
-        ? "Paid online orders require the refund/return workflow before cancellation."
-        : result.reason === "not-cancellable"
-          ? "This reservation can no longer be released because production has started."
-          : "This order changed before cancellation. Refresh and try again.";
-      return NextResponse.json({ error }, { status: 409 });
-    }
+    if (!cancelled) return NextResponse.json({ error: "This order changed. Refresh and try again." }, { status: 409 });
+
     await recordOrderWorkflowEvent({
       shopId: session.shopId,
       orderId: order.id,
@@ -89,10 +121,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       type: "CANCELLED",
       fromStatus: order.status,
       toStatus: OrderStatus.CANCELLED,
-      note: parsed.data.note || `Cancelled by ${session.name}.`,
-      metadata: { channel: order.channel, stockReleased: true },
+      note: cancellationReason,
+      metadata: { channel: order.channel, stockReleased: false, productionStarted: true },
     });
-    return NextResponse.json({ ok: true, order: { ...order, status: OrderStatus.CANCELLED } });
+    await audit({
+      shopId: session.shopId,
+      userId: session.id,
+      action: "orders.production_cancelled",
+      entityType: "Order",
+      entityId: order.id,
+      metadata: { from: order.status, stockReleased: false, note: cancellationReason },
+    });
+    return NextResponse.json({ ok: true, order: cancelled });
   }
 
   if (parsed.data.status === OrderStatus.COMPLETED) {
