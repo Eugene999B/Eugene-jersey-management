@@ -5,10 +5,14 @@ function source(path: string) {
   return readFileSync(path, "utf8");
 }
 
+function hasObjectKey(sourceText: string, key: string) {
+  return sourceText.includes(`${key}:`) || sourceText.includes(`"${key}":`);
+}
+
 function expectCodesCovered(component: string, actions: string, route: string, codes: string[]) {
   for (const code of codes) {
     expect(actions).toContain(`${route}?error=${code}`);
-    expect(component).toContain(`${code}:`) || expect(component).toContain(`"${code}":`);
+    expect(hasObjectKey(component, code)).toBe(true);
   }
 }
 
@@ -67,10 +71,10 @@ describe("Phase 20 dashboard action feedback", () => {
 
     for (const code of ["category", "category-update", "template-not-found"]) {
       expect(catalogActions).toContain(`/dashboard/catalog?error=${code}`);
-      expect(feedback.includes(`${code}:`) || feedback.includes(`"${code}":`)).toBe(true);
+      expect(hasObjectKey(feedback, code)).toBe(true);
     }
     expect(closingActions).toContain("/dashboard/closing?error=invalid");
-    expect(feedback).toContain("invalid:");
+    expect(hasObjectKey(feedback, "invalid")).toBe(true);
   });
 
   test("unexpected dashboard errors warn against blind retries", () => {
