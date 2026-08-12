@@ -6,7 +6,6 @@ function source(path: string) {
 }
 
 const directProductionModels = [
-  "DesignJobVersion",
   "DesignProductionBrief",
   "HeatPressRun",
   "HeatPressEvent",
@@ -52,19 +51,24 @@ describe("Phase 24A production-era tenant boundary", () => {
     expect(context).not.toContain('process.env.NODE_ENV !== "production"');
   });
 
-  it("registers every production-era shop-owned model as direct tenant data", () => {
+  it("registers production-era models that ordinary tenant workspaces access directly", () => {
     const tenantDb = source("../lib/tenant-db.ts");
+    const directSet = tenantDb.slice(tenantDb.indexOf("const directTenantModels"), tenantDb.indexOf("const childTenantPolicies"));
     for (const model of directProductionModels) {
-      expect(tenantDb, `${model} is missing from direct tenant policy`).toContain(`\"${model}\"`);
+      expect(directSet, `${model} is missing from direct tenant policy`).toContain(`\"${model}\"`);
     }
+    expect(directSet).not.toContain('"DesignJobVersion"');
   });
 
-  it("maps every production-era Prisma delegate before fail-closed unknown-delegate handling", () => {
+  it("maps production-era Prisma delegates while preserving dedicated design-version isolation", () => {
     const tenantDb = source("../lib/tenant-db.ts");
+    const verifier = source("../../scripts/verify-tenant-isolation.ts");
     for (const delegate of delegateNames) {
       expect(tenantDb, `${delegate} is missing from tenant delegate mapping`).toContain(`${delegate}:`);
     }
     expect(tenantDb).toContain("blockedUnknownDelegate");
+    expect(verifier).toContain("tenantA.designJobVersion.findMany()");
+    expect(verifier).toContain("outside the dedicated shop-filtered API");
   });
 
   it("keeps raw SQL blocked in tenant transactions and uses tenant-safe inventory concurrency", () => {
