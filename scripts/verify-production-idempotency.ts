@@ -4,6 +4,7 @@ import {
   ProductionInventoryKind,
   ProductionInventoryMovementType,
   ProductionInventoryUnit,
+  Role,
   SupplierAccountEntryType,
 } from "@prisma/client";
 import { platformDb } from "../src/lib/platform-db";
@@ -32,6 +33,7 @@ async function cleanup() {
   await platformDb.productionInventoryMovement.deleteMany({ where: { shopId: shop.id } });
   await platformDb.productionInventoryItem.deleteMany({ where: { shopId: shop.id } });
   await platformDb.supplier.deleteMany({ where: { shopId: shop.id } });
+  await platformDb.user.deleteMany({ where: { shopId: shop.id } });
   await platformDb.shop.delete({ where: { id: shop.id } });
 }
 
@@ -50,6 +52,17 @@ async function main() {
         verificationStatus: "VERIFIED",
         storefrontEnabled: true,
         publicOrderingEnabled: true,
+      },
+    });
+    const actor = await platformDb.user.create({
+      data: {
+        shopId: shop.id,
+        adminLoginId: "ESM-IDEMPOTENCY-OWNER",
+        email: "phase22b-idempotency@example.test",
+        name: "Phase 22B Verifier",
+        role: Role.OWNER,
+        passwordHash: "verification-only-not-a-login-password",
+        isActive: true,
       },
     });
     const supplier = await platformDb.supplier.create({ data: { shopId: shop.id, name: "Idempotency Supplier" } });
@@ -77,7 +90,7 @@ async function main() {
         quantity: 1,
         note: "Concurrent manual adjustment",
         idempotencyKey: manualKey,
-        createdById: "phase22b-verifier",
+        createdById: actor.id,
       })),
       tenant.$transaction((tx) => applyProductionInventoryMovement(inventoryTransaction(tx), {
         shopId: shop.id,
@@ -86,7 +99,7 @@ async function main() {
         quantity: 1,
         note: "Concurrent manual adjustment",
         idempotencyKey: manualKey,
-        createdById: "phase22b-verifier",
+        createdById: actor.id,
       })),
     ]);
     assert(manual.filter((result) => result.created).length === 1, "Concurrent manual adjustment reported more or fewer than one creation.");
@@ -96,8 +109,8 @@ async function main() {
 
     const paymentKey = "phase22b:payment:one";
     const paymentAttempts = await Promise.allSettled([
-      tenant.supplierAccountEntry.create({ data: { shopId: shop.id, supplierId: supplier.id, type: SupplierAccountEntryType.PAYMENT, amount: -25, idempotencyKey: paymentKey, createdById: "phase22b-verifier" } }),
-      tenant.supplierAccountEntry.create({ data: { shopId: shop.id, supplierId: supplier.id, type: SupplierAccountEntryType.PAYMENT, amount: -25, idempotencyKey: paymentKey, createdById: "phase22b-verifier" } }),
+      tenant.supplierAccountEntry.create({ data: { shopId: shop.id, supplierId: supplier.id, type: SupplierAccountEntryType.PAYMENT, amount: -25, idempotencyKey: paymentKey, createdById: actor.id } }),
+      tenant.supplierAccountEntry.create({ data: { shopId: shop.id, supplierId: supplier.id, type: SupplierAccountEntryType.PAYMENT, amount: -25, idempotencyKey: paymentKey, createdById: actor.id } }),
     ]);
     const paymentFailures = paymentAttempts.filter((result): result is PromiseRejectedResult => result.status === "rejected");
     assert(paymentAttempts.filter((result) => result.status === "fulfilled").length === 1, "Supplier payment unique key did not choose exactly one winner.");
@@ -117,7 +130,7 @@ async function main() {
           unitCost: 20,
           reason: "Concurrent supplier return",
           idempotencyKey: returnKey,
-          createdById: "phase22b-verifier",
+          createdById: actor.id,
         },
       });
       await applyProductionInventoryMovement(inventoryTransaction(tx), {
@@ -130,7 +143,7 @@ async function main() {
         referenceId: row.id,
         note: "Concurrent supplier return",
         idempotencyKey: `${returnKey}:stock`,
-        createdById: "phase22b-verifier",
+        createdById: actor.id,
       });
       await tx.supplierAccountEntry.create({
         data: {
@@ -140,7 +153,7 @@ async function main() {
           amount: -40,
           note: "Concurrent supplier return",
           idempotencyKey: `${returnKey}:credit`,
-          createdById: "phase22b-verifier",
+          createdById: actor.id,
         },
       });
       return { id: row.id, created: true };
