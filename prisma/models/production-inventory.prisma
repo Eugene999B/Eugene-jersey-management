@@ -132,9 +132,11 @@ model SupplierAccountEntry {
   supplierOrderId String?
   reference       String?
   note            String?
+  idempotencyKey  String?
   createdById     String
   createdAt       DateTime                 @default(now())
 
+  @@unique([shopId, idempotencyKey])
   @@index([shopId, supplierId, createdAt])
   @@index([shopId, type, createdAt])
   @@index([supplierOrderId])
@@ -149,9 +151,11 @@ model SupplierStockReturn {
   unitCost                  Decimal  @db.Decimal(14, 4)
   reason                    String
   reference                 String?
+  idempotencyKey            String?
   createdById               String
   createdAt                 DateTime @default(now())
 
+  @@unique([shopId, idempotencyKey])
   @@index([shopId, supplierId, createdAt])
   @@index([shopId, productionInventoryItemId, createdAt])
 }

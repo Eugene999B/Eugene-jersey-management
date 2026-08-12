@@ -206,6 +206,7 @@ test("production stock receives purchases and posts true job cost exactly once",
   await expect(costedJob).toContainText("43.68");
   await expect(costedJob).toContainText("36.32");
   await expect(costedJob).toContainText("45.4%");
+  page.once("dialog", (dialog) => dialog.accept());
   await costedJob.getByRole("button", { name: "Post garment, material use and waste to stock", exact: true }).click();
   await expect(page.getByRole("article").filter({ has: page.getByRole("heading", { name: designName, exact: true }) }).getByText("Inventory posted", { exact: true })).toBeVisible();
 
