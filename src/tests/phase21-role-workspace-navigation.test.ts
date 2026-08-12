@@ -34,6 +34,12 @@ const navRoutes = {
   subscription: "/dashboard/subscription",
 } as const;
 
+const nonNavRouteContracts = [
+  { route: "/dashboard/customer-production", roles: permissions.ordersRead },
+  { route: "/dashboard/production-stock", roles: permissions.suppliers },
+  { route: "/dashboard/setup", roles: permissions.settings },
+] as const;
+
 describe("Phase 21 role workspace navigation", () => {
   test("every normal shop role can discover the subscription page it is authorized to open", () => {
     for (const role of shopRoles) {
@@ -50,6 +56,16 @@ describe("Phase 21 role workspace navigation", () => {
         expect(navigation[key as keyof typeof navigation], `${role} navigation mismatch for ${route}`).toBe(
           canAccessDashboardPath(route, role),
         );
+      }
+    }
+  });
+
+  test("non-navigation dashboard workspaces match their page-level role contracts", () => {
+    for (const { route, roles } of nonNavRouteContracts) {
+      const allowedRoles = roles as readonly Role[];
+      for (const role of shopRoles) {
+        expect(canAccessDashboardPath(route, role), `${role} route mismatch for ${route}`).toBe(allowedRoles.includes(role));
+        expect(canAccessDashboardPath(`${route}/nested`, role), `${role} nested route mismatch for ${route}`).toBe(allowedRoles.includes(role));
       }
     }
   });

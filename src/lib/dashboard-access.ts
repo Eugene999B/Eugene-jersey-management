@@ -6,6 +6,9 @@ const dashboardRoles = ["OWNER", "MANAGER", "CASHIER", "DESIGNER", "INVENTORY_CL
 
 const routeRules: Array<{ prefix: string; roles: readonly DashboardRole[] }> = [
   { prefix: "/dashboard/subscription", roles: dashboardRoles },
+  { prefix: "/dashboard/customer-production", roles: ["OWNER", "MANAGER", "CASHIER", "DESIGNER", "VIEWER"] },
+  { prefix: "/dashboard/production-stock", roles: ["OWNER", "MANAGER", "INVENTORY_CLERK", "ACCOUNTANT"] },
+  { prefix: "/dashboard/setup", roles: ["OWNER", "MANAGER"] },
   { prefix: "/dashboard/catalog", roles: ["OWNER", "MANAGER", "INVENTORY_CLERK", "VIEWER"] },
   { prefix: "/dashboard/orders", roles: ["OWNER", "MANAGER", "CASHIER", "DESIGNER", "VIEWER"] },
   { prefix: "/dashboard/pos", roles: ["OWNER", "MANAGER", "CASHIER"] },

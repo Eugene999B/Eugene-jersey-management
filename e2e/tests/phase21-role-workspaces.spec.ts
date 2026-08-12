@@ -10,6 +10,11 @@ const roleWorkspaces = [
   { role: "Viewer", loginId: "EJM-E2E-VIEWER", allowedPath: "/dashboard/reports", forbiddenPath: "/dashboard/pos" },
 ] as const;
 
+const readOnlyCustomerProductionRoles = [
+  { role: "Cashier", loginId: "EJM-E2E-CASHIER" },
+  { role: "Viewer", loginId: "EJM-E2E-VIEWER" },
+] as const;
+
 function password() {
   const value = process.env.E2E_PASSWORD;
   if (!value) throw new Error("E2E_PASSWORD is required for browser acceptance tests.");
@@ -48,3 +53,31 @@ for (const workspace of roleWorkspaces) {
     }
   });
 }
+
+for (const workspace of readOnlyCustomerProductionRoles) {
+  test(`${workspace.role} can review Customer Production without mutation controls`, async ({ page }) => {
+    await signIn(page, workspace.loginId);
+    await page.goto("/dashboard/customer-production");
+    await expect(page.getByRole("heading", { name: "Custom production requests" })).toBeVisible();
+    await expect(page.getByText("Read-only production view", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Design Studio", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Stock & costing", exact: true })).toHaveCount(0);
+  });
+}
+
+test("Cashier is rejected by restricted non-sidebar stock and setup workspaces", async ({ page }) => {
+  await signIn(page, "EJM-E2E-CASHIER");
+  await page.goto("/dashboard/production-stock");
+  await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
+  await expect(page.getByText("Access restricted.", { exact: false })).toBeVisible();
+
+  await page.goto("/dashboard/setup");
+  await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
+});
+
+test("Inventory Clerk is rejected before Customer Production renders", async ({ page }) => {
+  await signIn(page, "EJM-E2E-INVENTORY");
+  await page.goto("/dashboard/customer-production");
+  await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
+  await expect(page.getByText("Access restricted.", { exact: false })).toBeVisible();
+});
