@@ -62,9 +62,10 @@ describe("Phase 21 role workspace navigation", () => {
 
   test("non-navigation dashboard workspaces match their page-level role contracts", () => {
     for (const { route, roles } of nonNavRouteContracts) {
+      const allowedRoles = roles as readonly Role[];
       for (const role of shopRoles) {
-        expect(canAccessDashboardPath(route, role), `${role} route mismatch for ${route}`).toBe(roles.includes(role));
-        expect(canAccessDashboardPath(`${route}/nested`, role), `${role} nested route mismatch for ${route}`).toBe(roles.includes(role));
+        expect(canAccessDashboardPath(route, role), `${role} route mismatch for ${route}`).toBe(allowedRoles.includes(role));
+        expect(canAccessDashboardPath(`${route}/nested`, role), `${role} nested route mismatch for ${route}`).toBe(allowedRoles.includes(role));
       }
     }
   });
