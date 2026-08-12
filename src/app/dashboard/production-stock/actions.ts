@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  Prisma,
   ProductionInventoryKind,
   ProductionInventoryMovementType,
   ProductionInventoryUnit,
@@ -20,6 +21,21 @@ import {
   productionInventoryKey,
 } from "@/lib/production-inventory";
 import { permissions } from "@/lib/rbac";
+
+const submissionIdSchema = z.string().uuid();
+
+type ReplayResult = {
+  entityId: string;
+  created: boolean;
+};
+
+function isUniqueConflict(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function sameOptionalText(left: string | null | undefined, right: string | null | undefined) {
+  return (left ?? "") === (right ?? "");
+}
 
 const inventoryItemSchema = z.object({
   kind: z.nativeEnum(ProductionInventoryKind),
@@ -104,6 +120,7 @@ export async function createProductionInventoryItemAction(formData: FormData) {
 }
 
 const adjustSchema = z.object({
+  submissionId: submissionIdSchema,
   inventoryItemId: z.string().min(1).max(160),
   type: z.enum(["WASTE", "DAMAGE", "ADJUSTMENT_IN", "ADJUSTMENT_OUT", "FINISHED_GOOD_IN"]),
   quantity: z.coerce.number().positive().max(10_000_000),
@@ -113,30 +130,53 @@ const adjustSchema = z.object({
 export async function adjustProductionInventoryAction(formData: FormData) {
   const { session, shopId } = await stockSession();
   const parsed = adjustSchema.safeParse({
+    submissionId: formData.get("submissionId"),
     inventoryItemId: formData.get("inventoryItemId"),
     type: formData.get("type"),
     quantity: formData.get("quantity"),
     note: formData.get("note"),
   });
   if (!parsed.success) redirect("/dashboard/production-stock?error=adjustment");
+  const idempotencyKey = `manual-adjustment:${parsed.data.submissionId}`;
+  let result: ReplayResult;
   try {
-    await prisma.$transaction((tx) => applyProductionInventoryMovement(tx, {
+    const applied = await prisma.$transaction((tx) => applyProductionInventoryMovement(tx, {
       shopId,
       inventoryItemId: parsed.data.inventoryItemId,
       type: ProductionInventoryMovementType[parsed.data.type],
       quantity: parsed.data.quantity,
       referenceType: "MANUAL_ADJUSTMENT",
       note: parsed.data.note,
+      idempotencyKey,
       createdById: session.id,
     }));
-  } catch {
-    redirect("/dashboard/production-stock?error=adjustment-stock");
+    if (
+      applied.movement.inventoryItemId !== parsed.data.inventoryItemId
+      || applied.movement.type !== ProductionInventoryMovementType[parsed.data.type]
+      || Math.abs(Number(applied.movement.quantityDelta)) !== parsed.data.quantity
+      || !sameOptionalText(applied.movement.note, parsed.data.note)
+    ) redirect("/dashboard/production-stock?error=adjustment");
+    result = { entityId: applied.movement.id, created: applied.created };
+  } catch (error) {
+    if (!isUniqueConflict(error)) redirect("/dashboard/production-stock?error=adjustment-stock");
+    const existing = await prisma.productionInventoryMovement.findFirst({ where: { shopId, idempotencyKey } });
+    if (
+      !existing
+      || existing.inventoryItemId !== parsed.data.inventoryItemId
+      || existing.type !== ProductionInventoryMovementType[parsed.data.type]
+      || Math.abs(Number(existing.quantityDelta)) !== parsed.data.quantity
+      || !sameOptionalText(existing.note, parsed.data.note)
+    ) redirect("/dashboard/production-stock?error=adjustment");
+    result = { entityId: existing.id, created: false };
   }
-  await audit({ shopId, userId: session.id, action: "production.stock.adjusted", entityType: "ProductionInventoryItem", entityId: parsed.data.inventoryItemId, metadata: { type: parsed.data.type, quantity: parsed.data.quantity, note: parsed.data.note } });
+  if (result.created) {
+    await audit({ shopId, userId: session.id, action: "production.stock.adjusted", entityType: "ProductionInventoryItem", entityId: parsed.data.inventoryItemId, metadata: { type: parsed.data.type, quantity: parsed.data.quantity, note: parsed.data.note, movementId: result.entityId } });
+  }
   revalidatePath("/dashboard/production-stock");
 }
 
 const supplierPaymentSchema = z.object({
+  submissionId: submissionIdSchema,
   supplierId: z.string().min(1).max(160),
   amount: z.coerce.number().positive().max(100_000_000),
   reference: z.string().trim().max(160).optional(),
@@ -146,6 +186,7 @@ const supplierPaymentSchema = z.object({
 export async function recordSupplierPaymentAction(formData: FormData) {
   const { session, shopId } = await stockSession();
   const parsed = supplierPaymentSchema.safeParse({
+    submissionId: formData.get("submissionId"),
     supplierId: formData.get("supplierId"),
     amount: formData.get("amount"),
     reference: formData.get("reference") || undefined,
@@ -154,23 +195,57 @@ export async function recordSupplierPaymentAction(formData: FormData) {
   if (!parsed.success) redirect("/dashboard/production-stock?error=payment");
   const supplier = await prisma.supplier.findFirst({ where: { id: parsed.data.supplierId, shopId }, select: { id: true } });
   if (!supplier) redirect("/dashboard/production-stock?error=supplier");
-  const entry = await prisma.supplierAccountEntry.create({
-    data: {
-      shopId,
-      supplierId: supplier.id,
-      type: SupplierAccountEntryType.PAYMENT,
-      amount: -parsed.data.amount,
-      reference: parsed.data.reference,
-      note: parsed.data.note,
-      createdById: session.id,
-    },
-  });
-  await audit({ shopId, userId: session.id, action: "supplier.payment-recorded", entityType: "SupplierAccountEntry", entityId: entry.id, metadata: { supplierId: supplier.id, amount: parsed.data.amount, reference: parsed.data.reference ?? null } });
+  const idempotencyKey = `supplier-payment:${parsed.data.submissionId}`;
+  let result: ReplayResult;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.supplierAccountEntry.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) {
+        if (
+          existing.supplierId !== supplier.id
+          || existing.type !== SupplierAccountEntryType.PAYMENT
+          || Number(existing.amount) !== -parsed.data.amount
+          || !sameOptionalText(existing.reference, parsed.data.reference)
+          || !sameOptionalText(existing.note, parsed.data.note)
+        ) throw new Error("IDEMPOTENCY_CONFLICT");
+        return { entityId: existing.id, created: false };
+      }
+      const entry = await tx.supplierAccountEntry.create({
+        data: {
+          shopId,
+          supplierId: supplier.id,
+          type: SupplierAccountEntryType.PAYMENT,
+          amount: -parsed.data.amount,
+          reference: parsed.data.reference,
+          note: parsed.data.note,
+          idempotencyKey,
+          createdById: session.id,
+        },
+      });
+      return { entityId: entry.id, created: true };
+    });
+  } catch (error) {
+    if (!isUniqueConflict(error)) redirect("/dashboard/production-stock?error=payment");
+    const existing = await prisma.supplierAccountEntry.findFirst({ where: { shopId, idempotencyKey } });
+    if (
+      !existing
+      || existing.supplierId !== supplier.id
+      || existing.type !== SupplierAccountEntryType.PAYMENT
+      || Number(existing.amount) !== -parsed.data.amount
+      || !sameOptionalText(existing.reference, parsed.data.reference)
+      || !sameOptionalText(existing.note, parsed.data.note)
+    ) redirect("/dashboard/production-stock?error=payment");
+    result = { entityId: existing.id, created: false };
+  }
+  if (result.created) {
+    await audit({ shopId, userId: session.id, action: "supplier.payment-recorded", entityType: "SupplierAccountEntry", entityId: result.entityId, metadata: { supplierId: supplier.id, amount: parsed.data.amount, reference: parsed.data.reference ?? null } });
+  }
   revalidatePath("/dashboard/production-stock");
   revalidatePath("/dashboard/suppliers");
 }
 
 const supplierReturnSchema = z.object({
+  submissionId: submissionIdSchema,
   supplierId: z.string().min(1).max(160),
   inventoryItemId: z.string().min(1).max(160),
   quantity: z.coerce.number().positive().max(10_000_000),
@@ -182,6 +257,7 @@ const supplierReturnSchema = z.object({
 export async function recordSupplierReturnAction(formData: FormData) {
   const { session, shopId } = await stockSession();
   const parsed = supplierReturnSchema.safeParse({
+    submissionId: formData.get("submissionId"),
     supplierId: formData.get("supplierId"),
     inventoryItemId: formData.get("inventoryItemId"),
     quantity: formData.get("quantity"),
@@ -193,9 +269,23 @@ export async function recordSupplierReturnAction(formData: FormData) {
   const supplier = await prisma.supplier.findFirst({ where: { id: parsed.data.supplierId, shopId }, select: { id: true } });
   const item = await prisma.productionInventoryItem.findFirst({ where: { id: parsed.data.inventoryItemId, shopId, isActive: true }, select: { id: true } });
   if (!supplier || !item) redirect("/dashboard/production-stock?error=return-tenant");
+  const idempotencyKey = `supplier-return:${parsed.data.submissionId}`;
+  let result: ReplayResult;
 
   try {
-    const returned = await prisma.$transaction(async (tx) => {
+    result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.supplierStockReturn.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) {
+        if (
+          existing.supplierId !== supplier.id
+          || existing.productionInventoryItemId !== item.id
+          || Number(existing.quantity) !== parsed.data.quantity
+          || Number(existing.unitCost) !== parsed.data.unitCost
+          || existing.reason !== parsed.data.reason
+          || !sameOptionalText(existing.reference, parsed.data.reference)
+        ) throw new Error("IDEMPOTENCY_CONFLICT");
+        return { entityId: existing.id, created: false };
+      }
       const row = await tx.supplierStockReturn.create({
         data: {
           shopId,
@@ -205,6 +295,7 @@ export async function recordSupplierReturnAction(formData: FormData) {
           unitCost: parsed.data.unitCost,
           reason: parsed.data.reason,
           reference: parsed.data.reference,
+          idempotencyKey,
           createdById: session.id,
         },
       });
@@ -217,7 +308,7 @@ export async function recordSupplierReturnAction(formData: FormData) {
         referenceType: "SUPPLIER_RETURN",
         referenceId: row.id,
         note: parsed.data.reason,
-        idempotencyKey: `supplier-return:${row.id}`,
+        idempotencyKey: `${idempotencyKey}:stock`,
         createdById: session.id,
       });
       await tx.supplierAccountEntry.create({
@@ -228,14 +319,28 @@ export async function recordSupplierReturnAction(formData: FormData) {
           amount: -(parsed.data.quantity * parsed.data.unitCost),
           reference: parsed.data.reference,
           note: parsed.data.reason,
+          idempotencyKey: `${idempotencyKey}:credit`,
           createdById: session.id,
         },
       });
-      return row;
+      return { entityId: row.id, created: true };
     });
-    await audit({ shopId, userId: session.id, action: "supplier.stock-returned", entityType: "SupplierStockReturn", entityId: returned.id, metadata: { supplierId: supplier.id, inventoryItemId: item.id, quantity: parsed.data.quantity, unitCost: parsed.data.unitCost } });
-  } catch {
-    redirect("/dashboard/production-stock?error=return-stock");
+  } catch (error) {
+    if (!isUniqueConflict(error)) redirect("/dashboard/production-stock?error=return-stock");
+    const existing = await prisma.supplierStockReturn.findFirst({ where: { shopId, idempotencyKey } });
+    if (
+      !existing
+      || existing.supplierId !== supplier.id
+      || existing.productionInventoryItemId !== item.id
+      || Number(existing.quantity) !== parsed.data.quantity
+      || Number(existing.unitCost) !== parsed.data.unitCost
+      || existing.reason !== parsed.data.reason
+      || !sameOptionalText(existing.reference, parsed.data.reference)
+    ) redirect("/dashboard/production-stock?error=return-stock");
+    result = { entityId: existing.id, created: false };
+  }
+  if (result.created) {
+    await audit({ shopId, userId: session.id, action: "supplier.stock-returned", entityType: "SupplierStockReturn", entityId: result.entityId, metadata: { supplierId: supplier.id, inventoryItemId: item.id, quantity: parsed.data.quantity, unitCost: parsed.data.unitCost } });
   }
   revalidatePath("/dashboard/production-stock");
   revalidatePath("/dashboard/suppliers");
@@ -325,15 +430,17 @@ export async function saveProductionCostAction(formData: FormData) {
 }
 
 export async function postProductionInventoryAction(formData: FormData) {
-  const { session, shopId } = await stockSession();
+  const session = await requireRole(costingRoles);
+  if (!session.shopId) redirect("/dashboard?error=missing-shop");
+  const shopId = session.shopId;
   await requireBusinessModuleAccess(shopId, "PRINTING_PRODUCTION");
   const costId = String(formData.get("costId") ?? "");
   if (!costId) redirect("/dashboard/production-stock?error=post");
   try {
-    const posted = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const cost = await tx.productionCostSnapshot.findFirst({ where: { id: costId, shopId } });
       if (!cost) throw new Error("COST_NOT_FOUND");
-      if (cost.inventoryPostedAt) return cost;
+      if (cost.inventoryPostedAt) return { posted: cost, created: false };
       if (!cost.garmentInventoryItemId || !cost.materialInventoryItemId) throw new Error("COST_STOCK_MISSING");
       await applyProductionInventoryMovement(tx, {
         shopId,
@@ -377,9 +484,17 @@ export async function postProductionInventoryAction(formData: FormData) {
           createdById: session.id,
         });
       }
-      return tx.productionCostSnapshot.update({ where: { id: cost.id }, data: { inventoryPostedAt: new Date(), updatedById: session.id } });
+      const claimed = await tx.productionCostSnapshot.updateMany({
+        where: { id: cost.id, shopId, inventoryPostedAt: null },
+        data: { inventoryPostedAt: new Date(), updatedById: session.id },
+      });
+      const posted = await tx.productionCostSnapshot.findFirst({ where: { id: cost.id, shopId } });
+      if (!posted) throw new Error("COST_NOT_FOUND_AFTER_POST");
+      return { posted, created: claimed.count === 1 };
     });
-    await audit({ shopId, userId: session.id, action: "production.cost.inventory-posted", entityType: "ProductionCostSnapshot", entityId: posted.id, metadata: { designJobId: posted.designJobId, garmentInventoryItemId: posted.garmentInventoryItemId, materialInventoryItemId: posted.materialInventoryItemId } });
+    if (result.created) {
+      await audit({ shopId, userId: session.id, action: "production.cost.inventory-posted", entityType: "ProductionCostSnapshot", entityId: result.posted.id, metadata: { designJobId: result.posted.designJobId, garmentInventoryItemId: result.posted.garmentInventoryItemId, materialInventoryItemId: result.posted.materialInventoryItemId } });
+    }
   } catch {
     redirect("/dashboard/production-stock?error=post-stock");
   }
