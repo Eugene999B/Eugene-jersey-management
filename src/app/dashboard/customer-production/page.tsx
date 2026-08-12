@@ -56,7 +56,7 @@ function tone(status: CustomerProductionRequestStatus): "green" | "red" | "orang
 }
 
 export default async function CustomerProductionDashboard({ searchParams }: { searchParams?: Promise<Record<string, string | undefined>> }) {
-  const session = await requireRole(permissions.orders);
+  const session = await requireRole(permissions.ordersRead);
   const { shop } = await getTenantContext();
   if (!shop) return null;
   const canManageProduction = PRODUCTION_ACTION_ROLES.has(session.role);
