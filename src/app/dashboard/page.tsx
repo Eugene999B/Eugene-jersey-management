@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { SalesChart } from "@/components/reports/sales-chart";
 import { businessModuleEnabled } from "@/lib/business-modules";
 import { currency, shortDate, titleCase } from "@/lib/format";
+import { orderPaymentStateLabel } from "@/lib/order-payment-state";
 import { getDashboardMetrics, getTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/db";
 import { canSeeNav } from "@/lib/rbac";
@@ -99,13 +100,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {metrics.recentOrders.map((order) => (
             <article key={order.id} className="rounded-xl border border-[#ded8cd] bg-white p-4">
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{order.receiptNumber}</p><p className="truncate text-sm text-slate-500">{order.customer?.name ?? "Walk-in"}</p></div><Badge tone={order.status === "COMPLETED" ? "green" : order.rush ? "red" : "blue"}>{titleCase(order.status)}</Badge></div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm"><div><p className="text-xs text-slate-500">Total</p><p className="font-semibold">{currency(order.totalAmount.toString(), shop.currency)}</p></div><div><p className="text-xs text-slate-500">Payment</p><p>{order.payments.some((payment) => payment.status === "SUCCESS") ? "Paid" : "Pending"}</p></div></div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm"><div><p className="text-xs text-slate-500">Total</p><p className="font-semibold">{currency(order.totalAmount.toString(), shop.currency)}</p></div><div><p className="text-xs text-slate-500">Payment</p><p>{orderPaymentStateLabel({ totalAmount: order.totalAmount, payments: order.payments })}</p></div></div>
               <p className="mt-3 text-xs text-slate-500">{shortDate(order.createdAt)}</p>
             </article>
           ))}
           {!metrics.recentOrders.length ? <p className="rounded-lg bg-white p-5 text-center text-sm text-slate-500">No recent orders.</p> : null}
         </div>
-        <div className="hidden overflow-x-auto sm:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="px-5 py-3">Receipt</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Paid</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Date</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{metrics.recentOrders.map((order) => <tr key={order.id}><td className="px-5 py-3 font-semibold">{order.receiptNumber}</td><td className="px-5 py-3">{order.customer?.name ?? "Walk-in"}</td><td className="px-5 py-3"><Badge tone={order.status === "COMPLETED" ? "green" : order.rush ? "red" : "blue"}>{titleCase(order.status)}</Badge></td><td className="px-5 py-3">{order.payments.some((payment) => payment.status === "SUCCESS") ? "Yes" : "No"}</td><td className="px-5 py-3 font-semibold">{currency(order.totalAmount.toString(), shop.currency)}</td><td className="px-5 py-3 text-slate-500">{shortDate(order.createdAt)}</td></tr>)}</tbody></table></div>
+        <div className="hidden overflow-x-auto sm:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#f6f4ef] text-xs uppercase text-slate-500"><tr><th className="px-5 py-3">Receipt</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Payment</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Date</th></tr></thead><tbody className="divide-y divide-[#ded8cd] bg-white">{metrics.recentOrders.map((order) => <tr key={order.id}><td className="px-5 py-3 font-semibold">{order.receiptNumber}</td><td className="px-5 py-3">{order.customer?.name ?? "Walk-in"}</td><td className="px-5 py-3"><Badge tone={order.status === "COMPLETED" ? "green" : order.rush ? "red" : "blue"}>{titleCase(order.status)}</Badge></td><td className="px-5 py-3">{orderPaymentStateLabel({ totalAmount: order.totalAmount, payments: order.payments })}</td><td className="px-5 py-3 font-semibold">{currency(order.totalAmount.toString(), shop.currency)}</td><td className="px-5 py-3 text-slate-500">{shortDate(order.createdAt)}</td></tr>)}</tbody></table></div>
       </section>
     </div>
   );
