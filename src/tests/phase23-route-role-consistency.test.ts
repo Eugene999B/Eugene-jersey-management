@@ -6,9 +6,10 @@ function source(path: string) {
 }
 
 describe("Phase 23 route and role consistency", () => {
-  it("keeps Customer Production readable to order roles but limits mutations to production operators", () => {
+  it("keeps Customer Production readable to order-read roles but limits mutations to production operators", () => {
     const page = source("../app/dashboard/customer-production/page.tsx");
     const actions = source("../app/dashboard/customer-production/actions.ts");
+    expect(page).toContain("await requireRole(permissions.ordersRead)");
     expect(page).toContain("const PRODUCTION_ACTION_ROLES");
     expect(page).toContain("Role.OWNER, Role.MANAGER, Role.DESIGNER");
     expect(page).toContain("const canManageProduction = PRODUCTION_ACTION_ROLES.has(session.role)");
