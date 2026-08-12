@@ -39,7 +39,7 @@ export default async function ProductionStockPage() {
   const session = await requireRole(permissions.suppliers);
   const { shop } = await getTenantContext();
   if (!shop) return null;
-  const canCost = [Role.OWNER, Role.MANAGER, Role.ACCOUNTANT].includes(session.role);
+  const canCost = session.role === Role.OWNER || session.role === Role.MANAGER || session.role === Role.ACCOUNTANT;
 
   const [items, movements, suppliers, accountEntries, returns, receipts, costs, briefs, variants] = await Promise.all([
     prisma.productionInventoryItem.findMany({ where: { shopId: shop.id, isActive: true }, orderBy: [{ kind: "asc" }, { name: "asc" }, { size: "asc" }] }),
