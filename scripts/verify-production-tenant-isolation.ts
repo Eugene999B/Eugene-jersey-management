@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { ProductionInventoryKind, ProductionInventoryUnit } from "@prisma/client";
+import { prisma } from "../src/lib/db";
 import { platformDb } from "../src/lib/platform-db";
 import { createTenantDb, TenantDatabaseAccessError, TenantScopeMismatchError } from "../src/lib/tenant-db";
+import { runWithTenantRequestContext } from "../src/lib/tenant-context";
 
 const SHOP_A_SLUG = "e2e-production-isolation-a";
 const SHOP_B_SLUG = "e2e-production-isolation-b";
@@ -89,6 +91,11 @@ async function main() {
     const tenantA = createTenantDb(shopA.id);
     const visible = await tenantA.productionInventoryItem.findMany({ orderBy: { name: "asc" } });
     assert(visible.length === 1 && visible[0].id === itemA.id, "Tenant A production stock read leaked another shop.");
+
+    const contextualVisible = await runWithTenantRequestContext(shopA.id, () => prisma.productionInventoryItem.findMany({ orderBy: { name: "asc" } }));
+    assert(contextualVisible.length === 1 && contextualVisible[0].id === itemA.id, "Context-aware prisma client did not bind Tenant A production stock.");
+    const contextualForeign = await runWithTenantRequestContext(shopA.id, () => prisma.productionInventoryItem.findUnique({ where: { id: itemB.id } }));
+    assert(contextualForeign === null, "Context-aware prisma client leaked Tenant B production stock.");
 
     const foreign = await tenantA.productionInventoryItem.findUnique({ where: { id: itemB.id } });
     assert(foreign === null, "Tenant A found Tenant B production stock by unique id.");
