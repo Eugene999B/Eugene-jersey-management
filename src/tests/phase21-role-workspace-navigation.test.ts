@@ -35,7 +35,7 @@ const navRoutes = {
 } as const;
 
 const nonNavRouteContracts = [
-  { route: "/dashboard/customer-production", roles: permissions.orders },
+  { route: "/dashboard/customer-production", roles: permissions.ordersRead },
   { route: "/dashboard/production-stock", roles: permissions.suppliers },
   { route: "/dashboard/setup", roles: permissions.settings },
 ] as const;
