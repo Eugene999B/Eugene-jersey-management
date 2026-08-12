@@ -81,7 +81,7 @@ export async function applyProductionInventoryMovement(
       const existing = await tx.productionInventoryMovement.findFirst({
         where: { shopId: input.shopId, idempotencyKey: input.idempotencyKey },
       });
-      if (existing) return existing;
+      if (existing) return { movement: existing, created: false };
     }
 
     const item = await tx.productionInventoryItem.findFirst({
@@ -113,7 +113,7 @@ export async function applyProductionInventoryMovement(
     });
     if (updated.count !== 1) continue;
 
-    return tx.productionInventoryMovement.create({
+    const movement = await tx.productionInventoryMovement.create({
       data: {
         shopId: input.shopId,
         inventoryItemId: item.id,
@@ -128,6 +128,7 @@ export async function applyProductionInventoryMovement(
         createdById: input.createdById,
       },
     });
+    return { movement, created: true };
   }
 
   throw new Error("Production inventory changed repeatedly while this movement was being recorded. Refresh and try again.");
