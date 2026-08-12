@@ -79,7 +79,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
         <div className="panel p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Intelligence watch</h2><p className="text-sm text-slate-500">Actionable risks for today</p></div><Badge tone={metrics.overdueDebts ? "red" : "orange"}>{metrics.overdueDebts} overdue</Badge></div>
-          <div className="mb-4 grid gap-2"><div className="flex items-center gap-3 rounded-lg bg-white p-3 text-sm"><AlertTriangle size={18} className={metrics.lowStockVariants.length ? "text-orange-600" : "text-emerald-600"} /><span>{metrics.lowStockVariants.length} product variant(s) need stock attention.</span></div><div className="flex items-center gap-3 rounded-lg bg-white p-3 text-sm"><CreditCard size={18} className={metrics.overdueDebts ? "text-red-600" : "text-emerald-600"} /><span>{metrics.overdueDebts} overdue debt account(s) need follow-up.</span></div></div>
+          <div className="mb-4 grid gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
+              <div className="flex min-w-0 items-center gap-3"><AlertTriangle size={18} className={metrics.lowStockVariants.length ? "text-orange-600" : "text-emerald-600"} /><span>{metrics.lowStockVariants.length} product variant(s) need stock attention.</span></div>
+              {visibleNavigation.catalog ? <Link href="/dashboard/catalog" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-semibold text-slate-700 hover:bg-slate-100">Review stock <ArrowRight size={15} /></Link> : null}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
+              <div className="flex min-w-0 items-center gap-3"><CreditCard size={18} className={metrics.overdueDebts ? "text-red-600" : "text-emerald-600"} /><span>{metrics.overdueDebts} overdue debt account(s) need follow-up.</span></div>
+              {visibleNavigation.debts ? <Link href="/dashboard/debts" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-semibold text-slate-700 hover:bg-slate-100">Review debts <ArrowRight size={15} /></Link> : null}
+            </div>
+          </div>
           <div className="space-y-3">{metrics.lowStockVariants.length ? metrics.lowStockVariants.map((variant) => <div key={variant.id} className="flex items-center justify-between rounded-lg border border-[#ded8cd] bg-white p-3"><div className="min-w-0"><p className="truncate font-semibold">{variant.product.name}</p><p className="truncate text-sm text-slate-500">{variant.sku}</p></div><Badge tone={variant.stockQty === 0 ? "red" : "orange"}>{variant.stockQty} left</Badge></div>) : <p className="rounded-lg bg-white p-4 text-sm text-slate-500">No low-stock items right now.</p>}</div>
         </div>
       </section>
