@@ -9,7 +9,7 @@
     "lint": "biome lint . --max-diagnostics=200",
     "test": "vitest run",
     "test:e2e": "npm --prefix e2e test",
-    "test:tenant-isolation": "tsx scripts/verify-tenant-isolation.ts && tsx scripts/verify-release26-platform-isolation.ts && tsx scripts/verify-release27-email-isolation.ts && tsx scripts/verify-release28-recovery-isolation.ts && tsx scripts/verify-production-tenant-isolation.ts",
+    "test:tenant-isolation": "tsx scripts/verify-tenant-isolation.ts && tsx scripts/verify-release26-platform-isolation.ts && tsx scripts/verify-release27-email-isolation.ts && tsx scripts/verify-release28-recovery-isolation.ts && tsx scripts/verify-production-tenant-isolation.ts && tsx scripts/verify-production-idempotency.ts",
     "test:release26-isolation": "tsx scripts/verify-release26-platform-isolation.ts",
     "test:release27-isolation": "tsx scripts/verify-release27-email-isolation.ts",
     "test:release28-isolation": "tsx scripts/verify-release28-recovery-isolation.ts",
