@@ -65,7 +65,7 @@ for (const workspace of readOnlyCustomerProductionRoles) {
   });
 }
 
-test("non-sidebar outer guards reject roles before restricted workspaces render", async ({ page }) => {
+test("Cashier is rejected by restricted non-sidebar stock and setup workspaces", async ({ page }) => {
   await signIn(page, "EJM-E2E-CASHIER");
   await page.goto("/dashboard/production-stock");
   await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
@@ -73,9 +73,11 @@ test("non-sidebar outer guards reject roles before restricted workspaces render"
 
   await page.goto("/dashboard/setup");
   await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
+});
 
-  await page.goto("/api/auth/logout");
+test("Inventory Clerk is rejected before Customer Production renders", async ({ page }) => {
   await signIn(page, "EJM-E2E-INVENTORY");
   await page.goto("/dashboard/customer-production");
   await expect(page).toHaveURL(/\/dashboard\?error=permission(?:&|$)/);
+  await expect(page.getByText("Access restricted.", { exact: false })).toBeVisible();
 });
