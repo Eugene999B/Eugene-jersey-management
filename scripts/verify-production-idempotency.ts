@@ -82,26 +82,31 @@ async function main() {
     const tenant = createTenantDb(shop.id);
 
     const manualKey = "phase22b:manual:one";
-    const manual = await Promise.all([
-      tenant.$transaction((tx) => applyProductionInventoryMovement(inventoryTransaction(tx), {
-        shopId: shop.id,
-        inventoryItemId: item.id,
-        type: ProductionInventoryMovementType.ADJUSTMENT_OUT,
-        quantity: 1,
-        note: "Concurrent manual adjustment",
-        idempotencyKey: manualKey,
-        createdById: actor.id,
-      })),
-      tenant.$transaction((tx) => applyProductionInventoryMovement(inventoryTransaction(tx), {
-        shopId: shop.id,
-        inventoryItemId: item.id,
-        type: ProductionInventoryMovementType.ADJUSTMENT_OUT,
-        quantity: 1,
-        note: "Concurrent manual adjustment",
-        idempotencyKey: manualKey,
-        createdById: actor.id,
-      })),
-    ]);
+    const manualAttempt = async () => {
+      try {
+        return await tenant.$transaction((tx) => applyProductionInventoryMovement(inventoryTransaction(tx), {
+          shopId: shop.id,
+          inventoryItemId: item.id,
+          type: ProductionInventoryMovementType.ADJUSTMENT_OUT,
+          quantity: 1,
+          note: "Concurrent manual adjustment",
+          idempotencyKey: manualKey,
+          createdById: actor.id,
+        }));
+      } catch (error) {
+        if (!isUniqueConflict(error)) throw error;
+        const existing = await tenant.productionInventoryMovement.findFirst({
+          where: { shopId: shop.id, idempotencyKey: manualKey },
+        });
+        assert(existing, "Concurrent manual adjustment lost the unique-key race but the winning movement was not readable.");
+        assert(existing.inventoryItemId === item.id, "Concurrent manual adjustment replay resolved to the wrong inventory item.");
+        assert(existing.type === ProductionInventoryMovementType.ADJUSTMENT_OUT, "Concurrent manual adjustment replay resolved to the wrong movement type.");
+        assert(Math.abs(Number(existing.quantityDelta)) === 1, "Concurrent manual adjustment replay resolved to the wrong quantity.");
+        assert(existing.note === "Concurrent manual adjustment", "Concurrent manual adjustment replay resolved to different business input.");
+        return { movement: existing, created: false };
+      }
+    };
+    const manual = await Promise.all([manualAttempt(), manualAttempt()]);
     assert(manual.filter((result) => result.created).length === 1, "Concurrent manual adjustment reported more or fewer than one creation.");
     assert(await platformDb.productionInventoryMovement.count({ where: { shopId: shop.id, idempotencyKey: manualKey } }) === 1, "Concurrent manual adjustment created duplicate movements.");
     const afterManual = await platformDb.productionInventoryItem.findUnique({ where: { id: item.id } });
