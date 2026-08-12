@@ -11,9 +11,7 @@ const globalForTenantContext = globalThis as unknown as {
 const tenantRequestContext =
   globalForTenantContext.tenantRequestContext ?? new AsyncLocalStorage<TenantRequestContext>();
 
-if (process.env.NODE_ENV !== "production") {
-  globalForTenantContext.tenantRequestContext = tenantRequestContext;
-}
+globalForTenantContext.tenantRequestContext = tenantRequestContext;
 
 export function bindTenantRequestContext(shopId: string | null) {
   tenantRequestContext.enterWith({ shopId: shopId?.trim() || null });
