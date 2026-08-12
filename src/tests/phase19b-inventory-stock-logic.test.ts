@@ -38,9 +38,12 @@ describe("Phase 19B existing atomic stock paths", () => {
     expect(online).toContain("stockQty: { gte: parsed.data.quantity }");
   });
 
-  it("keeps production inventory movement balances row-locked and non-negative", () => {
+  it("keeps production inventory movements concurrency-safe and non-negative", () => {
     const inventory = source("src/lib/production-inventory.ts");
-    expect(inventory).toContain("FOR UPDATE");
+    expect(inventory).not.toMatch(/\$(?:queryRaw|executeRaw)/);
+    expect(inventory).toContain("INVENTORY_UPDATE_RETRIES");
+    expect(inventory).toContain("updatedAt: item.updatedAt");
+    expect(inventory).toContain("if (updated.count !== 1) continue");
     expect(inventory).toContain("if (nextQuantity < -0.0001)");
   });
 });

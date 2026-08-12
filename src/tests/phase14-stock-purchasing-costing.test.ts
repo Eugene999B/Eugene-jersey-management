@@ -97,12 +97,13 @@ describe("Phase 14 stock, purchasing and production costing", () => {
     expect(`${migration}\n${links}`).not.toContain('ALTER TABLE "DesignProductionBrief"');
   });
 
-  it("serializes stock mutations and prevents negative balances", () => {
+  it("serializes stock mutations without raw SQL and prevents negative balances", () => {
     const helper = source("../lib/production-inventory.ts");
-    expect(helper).toContain('FOR UPDATE');
-    expect(helper).toContain('AND "shopId" = ${input.shopId}');
-    expect(helper).toContain('if (nextQuantity < -0.0001)');
-    expect(helper).toContain("existingAfterLock");
+    expect(helper).not.toMatch(/\$(?:queryRaw|executeRaw)/);
+    expect(helper).toContain("INVENTORY_UPDATE_RETRIES");
+    expect(helper).toContain("updatedAt: item.updatedAt");
+    expect(helper).toContain("if (updated.count !== 1) continue");
+    expect(helper).toContain("if (nextQuantity < -0.0001)");
     expect(helper).toContain("idempotencyKey");
   });
 

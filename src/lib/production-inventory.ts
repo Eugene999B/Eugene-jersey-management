@@ -1,5 +1,5 @@
 import {
-  Prisma,
+  type Prisma,
   ProductionInventoryMovementType,
   type ProductionInventoryKind,
   type ProductionInventoryUnit,
@@ -22,6 +22,8 @@ const OUTBOUND_MOVEMENT_TYPES: ReadonlySet<ProductionInventoryMovementType> = ne
   ProductionInventoryMovementType.ADJUSTMENT_OUT,
   ProductionInventoryMovementType.SUPPLIER_RETURN,
 ]);
+
+const INVENTORY_UPDATE_RETRIES = 8;
 
 function keyPart(value: string | null | undefined) {
   return (value ?? "-").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "-";
@@ -73,61 +75,62 @@ export async function applyProductionInventoryMovement(
   },
 ) {
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error("Inventory movement quantity must be greater than zero.");
-  if (input.idempotencyKey) {
-    const existing = await tx.productionInventoryMovement.findFirst({
-      where: { shopId: input.shopId, idempotencyKey: input.idempotencyKey },
+
+  for (let attempt = 0; attempt < INVENTORY_UPDATE_RETRIES; attempt += 1) {
+    if (input.idempotencyKey) {
+      const existing = await tx.productionInventoryMovement.findFirst({
+        where: { shopId: input.shopId, idempotencyKey: input.idempotencyKey },
+      });
+      if (existing) return existing;
+    }
+
+    const item = await tx.productionInventoryItem.findFirst({
+      where: { id: input.inventoryItemId, shopId: input.shopId, isActive: true },
     });
-    if (existing) return existing;
+    if (!item) throw new Error("Production inventory item was not found in this shop.");
+
+    const delta = inventoryMovementDelta(input.type, input.quantity);
+    const currentQuantity = Number(item.quantity);
+    const nextQuantity = currentQuantity + delta;
+    if (nextQuantity < -0.0001) throw new Error(`${item.name} does not have enough stock for this movement.`);
+
+    const receivedUnitCost = Math.max(0, input.unitCostSnapshot ?? Number(item.unitCost));
+    const nextUnitCost = input.updateWeightedCost && delta > 0
+      ? weightedUnitCost({ currentQuantity, currentUnitCost: Number(item.unitCost), receivedQuantity: delta, receivedUnitCost })
+      : Number(item.unitCost);
+
+    const updated = await tx.productionInventoryItem.updateMany({
+      where: {
+        id: item.id,
+        shopId: input.shopId,
+        isActive: true,
+        updatedAt: item.updatedAt,
+      },
+      data: {
+        quantity: nextQuantity,
+        ...(input.updateWeightedCost ? { unitCost: nextUnitCost } : {}),
+      },
+    });
+    if (updated.count !== 1) continue;
+
+    return tx.productionInventoryMovement.create({
+      data: {
+        shopId: input.shopId,
+        inventoryItemId: item.id,
+        type: input.type,
+        quantityDelta: delta,
+        balanceAfter: nextQuantity,
+        unitCostSnapshot: receivedUnitCost,
+        referenceType: input.referenceType ?? null,
+        referenceId: input.referenceId ?? null,
+        note: input.note ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
+        createdById: input.createdById,
+      },
+    });
   }
 
-  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
-    FROM "ProductionInventoryItem"
-    WHERE "id" = ${input.inventoryItemId}
-      AND "shopId" = ${input.shopId}
-      AND "isActive" = true
-    FOR UPDATE
-  `);
-  if (!locked.length) throw new Error("Production inventory item was not found in this shop.");
-
-  if (input.idempotencyKey) {
-    const existingAfterLock = await tx.productionInventoryMovement.findFirst({
-      where: { shopId: input.shopId, idempotencyKey: input.idempotencyKey },
-    });
-    if (existingAfterLock) return existingAfterLock;
-  }
-
-  const item = await tx.productionInventoryItem.findFirst({ where: { id: input.inventoryItemId, shopId: input.shopId, isActive: true } });
-  if (!item) throw new Error("Production inventory item was not found in this shop.");
-  const delta = inventoryMovementDelta(input.type, input.quantity);
-  const currentQuantity = Number(item.quantity);
-  const nextQuantity = currentQuantity + delta;
-  if (nextQuantity < -0.0001) throw new Error(`${item.name} does not have enough stock for this movement.`);
-
-  const receivedUnitCost = Math.max(0, input.unitCostSnapshot ?? Number(item.unitCost));
-  const nextUnitCost = input.updateWeightedCost && delta > 0
-    ? weightedUnitCost({ currentQuantity, currentUnitCost: Number(item.unitCost), receivedQuantity: delta, receivedUnitCost })
-    : Number(item.unitCost);
-
-  const updated = await tx.productionInventoryItem.update({
-    where: { id: item.id },
-    data: { quantity: nextQuantity, ...(input.updateWeightedCost ? { unitCost: nextUnitCost } : {}) },
-  });
-  return tx.productionInventoryMovement.create({
-    data: {
-      shopId: input.shopId,
-      inventoryItemId: item.id,
-      type: input.type,
-      quantityDelta: delta,
-      balanceAfter: updated.quantity,
-      unitCostSnapshot: receivedUnitCost,
-      referenceType: input.referenceType ?? null,
-      referenceId: input.referenceId ?? null,
-      note: input.note ?? null,
-      idempotencyKey: input.idempotencyKey ?? null,
-      createdById: input.createdById,
-    },
-  });
+  throw new Error("Production inventory changed repeatedly while this movement was being recorded. Refresh and try again.");
 }
 
 export function calculateProductionCost(input: {
