@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { permissions } from "@/lib/rbac";
 import { productVariantOptionLabel } from "@/lib/product-variants";
 import { listOrderWorkflows } from "@/lib/order-workflow";
+import { netRecognizedPaymentAmount } from "@/lib/payment-accounting";
 
 type OrdersPageProps = { searchParams?: Promise<{ q?: string }> };
 
@@ -66,8 +67,8 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
         orders={orders.map((order) => {
           const workflow = workflows.get(order.id);
           const paidAmount = order.payments
-            .filter((payment) => payment.status === "SUCCESS")
-            .reduce((sum, payment) => sum + Number(payment.amount), 0);
+            .filter((payment) => payment.method !== "STORE_CREDIT")
+            .reduce((sum, payment) => sum + netRecognizedPaymentAmount(payment), 0);
           return {
             id: order.id,
             receiptNumber: order.receiptNumber,
