@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, CircleDollarSig
 import { OrderStatus, Role } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
+import { ConfirmActionButton } from "@/components/ui/confirm-action-button";
 import { currency, shortDate, titleCase } from "@/lib/format";
 import type { OrderApprovalStatus, OrderWorkflowPriority } from "@/lib/order-workflow";
 
@@ -188,8 +189,21 @@ export function OrderBoard({ orders, role, currencyCode }: { orders: BoardOrder[
                       <p className="mt-3 text-sm font-semibold">{currency(order.totalAmount, currencyCode)}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <LinkButton href={`/dashboard/orders/${order.id}`} variant="outline" className="min-h-10 flex-1 px-2 py-1 text-xs">Open workflow</LinkButton>
-                        {nextStatuses(order.status, role).map((status) => (
-                          <Button key={status} variant={status === "CANCELLED" ? "danger" : "outline"} className="min-h-10 flex-1 px-2 py-1 text-xs sm:flex-none" disabled={isPending} onClick={() => updateOrder(order.id, status)}>
+                        {nextStatuses(order.status, role).map((status) => status === "CANCELLED" ? (
+                          <ConfirmActionButton
+                            key={status}
+                            type="button"
+                            confirmation={`Cancel ${order.receiptNumber}? This will move the order to Cancelled and may affect stock or fulfilment.`}
+                            variant="danger"
+                            className="min-h-10 flex-1 px-2 py-1 text-xs sm:flex-none"
+                            disabled={isPending}
+                            onClick={() => updateOrder(order.id, status)}
+                          >
+                            <ArrowRight size={14} />
+                            {titleCase(status)}
+                          </ConfirmActionButton>
+                        ) : (
+                          <Button key={status} type="button" variant="outline" className="min-h-10 flex-1 px-2 py-1 text-xs sm:flex-none" disabled={isPending} onClick={() => updateOrder(order.id, status)}>
                             {status === "COMPLETED" ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
                             {titleCase(status)}
                           </Button>
