@@ -14,7 +14,7 @@ describe("Phase 23 route and role consistency", () => {
     expect(page).toContain("Role.OWNER, Role.MANAGER, Role.DESIGNER");
     expect(page).toContain("const canManageProduction = PRODUCTION_ACTION_ROLES.has(session.role)");
     expect(page).toContain("Read-only production view");
-    expect(actions).toContain("const productionRoles = [Role.OWNER, Role.MANAGER, Role.DESIGNER]");
+    expect(actions).toContain("const productionRoles: Role[] = [Role.OWNER, Role.MANAGER, Role.DESIGNER]");
   });
 
   it("does not render mutation-only destinations to read-only Customer Production roles", () => {
