@@ -16,6 +16,10 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+function inventoryTransaction(tx: unknown) {
+  return tx as Prisma.TransactionClient;
+}
+
 function isUniqueConflict(reason: unknown) {
   return reason instanceof Prisma.PrismaClientKnownRequestError && reason.code === "P2002";
 }
@@ -66,7 +70,7 @@ async function main() {
 
     const manualKey = "phase22b:manual:one";
     const manual = await Promise.all([
-      tenant.$transaction((tx) => applyProductionInventoryMovement(tx, {
+      tenant.$transaction((tx) => applyProductionInventoryMovement(inventoryTransaction(tx), {
         shopId: shop.id,
         inventoryItemId: item.id,
         type: ProductionInventoryMovementType.ADJUSTMENT_OUT,
@@ -75,7 +79,7 @@ async function main() {
         idempotencyKey: manualKey,
         createdById: "phase22b-verifier",
       })),
-      tenant.$transaction((tx) => applyProductionInventoryMovement(tx, {
+      tenant.$transaction((tx) => applyProductionInventoryMovement(inventoryTransaction(tx), {
         shopId: shop.id,
         inventoryItemId: item.id,
         type: ProductionInventoryMovementType.ADJUSTMENT_OUT,
@@ -116,7 +120,7 @@ async function main() {
           createdById: "phase22b-verifier",
         },
       });
-      await applyProductionInventoryMovement(tx, {
+      await applyProductionInventoryMovement(inventoryTransaction(tx), {
         shopId: shop.id,
         inventoryItemId: item.id,
         type: ProductionInventoryMovementType.SUPPLIER_RETURN,
