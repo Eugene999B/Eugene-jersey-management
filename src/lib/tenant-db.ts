@@ -37,7 +37,6 @@ const directTenantModels = new Set([
   "CustomerMessage",
   "CustomerThread",
   "DesignJob",
-  "DesignJobVersion",
   "DesignProductionBrief",
   "HeatPressRun",
   "HeatPressEvent",
