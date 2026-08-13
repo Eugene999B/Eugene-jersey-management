@@ -5,8 +5,9 @@ const prismaReviewDeadline = new Date("2026-09-04T00:00:00.000Z");
 const nanoidReviewDeadline = new Date("2026-08-16T00:00:00.000Z");
 const fastUriAdvisorySource = 1130719;
 const fastUriAdvisoryUrl = "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7";
-const nanoidAdvisorySource = 1138813;
+const nanoidAdvisorySource = 1139427;
 const nanoidAdvisoryUrl = "https://github.com/advisories/GHSA-2v37-7h3g-55p8";
+const nanoidAuditRange = "<3.3.18";
 const auditPath = process.argv[2] ?? "npm-audit.json";
 
 function fail(message) {
@@ -81,18 +82,31 @@ if (installedFastUri?.version !== "4.1.1") {
 const nanoid = vulnerabilities.nanoid;
 if (nanoid) {
   if (Date.now() >= nanoidReviewDeadline.getTime()) {
-    fail(`the temporary PostCSS Nano ID exception expired on ${nanoidReviewDeadline.toISOString().slice(0, 10)}. Re-check for Nano ID 3.3.17+ or an updated PostCSS/Next dependency chain.`);
+    fail(`the temporary PostCSS Nano ID exception expired on ${nanoidReviewDeadline.toISOString().slice(0, 10)}. Re-check the npm 3.x release channel and PostCSS dependency chain.`);
   }
   const nanoidAdvisory = advisoryBySource(nanoid, nanoidAdvisorySource);
-  if (!nanoidAdvisory || nanoidAdvisory.url !== nanoidAdvisoryUrl || nanoidAdvisory.severity !== "high") {
-    fail("Nano ID advisory identity or severity changed.");
+  if (!nanoidAdvisory || nanoidAdvisory.url !== nanoidAdvisoryUrl || nanoidAdvisory.severity !== "high" || nanoidAdvisory.range !== nanoidAuditRange) {
+    fail("Nano ID advisory identity, severity or audit range changed.");
   }
   if (JSON.stringify(nanoid.nodes) !== JSON.stringify(["node_modules/postcss/node_modules/nanoid"])) {
     fail(`Nano ID now appears at an unreviewed installation path: ${JSON.stringify(nanoid.nodes)}`);
   }
   const installedNanoid = packages["node_modules/postcss/node_modules/nanoid"];
   if (installedNanoid?.version !== "3.3.16") {
-    fail(`expected the newest published reviewed Nano ID 3.x release 3.3.16, found ${installedNanoid?.version ?? "missing"}.`);
+    fail(`expected the reviewed nested Nano ID release 3.3.16, found ${installedNanoid?.version ?? "missing"}. Re-check whether a patched 3.x release is now installable.`);
+  }
+
+  let postcssInput;
+  try {
+    postcssInput = readFileSync("node_modules/postcss/lib/input.js", "utf8");
+  } catch (error) {
+    fail(`could not inspect the installed PostCSS Nano ID call path: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!postcssInput.includes("require('nanoid/non-secure')") || !postcssInput.includes("nanoid(6)")) {
+    fail("PostCSS Nano ID usage changed from the reviewed fixed-size non-secure call path.");
+  }
+  if (postcssInput.includes("customAlphabet") || postcssInput.includes("customRandom") || postcssInput.includes("nanoid(0)")) {
+    fail("PostCSS now exposes a Nano ID call shape covered by the zero-size custom-generator advisory.");
   }
 }
 
@@ -109,8 +123,10 @@ console.warn([
   `- Prisma mandatory review deadline: ${prismaReviewDeadline.toISOString().slice(0, 10)}`,
   ...(nanoid ? [
     `- Nano ID advisory: ${nanoidAdvisoryUrl}`,
-    "- affected path: Next/PostCSS -> nested Nano ID 3.x only",
-    "- installed nested Nano ID: 3.3.16 (advisory requires 3.3.17+, which is not yet published)",
+    `- npm audit reviewed range: ${nanoidAuditRange}`,
+    "- affected installation path: Next/PostCSS -> nested Nano ID 3.x only",
+    "- installed nested Nano ID: 3.3.16; the npm 3.x channel has no newer installable release in this review",
+    "- reviewed PostCSS usage: nanoid/non-secure with fixed size 6; no customAlphabet/customRandom zero-size path",
     `- Nano ID mandatory review deadline: ${nanoidReviewDeadline.toISOString().slice(0, 10)}`,
   ] : []),
   "- every other high/critical advisory remains blocking",
