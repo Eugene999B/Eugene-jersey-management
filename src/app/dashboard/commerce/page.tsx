@@ -15,6 +15,8 @@ const lockedReturnStatuses = new Set<ReturnRequestStatus>([
   ReturnRequestStatus.EXCHANGED,
 ]);
 
+const returnWorkflowHelp = "Approval and receipt can be recorded here. Process any refund from the order's Payment & refunds panel; exchanges and restocking stay in their dedicated stock workflow.";
+
 function returnStatusOptions(status: ReturnRequestStatus) {
   if (status === ReturnRequestStatus.REQUESTED) {
     return [ReturnRequestStatus.REQUESTED, ReturnRequestStatus.APPROVED, ReturnRequestStatus.REJECTED, ReturnRequestStatus.CANCELLED];
@@ -87,7 +89,7 @@ export default async function CommercePage() {
       <section className="panel overflow-hidden">
         <div className="border-b border-[#ded8cd] p-4 sm:p-5">
           <div className="flex items-center gap-2"><RotateCcw size={18} className="text-[var(--shop-primary)]" /><h2 className="text-lg font-semibold">Return workflow</h2></div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Approval and receipt can be recorded here. Process any refund from the order&apos;s Payment &amp; refunds panel; exchanges and restocking stay in their dedicated stock workflow.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{returnWorkflowHelp}</p>
         </div>
         <div className="divide-y divide-[#ded8cd] bg-white">
           {returns.map((request) => {
