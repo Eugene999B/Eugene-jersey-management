@@ -1,14 +1,14 @@
 "use server";
 
+import { ClosingStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ClosingStatus } from "@prisma/client";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
-import { permissions } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { requireRole } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { financialPeriodTotals } from "@/lib/financial-period";
+import { permissions } from "@/lib/rbac";
 
 const closingSchema = z.object({
   businessDate: z.coerce.date(),
@@ -17,6 +17,8 @@ const closingSchema = z.object({
   expenses: z.coerce.number().min(0).max(100_000_000).default(0),
   refunds: z.coerce.number().min(0).max(100_000_000).default(0),
   notes: z.string().trim().max(1000).optional(),
+  existingClosingId: z.string().trim().min(1).max(100).optional(),
+  expectedUpdatedAt: z.coerce.date().optional(),
 });
 
 function dateBounds(value: Date) {
@@ -27,15 +29,30 @@ function dateBounds(value: Date) {
   return { start, end };
 }
 
+function hasPrismaCode(error: unknown, code: string) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
+}
+
 export async function closeDayAction(formData: FormData) {
   const session = await requireRole(permissions.closing);
   if (!session.shopId) redirect("/dashboard?error=missing-shop");
   const parsed = closingSchema.safeParse({
-    businessDate: formData.get("businessDate"), openingFloat: formData.get("openingFloat") || 0,
-    manualCash: formData.get("manualCash"), expenses: formData.get("expenses") || 0,
-    refunds: formData.get("refunds") || 0, notes: formData.get("notes") || undefined,
+    businessDate: formData.get("businessDate"),
+    openingFloat: formData.get("openingFloat") || 0,
+    manualCash: formData.get("manualCash"),
+    expenses: formData.get("expenses") || 0,
+    refunds: formData.get("refunds") || 0,
+    notes: formData.get("notes") || undefined,
+    existingClosingId: formData.get("existingClosingId") || undefined,
+    expectedUpdatedAt: formData.get("expectedUpdatedAt") || undefined,
   });
   if (!parsed.success) redirect("/dashboard/closing?error=invalid");
+
+  const dateKey = parsed.data.businessDate.toISOString().slice(0, 10);
+  const revising = Boolean(parsed.data.existingClosingId);
+  if (revising !== Boolean(parsed.data.expectedUpdatedAt)) {
+    redirect(`/dashboard/closing?date=${dateKey}&error=closing-changed`);
+  }
 
   const { start, end } = dateBounds(parsed.data.businessDate);
   const truth = await financialPeriodTotals(session.shopId, start, end);
@@ -46,7 +63,6 @@ export async function closeDayAction(formData: FormData) {
   const cashDifference = Number((parsed.data.manualCash - expectedCashWithFloat).toFixed(2));
   const status = Math.abs(cashDifference) <= 1 ? ClosingStatus.BALANCED : ClosingStatus.VARIANCE;
   const data = {
-    closedById: session.id,
     openingFloat: parsed.data.openingFloat,
     expectedCash,
     manualCash: parsed.data.manualCash,
@@ -66,15 +82,48 @@ export async function closeDayAction(formData: FormData) {
     notes: parsed.data.notes,
   };
 
-  const closing = await prisma.dailyClosing.upsert({
-    where: { shopId_businessDate: { shopId: session.shopId, businessDate: parsed.data.businessDate } },
-    update: data,
-    create: { shopId: session.shopId, businessDate: parsed.data.businessDate, ...data },
-  });
+  let closing: { id: string };
+  if (revising) {
+    try {
+      closing = await prisma.dailyClosing.update({
+        where: {
+          id: parsed.data.existingClosingId!,
+          shopId: session.shopId,
+          businessDate: parsed.data.businessDate,
+          updatedAt: parsed.data.expectedUpdatedAt!,
+        },
+        data,
+        select: { id: true },
+      });
+    } catch (error) {
+      if (hasPrismaCode(error, "P2025")) {
+        redirect(`/dashboard/closing?date=${dateKey}&error=closing-changed`);
+      }
+      throw error;
+    }
+  } else {
+    try {
+      closing = await prisma.dailyClosing.create({
+        data: {
+          shopId: session.shopId,
+          businessDate: parsed.data.businessDate,
+          closedById: session.id,
+          ...data,
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (hasPrismaCode(error, "P2002")) {
+        redirect(`/dashboard/closing?date=${dateKey}&error=closing-exists`);
+      }
+      throw error;
+    }
+  }
+
   await audit({
     shopId: session.shopId,
     userId: session.id,
-    action: "closing.day_closed",
+    action: revising ? "closing.day_revised" : "closing.day_closed",
     entityType: "DailyClosing",
     entityId: closing.id,
     metadata: {
@@ -83,8 +132,9 @@ export async function closeDayAction(formData: FormData) {
       recognizedOrders: truth.bookedOrderCount,
       providerRefunds: truth.providerRefunds,
       captures: truth.captures,
+      previousUpdatedAt: parsed.data.expectedUpdatedAt?.toISOString() ?? null,
     },
   });
   revalidatePath("/dashboard/closing");
-  redirect(`/dashboard/closing?date=${parsed.data.businessDate.toISOString().slice(0, 10)}`);
+  redirect(`/dashboard/closing?date=${dateKey}`);
 }
