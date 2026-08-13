@@ -12,7 +12,12 @@ import { permissions } from "@/lib/rbac";
 import { getTenantContext } from "@/lib/tenant";
 
 type Props = {
-  searchParams?: Promise<{ date?: string }>;
+  searchParams?: Promise<{ date?: string; error?: string }>;
+};
+
+const closingErrorMessages: Record<string, string> = {
+  "closing-changed": "This closing changed after you opened it. Reload the date and review the latest saved values before revising it again.",
+  "closing-exists": "This business date was closed after you opened the page. Reload the date to review the saved closing before making any revision.",
 };
 
 function todayInput() {
@@ -43,6 +48,7 @@ export default async function ClosingPage({ searchParams }: Props) {
 
   const params = (await searchParams) ?? {};
   const selectedDate = validDateInput(params.date) ? params.date! : todayInput();
+  const closingError = params.error ? closingErrorMessages[params.error] : undefined;
   const { start, end } = bounds(selectedDate);
 
   const [truth, debtPayments, closings, selectedClosing] = await Promise.all([
@@ -83,6 +89,10 @@ export default async function ClosingPage({ searchParams }: Props) {
           ))}
         </div>
       </div>
+
+      {closingError ? (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold leading-6 text-red-800">{closingError}</div>
+      ) : null}
 
       <form method="get" className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
         <label className="min-w-0 flex-1 text-sm font-semibold text-slate-700" htmlFor="closing-review-date">
