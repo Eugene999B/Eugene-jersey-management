@@ -109,6 +109,13 @@ jobs:
           npm run production:activate
           npm run production:purge-demo
 
+      - name: Verify staging pre-deploy path
+        env:
+          NODE_ENV: test
+          CI: "true"
+          RAILWAY_ENVIRONMENT_NAME: staging
+        run: npm run deployment:predeploy
+
       - name: Lint
         shell: bash
         run: |
@@ -236,6 +243,13 @@ jobs:
           E2E_TESTING: "true"
           E2E_PASSWORD: ci-browser-password-2026
         run: npm run e2e:seed
+
+      - name: Rehearse PostgreSQL backup and restore
+        env:
+          NODE_ENV: test
+          CI: "true"
+          RECOVERY_REHEARSAL: "true"
+        run: npm run release:verify-recovery
 
       - name: Run Chromium browser acceptance
         shell: bash
