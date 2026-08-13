@@ -5,6 +5,7 @@ const prismaReviewDeadline = new Date("2026-09-04T00:00:00.000Z");
 const nanoidReviewDeadline = new Date("2026-08-16T00:00:00.000Z");
 const fastUriAdvisorySource = 1130719;
 const fastUriAdvisoryUrl = "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7";
+// Previous reviewed npm-audit source fingerprint: 1138813. Current fingerprint after the 2026-08-13 re-review: 1139427.
 const nanoidAdvisorySource = 1139427;
 const nanoidAdvisoryUrl = "https://github.com/advisories/GHSA-2v37-7h3g-55p8";
 const nanoidAuditRange = "<3.3.18";
