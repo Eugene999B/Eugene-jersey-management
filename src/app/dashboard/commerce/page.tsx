@@ -1,13 +1,14 @@
 import { CouponDiscountType, ReturnRequestStatus } from "@prisma/client";
-import { Bike, PackageCheck, RotateCcw, Tags } from "lucide-react";
+import { ArrowUpRight, Bike, PackageCheck, RotateCcw, Tags } from "lucide-react";
+import Link from "next/link";
+import { createCouponAction, createDeliveryZoneAction, updateReturnRequestAction } from "@/app/dashboard/commerce/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createCouponAction, createDeliveryZoneAction, updateReturnRequestAction } from "@/app/dashboard/commerce/actions";
-import { prisma } from "@/lib/db";
-import { getTenantContext } from "@/lib/tenant";
-import { currency, shortDate, titleCase } from "@/lib/format";
 import { requireRole } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { currency, shortDate, titleCase } from "@/lib/format";
 import { permissions } from "@/lib/rbac";
+import { getTenantContext } from "@/lib/tenant";
 
 const lockedReturnStatuses = new Set<ReturnRequestStatus>([
   ReturnRequestStatus.REFUNDED,
@@ -50,13 +51,14 @@ export default async function CommercePage() {
       <section className="grid gap-4 xl:grid-cols-2 xl:gap-5">
         <div className="panel p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-2"><Bike size={18} className="text-[var(--shop-primary)]" /><h2 className="text-lg font-semibold">Delivery zones</h2></div>
+          <p className="mb-3 text-xs leading-5 text-slate-500">Saving an existing zone name updates and reactivates that zone.</p>
           <form action={createDeliveryZoneAction} className="grid gap-3 sm:grid-cols-2">
             <input className="field" name="name" maxLength={80} placeholder="Zone name" required />
             <input className="field" name="city" maxLength={100} placeholder="City" />
             <input className="field" name="area" maxLength={100} placeholder="Area" />
             <input className="field" name="fee" type="number" min="0" step="0.01" placeholder="Fee" />
             <input className="field" name="estimatedMins" type="number" min="1" max="10080" placeholder="Estimated minutes" />
-            <Button className="w-full">Create zone</Button>
+            <Button className="w-full">Save zone</Button>
           </form>
           <div className="mt-4 grid gap-2">
             {zones.map((zone) => <div key={zone.id} className="flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-3 text-sm"><span className="min-w-0 truncate font-semibold">{zone.name}</span><span className="shrink-0 text-right text-slate-600">{currency(zone.fee.toString(), shop.currency)}{zone.estimatedMins ? <span className="block text-xs text-slate-400">{zone.estimatedMins} mins</span> : null}</span></div>)}
@@ -83,14 +85,27 @@ export default async function CommercePage() {
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="border-b border-[#ded8cd] p-4 sm:p-5"><div className="flex items-center gap-2"><RotateCcw size={18} className="text-[var(--shop-primary)]" /><h2 className="text-lg font-semibold">Return workflow</h2></div><p className="mt-2 text-sm leading-6 text-slate-500">Approval and receipt can be recorded here. Refunds and exchanges require the dedicated payment and stock workflow.</p></div>
+        <div className="border-b border-[#ded8cd] p-4 sm:p-5">
+          <div className="flex items-center gap-2"><RotateCcw size={18} className="text-[var(--shop-primary)]" /><h2 className="text-lg font-semibold">Return workflow</h2></div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Approval and receipt can be recorded here. Process any refund from the order&apos;s Payment &amp; refunds panel; exchanges and restocking stay in their dedicated stock workflow.</p>
+        </div>
         <div className="divide-y divide-[#ded8cd] bg-white">
           {returns.map((request) => {
             const locked = lockedReturnStatuses.has(request.status);
             return (
               <form key={request.id} action={updateReturnRequestAction} className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[1fr_180px_1fr_auto] lg:items-end">
                 <input type="hidden" name="requestId" value={request.id} />
-                <div className="min-w-0"><p className="truncate font-semibold">{request.order.receiptNumber}</p><p className="text-sm text-slate-500">{request.order.buyer?.name ?? request.order.customer?.name ?? "Customer"} · {shortDate(request.requestedAt)}</p><p className="mt-1 break-words text-sm text-slate-600">{request.reason}</p></div>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{request.order.receiptNumber}</p>
+                  <p className="text-sm text-slate-500">{request.order.buyer?.name ?? request.order.customer?.name ?? "Customer"} · {shortDate(request.requestedAt)}</p>
+                  <p className="mt-1 break-words text-sm text-slate-600">{request.reason}</p>
+                  <Link className="mt-2 inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-[var(--shop-primary)] hover:underline" href={`/dashboard/orders/${request.order.id}`}>
+                    Open order <ArrowUpRight size={14} />
+                  </Link>
+                  {request.status === ReturnRequestStatus.RECEIVED ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 text-amber-800">Item received. Open the order to process any refund; handle exchange or restocking through the normal stock workflow.</p>
+                  ) : null}
+                </div>
                 <label className="text-xs font-semibold text-slate-600">Status<select className="field mt-1" name="status" defaultValue={request.status} disabled={locked}>{returnStatusOptions(request.status).map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}</select></label>
                 <label className="text-xs font-semibold text-slate-600">Resolution<input className="field mt-1" name="resolution" maxLength={1000} placeholder="Resolution note" defaultValue={request.resolution ?? ""} /></label>
                 <Button variant="outline" className="w-full lg:w-auto" disabled={locked}><PackageCheck size={16} /> Update</Button>
